@@ -1,5 +1,5 @@
-// src/components/public/FAQ.jsx
-import React, { useState } from 'react';
+// src/components/public/Terms.jsx
+import React from 'react';
 import {
     Typography,
     Box,
@@ -170,7 +170,7 @@ const LinksCard = styled(Card)({
 });
 
 // ============================================
-// STYLES RECHERCHE (MODIFIÉS COMME HOME)
+// STYLES RECHERCHE
 // ============================================
 
 const SearchCard = styled(Card)({
@@ -270,17 +270,18 @@ const SearchButton = styled(Button)({
 });
 
 // ============================================
-// STYLES FAQ
+// STYLES TERMS
 // ============================================
 
 const PageTitle = styled(Typography)({
     textAlign: 'center',
-    fontSize: '24px',
+    fontSize: '28px',
     fontWeight: 700,
     color: '#252930',
-    margin: '0 auto 10px',
-    maxWidth: '600px',
-    lineHeight: 1.2,
+    margin: '0 auto 20px',
+    maxWidth: '700px',
+    lineHeight: 1.3,
+    fontFamily: '"Inria Sans", sans-serif',
 });
 
 const TitleLine = styled(Box)({
@@ -288,82 +289,31 @@ const TitleLine = styled(Box)({
     background: '#0b7890',
     width: '100%',
     maxWidth: '500px',
-    margin: '0 auto 10px',
+    margin: '0 auto 20px',
 });
 
-const FaqBox = styled(Box)({
-    maxWidth: '600px',
-    margin: '28px auto 0',
-    border: '1px solid #d4dbe2',
-    borderRadius: '5px',
-    overflow: 'hidden',
-});
-
-const FaqItem = styled(Box)(({ open }) => ({
-    borderBottom: '1px solid #d4dbe2',
-    '&:last-child': {
-        borderBottom: 0,
-    },
-    '& .faq-question': {
-        minHeight: '50px',
-        padding: '14px 48px 14px 18px',
-        position: 'relative',
-        color: open ? '#075de9' : '#06101b',
+const TermsContent = styled(Box)({
+    maxWidth: '800px',
+    margin: '0 auto',
+    padding: '0 20px',
+    textAlign: 'justify',
+    '& p': {
         fontSize: '15px',
-        lineHeight: 1.4,
-        fontWeight: 700,
-        cursor: 'pointer',
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        backgroundColor: open ? '#e8f2ff' : 'transparent',
-        display: 'flex',
-        alignItems: 'center',
-        '&::after': {
-            content: open ? '"▲"' : '"▼"',
-            position: 'absolute',
-            right: '16px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: open ? '#075de9' : '#111',
-            fontSize: '18px',
-            fontWeight: 700,
-        },
-    },
-    '& .faq-answer': {
-        display: open ? 'block' : 'none',
-        padding: '14px 18px 16px',
-        color: '#06101b',
-        fontSize: '14px',
-        lineHeight: 1.6,
+        lineHeight: 1.8,
+        color: '#333',
+        marginBottom: '16px',
         fontFamily: 'Arial, Helvetica, sans-serif',
     },
-}));
+    '& strong': {
+        color: '#06445b',
+    },
+});
 
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
-const FAQ = () => {
-    const [openIndex, setOpenIndex] = useState(0);
-
-    const faqs = [
-        {
-            question: "Comment s'inscrire sur la plateforme E-stages SNRT ?",
-            answer: "En vous inscrivant sur la plateforme E-stages SNRT, un message de confirmation sera envoyé à votre adresse email. Si vous ne recevez pas le mail de confirmation juste après votre inscription, veuillez vérifier dans votre boîte SPAM."
-        },
-        {
-            question: "Quels types de fichiers sont supportés pour une candidature de stage ?",
-            answer: "Les formats acceptés sont : PDF, DOC, DOCX, PNG et JPG. La taille maximale autorisée est de 5 Mo par fichier."
-        },
-        {
-            question: "Comment suivre le résultat de ma demande de stage ?",
-            answer: "Connectez-vous à votre compte E-stages, rendez-vous dans la section 'Mes candidatures' pour suivre l'évolution de votre demande en temps réel."
-        }
-    ];
-
-    const toggleFaq = (index) => {
-        setOpenIndex(openIndex === index ? -1 : index);
-    };
-
+const Terms = () => {
     return (
         <Container maxWidth="xl" sx={{
             padding: 0,
@@ -412,14 +362,14 @@ const FAQ = () => {
 
                         <CaptchaBox>
                             <svg viewBox="0 0 240 70" aria-hidden="true">
-                                <path d="M8 25 C54 5, 111 44, 230 16" fill="none" stroke="#65b0ff" strokeWidth="2"/>
-                                <path d="M10 50 C77 25, 153 64, 232 42" fill="none" stroke="#71d744" strokeWidth="2"/>
-                                <text x="18" y="53" fontSize="50" fontFamily="Trebuchet MS" fill="#66dc52">h</text>
-                                <text x="56" y="53" fontSize="50" fontFamily="Trebuchet MS" fill="#ef58ba">4</text>
-                                <text x="94" y="53" fontSize="50" fontFamily="Trebuchet MS" fill="#ef9d43">U</text>
-                                <text x="136" y="53" fontSize="50" fontFamily="Trebuchet MS" fill="#ff5db7">F</text>
-                                <text x="176" y="53" fontSize="50" fontFamily="Trebuchet MS" fill="#64e1d6">s</text>
-                                <text x="210" y="53" fontSize="50" fontFamily="Trebuchet MS" fill="#5bdd52">0</text>
+                                <path d="M7 17 C45 35, 82 2, 132 25 S205 12, 232 32" fill="none" stroke="#589dff" strokeWidth="2"/>
+                                <path d="M10 48 C64 28, 115 58, 230 17" fill="none" stroke="#ef5fb0" strokeWidth="2"/>
+                                <text x="15" y="50" fontSize="50" fontFamily="Trebuchet MS" fill="#75e45e" transform="rotate(-4 15 50)">0</text>
+                                <text x="53" y="50" fontSize="50" fontFamily="Trebuchet MS" fill="#65e4d6" transform="rotate(6 53 50)">v</text>
+                                <text x="91" y="50" fontSize="50" fontFamily="Trebuchet MS" fill="#59e2d8" transform="rotate(-7 91 50)">t</text>
+                                <text x="124" y="50" fontSize="50" fontFamily="Trebuchet MS" fill="#3364f0" transform="rotate(9 124 50)">y</text>
+                                <text x="162" y="50" fontSize="50" fontFamily="Trebuchet MS" fill="#ff65c8" transform="rotate(-5 162 50)">6</text>
+                                <text x="200" y="50" fontSize="50" fontFamily="Trebuchet MS" fill="#65e45e" transform="rotate(7 200 50)">d</text>
                             </svg>
                         </CaptchaBox>
 
@@ -435,8 +385,8 @@ const FAQ = () => {
                         <ForgotLink href="#">Mot de passe oublié !</ForgotLink>
 
                         <TermsText>
-    En vous connectant, vous acceptez nos <a href="/terms">Termes et Conditions</a> du service
-</TermsText>
+                            En vous connectant, vous acceptez nos <a href="/terms">Termes et Conditions</a> du service
+                        </TermsText>
                     </SideCard>
 
                     <LinksCard sx={{ display: { xs: 'none', md: 'block' } }}>
@@ -459,21 +409,20 @@ const FAQ = () => {
                         borderRight: { md: '1px solid #cfd5da' },
                     }}
                 >
-                    <PageTitle>Foire aux questions</PageTitle>
+                    <PageTitle>Termes et Conditions du service</PageTitle>
                     <TitleLine />
 
-                    <FaqBox>
-                        {faqs.map((faq, index) => (
-                            <FaqItem key={index} open={openIndex === index}>
-                                <div className="faq-question" onClick={() => toggleFaq(index)}>
-                                    {faq.question}
-                                </div>
-                                <div className="faq-answer">
-                                    {faq.answer}
-                                </div>
-                            </FaqItem>
-                        ))}
-                    </FaqBox>
+                    <TermsContent>
+                        <p>
+                            Par le biais de ce formulaire, la <strong>SNRT</strong> collecte vos données personnelles en vue de traiter votre candidature pour le recrutement. Ce traitement a fait l'objet d'une autorisation auprès de la <strong>CNDP</strong> n°A-RH-306/2018, ayant pour finalité : <strong>la Gestion des ressources humaines</strong>.
+                        </p>
+                        <p>
+                            La SNRT prend toutes les précautions utiles pour préserver la sécurité et la confidentialité des données traitées et notamment pour empêcher qu'elles soient détruites, déformées, endommagées ou que des tiers non autorisés puissent en prendre connaissance, conformément à la <strong>loi 09-08</strong>.
+                        </p>
+                        <p>
+                            Vous pouvez vous adresser à l'adresse suivante : <strong>e-recrutement@snrt.ma</strong> pour exercer vos droits d'accès, de rectification et d'opposition conformément aux dispositions de la <strong>loi 09-08</strong>.
+                        </p>
+                    </TermsContent>
                 </Grid>
 
                 {/* ===== SIDEBAR DROITE ===== */}
@@ -527,4 +476,4 @@ const FAQ = () => {
     );
 };
 
-export default FAQ;
+export default Terms;

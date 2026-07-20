@@ -169,62 +169,88 @@ const LinksCard = styled(Card)({
     },
 });
 
+// ============================================
+// STYLES RECHERCHE (CORRIGÉS)
+// ============================================
+
 const SearchCard = styled(Card)({
     backgroundColor: '#f7f7f7',
     borderRadius: '19px',
     padding: '32px 20px 20px',
-    textAlign: 'center',
     minHeight: '480px',
     boxShadow: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+
     '& h2': {
-        margin: '0 0 18px',
+        marginBottom: '18px',
         color: '#07111b',
         fontSize: '18px',
-        lineHeight: 1.2,
         fontWeight: 400,
+        textAlign: 'center',
         fontFamily: '"Inria Sans", sans-serif',
-        whiteSpace: 'nowrap',
     },
 });
 
 const SearchField = styled(TextField)({
+    width: '100%',
+    maxWidth: '220px',
+    marginBottom: '10px',
+
     '& .MuiOutlinedInput-root': {
-        borderRadius: '27px',
-        backgroundColor: '#ffffff',
         height: '42px',
-        '& fieldset': { borderColor: '#e1e6eb' },
-        '&:hover fieldset': { borderColor: '#e1e6eb' },
-        '&.Mui-focused fieldset': { borderColor: '#148aa0' },
+        borderRadius: '27px',
+        background: '#fff',
+
+        '& fieldset': {
+            borderColor: '#e1e6eb',
+        },
+
+        '&:hover fieldset': {
+            borderColor: '#e1e6eb',
+        },
+
+        '&.Mui-focused fieldset': {
+            borderColor: '#148aa0',
+        },
     },
+
     '& .MuiInputBase-input': {
         padding: '0 28px',
         fontSize: '15px',
         color: '#6d7884',
     },
-    width: '100%',
-    maxWidth: '220px',
-    margin: '0 auto 10px',
-    display: 'block',
 });
 
 const DateField = styled(TextField)({
+    width: '100%',
+    maxWidth: '220px',
+    marginBottom: '10px',
+
     '& .MuiOutlinedInput-root': {
-        borderRadius: '27px',
-        backgroundColor: '#ffffff',
         height: '42px',
-        '& fieldset': { borderColor: '#e1e6eb' },
-        '&:hover fieldset': { borderColor: '#e1e6eb' },
-        '&.Mui-focused fieldset': { borderColor: '#148aa0' },
+        borderRadius: '27px',
+        background: '#fff',
+
+        '& fieldset': {
+            borderColor: '#e1e6eb',
+        },
+
+        '&:hover fieldset': {
+            borderColor: '#e1e6eb',
+        },
+
+        '&.Mui-focused fieldset': {
+            borderColor: '#148aa0',
+        },
     },
+
     '& .MuiInputBase-input': {
         padding: '0 45px 0 28px',
         fontSize: '15px',
         color: '#6d7884',
     },
-    width: '100%',
-    maxWidth: '220px',
-    margin: '0 auto 10px',
-    display: 'block',
 });
 
 const SearchButton = styled(Button)({
@@ -232,13 +258,20 @@ const SearchButton = styled(Button)({
     height: '42px',
     marginTop: '2px',
     borderRadius: '23px',
-    backgroundColor: '#148aa0',
+    background: '#148aa0',
     color: '#fff',
-    fontSize: '15px',
     fontWeight: 700,
+    fontSize: '15px',
     textTransform: 'none',
-    '&:hover': { backgroundColor: '#0b7890' },
+
+    '&:hover': {
+        background: '#0b7890',
+    },
 });
+
+// ============================================
+// STYLES CONTENU CENTRAL (inchangés)
+// ============================================
 
 const HeroTitle = styled(Typography)(({ theme }) => ({
     textAlign: 'center',
@@ -431,8 +464,8 @@ const Home = () => {
                         <ForgotLink href="#">Mot de passe oublié !</ForgotLink>
 
                         <TermsText>
-                            En vous connectant, vous acceptez nos <a href="#">Termes et Conditions</a> du service
-                        </TermsText>
+    En vous connectant, vous acceptez nos <a href="/terms">Termes et Conditions</a> du service
+</TermsText>
                     </SideCard>
 
                     <LinksCard sx={{ display: { xs: 'none', md: 'block' } }}>
@@ -490,22 +523,22 @@ const Home = () => {
                     </PagerBox>
                 </Grid>
 
-                {/* ===== SIDEBAR DROITE ===== */}
+                {/* ===== SIDEBAR DROITE (CORRIGÉE) ===== */}
                 <Grid item xs={12} md={3} sx={{ px: { xs: 2, md: 1 }, py: { xs: 2, md: 3 } }}>
                     <SearchCard>
                         <h2>Recherche les offres</h2>
 
-                        <SearchField placeholder="Profil" variant="outlined" />
+                        <SearchField
+                            placeholder="Profil"
+                            variant="outlined"
+                        />
 
                         <SearchField
                             select
-                            variant="outlined"
                             defaultValue=""
-                            sx={{
-                                '& .MuiInputBase-input': { color: '#111' },
-                            }}
+                            variant="outlined"
                         >
-                            <MenuItem value="">* Séléctionne</MenuItem>
+                            <MenuItem value="">* Sélectionner</MenuItem>
                             <MenuItem value="Informatique">Informatique</MenuItem>
                             <MenuItem value="Audiovisuel">Audiovisuel</MenuItem>
                             <MenuItem value="Gestion">Gestion</MenuItem>
@@ -513,18 +546,27 @@ const Home = () => {
                         </SearchField>
 
                         <DateField
-                            placeholder="jj/mm/aaa"
+                            placeholder="jj/mm/aaaa"
                             variant="outlined"
                             InputProps={{
                                 endAdornment: (
-                                    <InputAdornment position="end" sx={{ position: 'absolute', right: '16px', color: '#333' }}>
+                                    <InputAdornment
+                                        position="end"
+                                        sx={{
+                                            position: 'absolute',
+                                            right: 16,
+                                            color: '#333'
+                                        }}
+                                    >
                                         <i className="fa-solid fa-calendar"></i>
                                     </InputAdornment>
                                 ),
                             }}
                         />
 
-                        <SearchButton>Recherche</SearchButton>
+                        <SearchButton>
+                            Recherche
+                        </SearchButton>
                     </SearchCard>
                 </Grid>
             </Grid>
