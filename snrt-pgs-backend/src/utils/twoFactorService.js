@@ -11,7 +11,7 @@ function generateTwoFactorCode() {
   const max = 10 ** codeLength;
   const code = crypto.randomInt(0, max).toString().padStart(codeLength, '0');
   const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-  const expiresAt = new Date(Date.now() + CONFIG.twoFactor.ttlMinutes * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   return { code, codeHash, expiresAt };
 }
 
