@@ -51,4 +51,9 @@ if (process.env.NODE_ENV === 'production') {
     }));
 }
 
+logger.audit = function (message, meta = {}) {
+    const formatted = typeof message === 'object' ? JSON.stringify(message) : message;
+    logger.info(`[AUDIT] ${formatted}`, meta);
+};
+
 module.exports = logger;
