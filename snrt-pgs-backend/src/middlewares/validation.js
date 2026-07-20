@@ -1,10 +1,6 @@
 const ApiError = require('../utils/ApiError');
 
-/**
- * Middleware generique : valide req.body (ou req.params/req.query via
- * l'option `source`) contre un schema Joi donne. Renvoie toutes les erreurs
- * en une seule fois (abortEarly: false).
- */
+
 function validate(schema, source = 'body') {
   return (req, res, next) => {
     const { error, value } = schema.validate(req[source], {

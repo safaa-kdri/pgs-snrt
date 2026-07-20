@@ -27,7 +27,7 @@ const utilisateurExterneSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Adresse email invalide.'],
     },
-    motDePasse: { type: String, required: true, select: false }, // hash Argon2id
+    motDePasse: { type: String, required: true, select: false }, 
     telephone: { type: String, required: true },
     dateInscription: { type: Date, default: Date.now },
     actif: { type: Boolean, default: true },
@@ -45,13 +45,11 @@ const utilisateurExterneSchema = new mongoose.Schema(
 
     documents: { type: [documentSchema], default: [] },
 
-    // --- Double authentification (2FA) par code email ---
     twoFactor: {
       codeHash: { type: String, default: null, select: false },
       expiresAt: { type: Date, default: null, select: false },
     },
 
-    // --- Refresh tokens actifs (un par session/appareil), rotation a chaque refresh ---
     refreshTokens: {
       type: [
         {
@@ -66,13 +64,11 @@ const utilisateurExterneSchema = new mongoose.Schema(
       select: false,
     },
 
-    // --- Reinitialisation de mot de passe ---
     passwordReset: {
       tokenHash: { type: String, default: null, select: false },
       expiresAt: { type: Date, default: null, select: false },
     },
 
-    // --- Protection contre les attaques par force brute ---
     security: {
       failedLoginAttempts: { type: Number, default: 0, select: false },
       lockUntil: { type: Date, default: null, select: false },

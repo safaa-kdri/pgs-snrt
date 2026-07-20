@@ -14,7 +14,7 @@ const ApplicationSchema = new mongoose.Schema({
     },
     commentaire: String,
     
-    // Références
+    
     etudiantId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'UtilisateurExterne',
@@ -30,7 +30,7 @@ const ApplicationSchema = new mongoose.Schema({
         ref: 'UtilisateurInterne'
     },
     
-    // Embedded
+ 
     documents: [{
         nom: { type: String, required: true },
         type: {

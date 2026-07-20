@@ -27,9 +27,7 @@ const {
 
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// -----------------------------------------------------------------------------
-// Helpers internes
-// -----------------------------------------------------------------------------
+
 async function resolveRoleName(user, userType) {
   if (userType === 'externe') return 'Etudiant';
   const role = await Role.findById(user.roleId).select('nom');
@@ -76,9 +74,7 @@ async function issueSession(res, user, userType, req) {
   return role;
 }
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/register (etudiants uniquement)
-// -----------------------------------------------------------------------------
+
 const register = asyncHandler(async (req, res) => {
   const { motDePasse, email, ...rest } = req.body;
 
@@ -116,9 +112,7 @@ const register = asyncHandler(async (req, res) => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/login (etape 1/2)
-// -----------------------------------------------------------------------------
+
 const login = asyncHandler(async (req, res) => {
   const { email, motDePasse } = req.body;
   const genericError = 'Adresse email ou mot de passe incorrect.';
@@ -182,9 +176,7 @@ const login = asyncHandler(async (req, res) => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/verify-2fa (etape 2/2)
-// -----------------------------------------------------------------------------
+
 const verifyTwoFactor = asyncHandler(async (req, res) => {
   const { code } = req.body;
   const preAuthToken = req.cookies?.preAuthToken;
@@ -227,9 +219,7 @@ const verifyTwoFactor = asyncHandler(async (req, res) => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/resend-2fa
-// -----------------------------------------------------------------------------
+
 const resendTwoFactorCode = asyncHandler(async (req, res) => {
   const preAuthToken = req.cookies?.preAuthToken;
   if (!preAuthToken) throw ApiError.unauthorized('Session expiree. Veuillez vous reconnecter.');
@@ -253,9 +243,7 @@ const resendTwoFactorCode = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Un nouveau code vous a ete envoye.' });
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/refresh
-// -----------------------------------------------------------------------------
+
 const refresh = asyncHandler(async (req, res) => {
   const refreshTokenCookie = req.cookies?.refreshToken;
   if (!refreshTokenCookie) throw ApiError.unauthorized('Session absente. Veuillez vous reconnecter.');
@@ -312,9 +300,7 @@ const refresh = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Session renouvelee.' });
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/logout
-// -----------------------------------------------------------------------------
+
 const logout = asyncHandler(async (req, res) => {
   const refreshTokenCookie = req.cookies?.refreshToken;
 
@@ -335,9 +321,7 @@ const logout = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Deconnexion reussie.' });
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/forgot-password
-// -----------------------------------------------------------------------------
+
 const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
   const genericResponse = {
@@ -367,9 +351,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
   return res.status(200).json(genericResponse);
 });
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/auth/reset-password/:token
-// -----------------------------------------------------------------------------
+
 const resetPassword = asyncHandler(async (req, res) => {
   const { token } = req.params;
   const { motDePasse } = req.body;
@@ -402,9 +384,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// GET /api/v1/auth/me
-// -----------------------------------------------------------------------------
+
 const me = asyncHandler(async (req, res) => {
   const user = await userLookup.findById(req.user.id, req.user.userType);
   if (!user) throw ApiError.notFound('Utilisateur introuvable.');

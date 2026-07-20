@@ -2,15 +2,6 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { CONFIG } = require('../config/constants');
 
-/**
- * Centralise :
- *  - la creation/verification des JWT (access, refresh, pre-auth 2FA, reset password)
- *  - le depot/suppression des cookies HttpOnly correspondants
- *
- * Conformement au cahier des charges (3.3.2), les jetons ne sont JAMAIS
- * exposes au JavaScript client : ils circulent uniquement via cookies
- * HttpOnly + Secure + SameSite (jamais de Local Storage).
- */
 
 const COOKIE_BASE_OPTIONS = {
   httpOnly: true,
@@ -20,7 +11,6 @@ const COOKIE_BASE_OPTIONS = {
   path: '/',
 };
 
-// --- Generation des JWT ---
 function signAccessToken(payload) {
   return jwt.sign(payload, CONFIG.jwt.accessSecret, { expiresIn: CONFIG.jwt.accessExpires });
 }
@@ -30,7 +20,6 @@ function signRefreshToken(payload) {
 }
 
 function signPreAuthToken(payload) {
-  // Jeton temporaire emis apres validation du mot de passe, en attente du code 2FA.
   return jwt.sign(payload, CONFIG.jwt.preAuthSecret, { expiresIn: CONFIG.jwt.preAuthExpires });
 }
 
@@ -38,7 +27,6 @@ function signResetToken(payload) {
   return jwt.sign(payload, CONFIG.jwt.resetSecret, { expiresIn: `${CONFIG.resetPassword.ttlMinutes}m` });
 }
 
-// --- Verification (renvoie null si invalide/expire) ---
 function verifyToken(token, secret) {
   try {
     return jwt.verify(token, secret);
@@ -52,7 +40,6 @@ const verifyRefreshToken = (token) => verifyToken(token, CONFIG.jwt.refreshSecre
 const verifyPreAuthToken = (token) => verifyToken(token, CONFIG.jwt.preAuthSecret);
 const verifyResetToken = (token) => verifyToken(token, CONFIG.jwt.resetSecret);
 
-// --- Cookies ---
 function setAccessTokenCookie(res, token) {
   res.cookie('accessToken', token, { ...COOKIE_BASE_OPTIONS, maxAge: 15 * 60 * 1000 });
 }
@@ -74,7 +61,6 @@ function clearPreAuthCookie(res) {
   res.clearCookie('preAuthToken', COOKIE_BASE_OPTIONS);
 }
 
-// --- Jeton aleatoire + empreinte SHA-256 (refresh tokens en base, reset password) ---
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }

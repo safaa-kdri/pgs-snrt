@@ -5,16 +5,7 @@ const logger = require('../utils/logger');
 const { getModelSafe } = require('../utils/lazyModel');
 const { ROLES, APPLICATION_STATUS } = require('../config/constants');
 
-/**
- * NOTE DE DEPENDANCE INTER-MODULES : la planification d'un entretien doit
- * lire/mettre a jour la candidature associee (collection "applications",
- * modele porte par Mohammed). Plutot que d'importer directement
- * '../models/Application' (dependance dure a un fichier qui n'existe pas
- * encore dans ce lot de livraison), on recupere le modele deja enregistre
- * aupres de Mongoose via getModelSafe('Application') (utils/lazyModel.js).
- * Cela fonctionne des que models/Application.js est charge quelque part au
- * demarrage du serveur, sans coupler ce fichier a son implementation.
- */
+
 
 async function notifyStudentInterviewScheduled(application, interview) {
   try {
@@ -28,9 +19,7 @@ async function notifyStudentInterviewScheduled(application, interview) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// POST /api/v1/interviews  (RH, Departement, Administrateur)
-// -----------------------------------------------------------------------------
+
 const createInterview = asyncHandler(async (req, res) => {
   if (![ROLES.RH, ROLES.DEPARTEMENT, ROLES.ADMIN].includes(req.user.role)) {
     throw ApiError.forbidden('Seuls le RH ou le departement peuvent planifier un entretien.');
@@ -71,10 +60,7 @@ const createInterview = asyncHandler(async (req, res) => {
   return res.status(201).json({ success: true, message: 'Entretien planifie.', interview });
 });
 
-// -----------------------------------------------------------------------------
-// GET /api/v1/interviews  (RH, Departement, Encadrant, Administrateur uniquement
-// - commentaires confidentiels, jamais expose aux etudiants)
-// -----------------------------------------------------------------------------
+
 const listInterviews = asyncHandler(async (req, res) => {
   if (req.user.role === ROLES.ETUDIANT) {
     throw ApiError.forbidden('Acces reserve au personnel interne.');
@@ -108,9 +94,7 @@ const listInterviews = asyncHandler(async (req, res) => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// GET /api/v1/interviews/:id
-// -----------------------------------------------------------------------------
+
 const getInterviewById = asyncHandler(async (req, res) => {
   if (req.user.role === ROLES.ETUDIANT) throw ApiError.forbidden('Acces reserve au personnel interne.');
 
@@ -120,9 +104,7 @@ const getInterviewById = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, interview });
 });
 
-// -----------------------------------------------------------------------------
-// PUT /api/v1/interviews/:id  (reprogrammation, commentaires, resultat)
-// -----------------------------------------------------------------------------
+
 const updateInterview = asyncHandler(async (req, res) => {
   if (![ROLES.RH, ROLES.DEPARTEMENT, ROLES.ADMIN].includes(req.user.role)) {
     throw ApiError.forbidden("Vous n'avez pas les droits pour modifier cet entretien.");
@@ -142,9 +124,7 @@ const updateInterview = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Entretien mis a jour.', interview });
 });
 
-// -----------------------------------------------------------------------------
-// PUT /api/v1/interviews/:id/cancel
-// -----------------------------------------------------------------------------
+
 const cancelInterview = asyncHandler(async (req, res) => {
   if (![ROLES.RH, ROLES.DEPARTEMENT, ROLES.ADMIN].includes(req.user.role)) {
     throw ApiError.forbidden("Vous n'avez pas les droits pour annuler cet entretien.");

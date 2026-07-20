@@ -3,10 +3,7 @@ const ApiError = require('../utils/ApiError');
 const { verifyAccessToken } = require('../utils/jwt');
 const userLookup = require('../utils/userLookup');
 
-/**
- * Verifie le JWT d'acces (cookie HttpOnly "accessToken") et attache
- * l'utilisateur authentifie a req.user. A utiliser sur toute route protegee.
- */
+
 function authenticate() {
   return async (req, res, next) => {
     try {
@@ -33,10 +30,7 @@ function authenticate() {
   };
 }
 
-/**
- * Controle d'acces base sur les roles (RBAC). Usage :
- *   router.post('/offers', authenticate(), authorize('Departement', 'Administrateur'), ...)
- */
+
 function authorize(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
@@ -47,11 +41,7 @@ function authorize(...allowedRoles) {
   };
 }
 
-/**
- * Limitation du nombre de requetes par IP (protection brute force - OWASP).
- * Regroupees ici avec le reste des middlewares de securite d'authentification
- * (pas de fichier dedie dans l'arborescence de l'equipe).
- */
+
 const rateLimitHandler = (req, res, next) => next(ApiError.tooManyRequests());
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler });

@@ -5,18 +5,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { getModelSafe } = require('../utils/lazyModel');
 const { ROLES, OFFER_STATUS, APPLICATION_STATUS } = require('../config/constants');
 
-/**
- * Tableaux de bord personnalises par role (Cahier des charges 7.7) :
- *   - RH          : offres, candidatures, taux d'acceptation, stages en cours
- *   - Departement  : offres creees, candidatures recues, stagiaires selectionnes
- *   - Etudiant     : candidatures envoyees, acceptees, documents manquants
- *
- * Les agregations portant sur "applications" / "internships" (modeles
- * Mohammed / Safaa) utilisent getModelSafe() : si ces modeles ne sont pas
- * encore enregistres sur l'environnement d'execution, la section
- * correspondante est renvoyee avec `pending: true` plutot que de faire
- * echouer tout le tableau de bord.
- */
+
 
 async function offerStatsFor(filter) {
   const [total, publiees, enAttente, brouillons, archivees] = await Promise.all([
@@ -57,9 +46,7 @@ async function internshipStatsFor(filter) {
   return { enCours, termines };
 }
 
-// -----------------------------------------------------------------------------
-// GET /api/v1/dashboard  (adapte automatiquement au role de l'utilisateur connecte)
-// -----------------------------------------------------------------------------
+
 const getDashboard = asyncHandler(async (req, res) => {
   const { role, id: userId, departementId } = req.user;
 
@@ -113,7 +100,6 @@ const getDashboard = asyncHandler(async (req, res) => {
     });
   }
 
-  // Administrateur : vue globale complete (voir aussi /api/v1/stats/global).
   const [offres, candidatures, stages] = await Promise.all([offerStatsFor({}), applicationStatsFor({}), internshipStatsFor({})]);
 
   return res.status(200).json({ success: true, role, dashboard: { offres, candidatures, stages } });

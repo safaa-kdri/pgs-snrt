@@ -7,7 +7,6 @@ const router = express.Router();
 
 router.use(authenticate());
 
-// Tableau de bord adapte au role de l'utilisateur connecte (7.7).
 router.get('/', dashboardController.getDashboard);
 
 // Statistiques globales (Administrateur) et export (RH/Admin) - table 3.8.

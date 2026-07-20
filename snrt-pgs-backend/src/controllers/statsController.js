@@ -7,17 +7,7 @@ const ApiError = require('../utils/ApiError');
 const { getModelSafe } = require('../utils/lazyModel');
 const { ROLES, OFFER_STATUS } = require('../config/constants');
 
-/**
- * Statistiques globales et export de donnees (Cahier des charges 7.7 :
- * "Export des donnees (PDF, Excel)"). L'export PDF proprement dit est du
- * ressort de services/pdfService.js (Safaa) ; en attendant son integration,
- * cette route propose un export CSV/JSON directement exploitable dans un
- * tableur, sans dependance supplementaire.
- */
 
-// -----------------------------------------------------------------------------
-// GET /api/v1/stats/global  (Administrateur uniquement)
-// -----------------------------------------------------------------------------
 const getGlobalStats = asyncHandler(async (req, res) => {
   if (req.user.role !== ROLES.ADMIN) {
     throw ApiError.forbidden('Reserve a l\'administrateur.');
@@ -72,9 +62,7 @@ const getGlobalStats = asyncHandler(async (req, res) => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// GET /api/v1/stats/export?format=csv|json  (RH, Administrateur)
-// -----------------------------------------------------------------------------
+
 const exportOfferStats = asyncHandler(async (req, res) => {
   if (![ROLES.RH, ROLES.ADMIN].includes(req.user.role)) {
     throw ApiError.forbidden('Reserve au RH et a l\'administrateur.');

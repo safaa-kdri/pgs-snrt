@@ -1,11 +1,6 @@
 const mongoose = require('mongoose');
 
-/**
- * Collection "favorites" (Dossier de Conception - 3.11).
- * Permet a un etudiant de sauvegarder une offre pour la retrouver plus tard.
- * RG-022 : un etudiant ne peut sauvegarder une offre en favori qu'une seule
- * fois -> index compose unique (etudiantId, offreId).
- */
+
 const favoriteSchema = new mongoose.Schema(
   {
     etudiantId: { type: mongoose.Schema.Types.ObjectId, ref: 'UtilisateurExterne', required: true },

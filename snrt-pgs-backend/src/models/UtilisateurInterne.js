@@ -26,13 +26,11 @@ const utilisateurInterneSchema = new mongoose.Schema(
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', required: true },
     departementId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
 
-    // --- Double authentification (2FA) par code email ---
     twoFactor: {
       codeHash: { type: String, default: null, select: false },
       expiresAt: { type: Date, default: null, select: false },
     },
 
-    // --- Refresh tokens actifs (un par session/appareil), rotation a chaque refresh ---
     refreshTokens: {
       type: [
         {
@@ -47,13 +45,11 @@ const utilisateurInterneSchema = new mongoose.Schema(
       select: false,
     },
 
-    // --- Reinitialisation de mot de passe ---
     passwordReset: {
       tokenHash: { type: String, default: null, select: false },
       expiresAt: { type: Date, default: null, select: false },
     },
 
-    // --- Protection contre les attaques par force brute ---
     security: {
       failedLoginAttempts: { type: Number, default: 0, select: false },
       lockUntil: { type: Date, default: null, select: false },
