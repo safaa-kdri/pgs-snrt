@@ -157,8 +157,17 @@ const login = asyncHandler(async (req, res) => {
 
   try {
     await sendTwoFactorCodeEmail(user.email, code);
+    logger.info(`[2FA] Email sent successfully to ${user.email}`);
   } catch (err) {
-    throw ApiError.internal("Impossible d'envoyer le code de verification. Veuillez reessayer.");
+    logger.error(`[2FA Email Failed] SMTP error: ${err.message}`);
+
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`==================================================`);
+      logger.info(`[DEV MODE] 2FA CODE FOR ${user.email}: ${code}`);
+      logger.info(`==================================================`);
+    } else {
+      throw ApiError.internal("Impossible d'envoyer le code de verification. Veuillez reessayer.");
+    }
   }
 
   const preAuthToken = signPreAuthToken({ sub: user._id.toString(), userType });
