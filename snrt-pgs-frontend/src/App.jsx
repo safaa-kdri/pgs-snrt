@@ -1,6 +1,7 @@
 // src/App.jsx
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Box } from '@mui/material';  // ← AJOUTER
 
 import Layout from './components/common/Layout';
 
@@ -19,28 +20,30 @@ import Verify2FA from './components/auth/Verify2FA';
 
 function App() {
     return (
-        <Layout>
-            <Routes>
-                {/* Routes Publiques */}
-                <Route path="/" element={<Home />} />
-                <Route path="/offres" element={<OffersList />} />
-                <Route path="/offres/:id" element={<OfferDetail />} />
-                <Route path="/faq" element={<FAQ />} />
-                <Route path="/contact" element={<Contact />} />
+        <Box sx={{ padding: 0, margin: 0 }}>   {/* ← AJOUTER CETTE LIGNE */}
+            <Layout>
+                <Routes>
+                    {/* Routes Publiques */}
+                    <Route path="/" element={<Home />} />
+                    <Route path="/offres" element={<OffersList />} />
+                    <Route path="/offres/:id" element={<OfferDetail />} />
+                    <Route path="/faq" element={<FAQ />} />
+                    <Route path="/contact" element={<Contact />} />
 
-                {/* Routes Authentification */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/verify-2fa" element={<Verify2FA />} />
+                    {/* Routes Authentification */}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/verify-2fa" element={<Verify2FA />} />
 
-                {/* Routes Protégées (à venir) */}
-                <Route path="/dashboard/*" element={<div>Dashboard</div>} />
+                    {/* Routes Protégées (à venir) */}
+                    <Route path="/dashboard/*" element={<div>Dashboard</div>} />
 
-                {/* 404 */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-        </Layout>
+                    {/* 404 */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </Layout>
+        </Box>
     );
 }
 
