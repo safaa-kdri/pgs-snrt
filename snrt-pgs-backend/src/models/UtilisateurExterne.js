@@ -1,159 +1,98 @@
-// src/models/UtilisateurExterne.js
 const mongoose = require('mongoose');
-const argon2 = require('argon2');
-const BaseSchema = require('./BaseModel');
 
-const UtilisateurExterneSchema = new mongoose.Schema({
-    nom: {
-        type: String,
-        required: [true, 'Le nom est obligatoire'],
-        trim: true,
-        maxlength: 100
-    },
-    prenom: {
-        type: String,
-        required: [true, 'Le prénom est obligatoire'],
-        trim: true,
-        maxlength: 100
-    },
+/**
+ * Collection "utilisateurs_externes" (Dossier de Conception - 3.2).
+ * Etudiants / candidats. Seul type de compte pouvant s'auto-inscrire
+ * via POST /api/v1/auth/register.
+ */
+const documentSchema = new mongoose.Schema(
+  {
+    nom: { type: String, required: true },
+    type: { type: String, required: true },
+    chemin: { type: String, required: true },
+    dateUpload: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const utilisateurExterneSchema = new mongoose.Schema(
+  {
+    nom: { type: String, required: true, trim: true },
+    prenom: { type: String, required: true, trim: true },
     email: {
-        type: String,
-        required: [true, 'L\'email est obligatoire'],
-        unique: true,
-        trim: true,
-        lowercase: true,
-        match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Email invalide']
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, 'Adresse email invalide.'],
     },
-    motDePasse: {
-        type: String,
-        required: [true, 'Le mot de passe est obligatoire'],
-        minlength: 16,
-        select: false
+    motDePasse: { type: String, required: true, select: false }, // hash Argon2id
+    telephone: { type: String, required: true },
+    dateInscription: { type: Date, default: Date.now },
+    actif: { type: Boolean, default: true },
+
+    cin: { type: String, required: true, unique: true, trim: true, uppercase: true },
+    civilite: { type: String, required: true, enum: ['Mme', 'Mr'] },
+    dateNaissance: { type: Date, required: true },
+    adresse: { type: String, required: true },
+    ville: { type: String, required: true },
+    pays: { type: String, required: true },
+    universite: { type: String, default: null },
+    filiere: { type: String, default: null },
+    niveau: { type: String, default: null },
+    annee: { type: String, default: null },
+
+    documents: { type: [documentSchema], default: [] },
+
+    // --- Double authentification (2FA) par code email ---
+    twoFactor: {
+      codeHash: { type: String, default: null, select: false },
+      expiresAt: { type: Date, default: null, select: false },
     },
-    telephone: {
-        type: String,
-        required: [true, 'Le téléphone est obligatoire'],
-        trim: true
+
+    // --- Refresh tokens actifs (un par session/appareil), rotation a chaque refresh ---
+    refreshTokens: {
+      type: [
+        {
+          tokenHash: { type: String, required: true },
+          expiresAt: { type: Date, required: true },
+          createdAt: { type: Date, default: Date.now },
+          userAgent: { type: String, default: null },
+          ip: { type: String, default: null },
+        },
+      ],
+      default: [],
+      select: false,
     },
-    cin: {
-        type: String,
-        required: [true, 'Le CIN est obligatoire'],
-        unique: true,
-        trim: true
+
+    // --- Reinitialisation de mot de passe ---
+    passwordReset: {
+      tokenHash: { type: String, default: null, select: false },
+      expiresAt: { type: Date, default: null, select: false },
     },
-    civilite: {
-        type: String,
-        enum: ['M.', 'Mme', 'Mlle'],
-        required: true
+
+    // --- Protection contre les attaques par force brute ---
+    security: {
+      failedLoginAttempts: { type: Number, default: 0, select: false },
+      lockUntil: { type: Date, default: null, select: false },
     },
-    dateNaissance: {
-        type: Date,
-        required: true
-    },
-    adresse: {
-        type: String,
-        required: true
-    },
-    ville: {
-        type: String,
-        required: true
-    },
-    pays: {
-        type: String,
-        required: true,
-        default: 'Maroc'
-    },
-    universite: String,
-    filiere: String,
-    niveau: {
-        type: String,
-        enum: ['Bac', 'Bac+1', 'Bac+2', 'Bac+3', 'Bac+4', 'Bac+5', 'Doctorat']
-    },
-    annee: String,
-    documents: [{
-        nom: { type: String, required: true },
-        type: { type: String, enum: ['CV', 'Lettre Motivation', 'Releve Notes', 'Attestation', 'Autre'] },
-        chemin: { type: String, required: true },
-        dateUpload: { type: Date, default: Date.now },
-        taille: Number
-    }],
-    dateInscription: {
-        type: Date,
-        default: Date.now
-    },
-    actif: {
-        type: Boolean,
-        default: true
-    },
-    // Sécurité
-    failedLoginAttempts: {
-        type: Number,
-        default: 0
-    },
-    lockedUntil: {
-        type: Date,
-        default: null
-    },
-    lastLogin: {
-        type: Date,
-        default: null
-    }
+
+    derniereConnexion: { type: Date, default: null },
+  },
+  { timestamps: true, collection: 'utilisateurs_externes' }
+);
+
+utilisateurExterneSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    delete ret.motDePasse;
+    delete ret.twoFactor;
+    delete ret.refreshTokens;
+    delete ret.passwordReset;
+    delete ret.security;
+    delete ret.__v;
+    return ret;
+  },
 });
 
-UtilisateurExterneSchema.add(BaseSchema);
-
-// Hashage du mot de passe
-UtilisateurExterneSchema.pre('save', async function(next) {
-    if (!this.isModified('motDePasse')) return next();
-
-    try {
-        this.motDePasse = await argon2.hash(this.motDePasse, {
-            type: argon2.argon2id,
-            memoryCost: 2 ** 16,
-            timeCost: 3,
-            parallelism: 1
-        });
-        next();
-    } catch (error) {
-        next(error);
-    }
-});
-
-// Vérification du mot de passe
-UtilisateurExterneSchema.methods.verifyPassword = async function(password) {
-    try {
-        return await argon2.verify(this.motDePasse, password);
-    } catch (error) {
-        return false;
-    }
-};
-
-UtilisateurExterneSchema.methods.isLocked = function() {
-    if (!this.lockedUntil) return false;
-    return new Date() < this.lockedUntil;
-};
-
-UtilisateurExterneSchema.methods.incrementFailedAttempts = async function() {
-    this.failedLoginAttempts += 1;
-    if (this.failedLoginAttempts >= 3) {
-        this.lockedUntil = new Date(Date.now() + 60 * 60 * 1000);
-    }
-    await this.save();
-};
-
-UtilisateurExterneSchema.methods.resetFailedAttempts = async function() {
-    this.failedLoginAttempts = 0;
-    this.lockedUntil = null;
-    this.lastLogin = new Date();
-    await this.save();
-};
-
-UtilisateurExterneSchema.virtual('fullName').get(function() {
-    return `${this.prenom} ${this.nom}`;
-});
-
-UtilisateurExterneSchema.index({ email: 1 });
-UtilisateurExterneSchema.index({ cin: 1 });
-UtilisateurExterneSchema.index({ actif: 1 });
-
-module.exports = mongoose.model('UtilisateurExterne', UtilisateurExterneSchema);
+module.exports = mongoose.model('UtilisateurExterne', utilisateurExterneSchema);
