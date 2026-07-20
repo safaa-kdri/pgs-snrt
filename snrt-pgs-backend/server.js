@@ -1,88 +1,105 @@
-// server.js
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
-const path = require('path');
 
 const connectDB = require('./src/config/database');
+const { CONFIG, assertRequiredEnv } = require('./src/config/constants');
 const logger = require('./src/utils/logger');
-const errorHandler = require('./src/middlewares/errorHandler');
+
+const authRoutes = require('./src/routes/authRoutes');
+const offerRoutes = require('./src/routes/offerRoutes');
+const interviewRoutes = require('./src/routes/interviewRoutes');
+const dashboardRoutes = require('./src/routes/dashboardRoutes');
+
+assertRequiredEnv();
 
 const app = express();
 
-// ============ CONNEXION DATABASE ============
-connectDB();
+// Necessaire derriere un reverse proxy (Nginx) pour que req.ip / rate-limit
+// et les cookies "secure" fonctionnent correctement.
+app.set('trust proxy', 1);
 
-// ============ MIDDLEWARES ============
-
-// Security
+// --- Securite HTTP de base ---
 app.use(helmet());
+app.use(cors({ origin: CONFIG.clientUrl, credentials: true })); // credentials: indispensable pour les cookies HttpOnly
 
-// CORS
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-    optionsSuccessStatus: 200
-}));
+// --- Parsers ---
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser());
 
-// Rate Limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: 'Trop de requêtes, veuillez réessayer dans 15 minutes.'
-});
-app.use('/api', limiter);
-
-// Body Parser
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Data Sanitization
+// --- Protection contre les injections NoSQL (OWASP) ---
 app.use(mongoSanitize());
 
-// Logging
-app.use(morgan('combined', {
-    stream: { write: (message) => logger.info(message.trim()) }
-}));
+// --- Logs HTTP (dev) ---
+if (CONFIG.nodeEnv !== 'production') {
+  app.use(morgan('dev', { stream: { write: (msg) => logger.debug(msg.trim()) } }));
+}
 
-// ============ STATIC FILES ============
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// --- Healthcheck ---
+app.get('/api/v1/health', (req, res) => res.status(200).json({ success: true, status: 'up' }));
 
-// ============ ROUTES ============
-// (À importer plus tard)
+// --- Routes (perimetre Badr : auth, offres, entretiens, dashboard/stats) ---
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/offers', offerRoutes);
+app.use('/api/v1/interviews', interviewRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 
-// ============ HEALTH CHECK ============
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        success: true,
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development',
-        message: '🚀 SNRT PGS API is running'
-    });
-});
+// D'autres routers (userRoutes, departmentRoutes, periodRoutes,
+// applicationRoutes, internshipRoutes, notificationRoutes...) seront montes
+// ici au fur et a mesure de leur integration par le reste de l'equipe.
 
-// ============ 404 ============
+// --- 404 ---
 app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: `Route ${req.originalUrl} not found`
+  res.status(404).json({ success: false, message: `Route introuvable : ${req.method} ${req.originalUrl}` });
+});
+
+// --- Gestion globale des erreurs (doit rester le dernier middleware) ---
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  const isOperational = err.isOperational || false;
+
+  if (!isOperational) logger.error(`[Unhandled] ${err.message}\n${err.stack}`);
+
+  const response = { success: false, message: isOperational ? err.message : 'Erreur interne du serveur.' };
+  if (err.details) response.details = err.details;
+  if (CONFIG.nodeEnv === 'development' && !isOperational) response.stack = err.stack;
+
+  res.status(statusCode).json(response);
+});
+
+// -----------------------------------------------------------------------------
+// Demarrage
+// -----------------------------------------------------------------------------
+async function start() {
+  await connectDB();
+
+  const server = app.listen(CONFIG.port, () => {
+    logger.info(`[Server] PGS API demarree sur le port ${CONFIG.port} (${CONFIG.nodeEnv})`);
+  });
+
+  const shutdown = (signal) => {
+    logger.info(`[Server] Signal ${signal} recu, arret en cours...`);
+    server.close(() => {
+      logger.info('[Server] Arret propre termine.');
+      process.exit(0);
     });
-});
+  };
 
-// ============ ERROR HANDLING ============
-app.use(errorHandler);
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('unhandledRejection', (err) => {
+    logger.error(`[UnhandledRejection] ${err.message}`);
+    server.close(() => process.exit(1));
+  });
+}
 
-// ============ START SERVER ============
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    logger.info(`🚀 Server running on port ${PORT}`);
-    logger.info(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-    logger.info(`📊 Health check: http://localhost:${PORT}/health`);
-});
+if (require.main === module) {
+  start();
+}
 
 module.exports = app;

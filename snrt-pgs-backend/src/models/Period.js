@@ -35,7 +35,6 @@ const PeriodSchema = new mongoose.Schema({
 
 PeriodSchema.add(BaseSchema);
 
-// Validation des dates
 PeriodSchema.pre('validate', function(next) {
     if (this.dateFin <= this.dateDebut) {
         next(new Error('La date de fin doit être postérieure à la date de début'));
