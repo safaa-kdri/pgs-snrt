@@ -1,16 +1,26 @@
 // src/components/common/Layout.jsx
 import React from 'react';
-import { Box, Container } from '@mui/material';
+import { Box } from '@mui/material';
 import Header from './Header';
 import Footer from './Footer';
 
 const Layout = ({ children }) => {
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            minHeight: '100vh',
+            padding: 0,
+            margin: 0
+        }}>
             <Header />
-            <Container component="main" sx={{ flex: 1, py: 4 }}>
+            <Box component="main" sx={{ 
+                flex: 1, 
+                padding: 0, 
+                margin: 0 
+            }}>
                 {children}
-            </Container>
+            </Box>
             <Footer />
         </Box>
     );

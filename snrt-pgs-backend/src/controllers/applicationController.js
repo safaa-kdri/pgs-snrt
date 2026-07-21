@@ -2,16 +2,58 @@
 const Application = require('../models/Application');
 const Document = require('../models/Document');
 const Offer = require('../models/Offer');
+const Notification = require('../models/Notification');
+const UtilisateurExterne = require('../models/UtilisateurExterne');
+const { APPLICATION_STATUS } = require('../config/constants');
+const { sendApplicationStatusChangedEmail } = require('../services/emailService');
+const logger = require('../utils/logger');
 
-const STATUTS = ['Brouillon', 'Soumise', 'Analyse', 'Entretien', 'Acceptee', 'Refusee'];
+// RG-018 : toute etape cle du workflow de candidature declenche une
+// notification (plateforme + email). Non bloquant : un echec d'envoi ne doit
+// jamais faire echouer le changement de statut lui-meme.
+async function notifyStudentStatusChanged(application, statut) {
+    try {
+        const [student, offer] = await Promise.all([
+            UtilisateurExterne.findById(application.etudiantId).select('email nom prenom'),
+            Offer.findById(application.offreId).select('titre'),
+        ]);
+        if (!student) return;
+
+        await Notification.create({
+            type: 'InApp',
+            titre: 'Mise a jour de candidature',
+            message: `Le statut de votre candidature pour "${offer?.titre || 'une offre'}" est maintenant : ${statut}.`,
+            lien: `/candidatures/${application._id}`,
+            userId: student._id,
+            userModel: 'UtilisateurExterne',
+        });
+
+        await sendApplicationStatusChangedEmail({
+            to: student.email,
+            studentName: `${student.prenom} ${student.nom}`,
+            offerTitle: offer?.titre || 'votre offre',
+            status: statut,
+        });
+    } catch (err) {
+        logger.warn(`[Application] Notification de changement de statut non envoyee: ${err.message}`);
+    }
+}
+
+// Source unique de verite pour les statuts : config/constants.js
+// (evite le desalignement Analyse/EnAnalyse entre schema et controleur).
+const STATUTS = Object.values(APPLICATION_STATUS);
 
 const TRANSITIONS_AUTORISEES = {
-    Brouillon: ['Soumise'],
-    Soumise: ['Analyse', 'Refusee'],
-    Analyse: ['Entretien', 'Acceptee', 'Refusee'],
-    Entretien: ['Acceptee', 'Refusee'],
-    Acceptee: [],
-    Refusee: []
+    [APPLICATION_STATUS.BROUILLON]: [APPLICATION_STATUS.SOUMISE],
+    [APPLICATION_STATUS.SOUMISE]: [APPLICATION_STATUS.EN_ANALYSE, APPLICATION_STATUS.REFUSEE],
+    [APPLICATION_STATUS.EN_ANALYSE]: [
+        APPLICATION_STATUS.ENTRETIEN,
+        APPLICATION_STATUS.ACCEPTEE,
+        APPLICATION_STATUS.REFUSEE,
+    ],
+    [APPLICATION_STATUS.ENTRETIEN]: [APPLICATION_STATUS.ACCEPTEE, APPLICATION_STATUS.REFUSEE],
+    [APPLICATION_STATUS.ACCEPTEE]: [],
+    [APPLICATION_STATUS.REFUSEE]: [],
 };
 
 const canChangeStatus = (ancienStatut, nouveauStatut) => {
@@ -48,7 +90,7 @@ exports.createApplication = async (req, res) => {
             offreId,
             commentaire,
             documents,
-            statut: 'Brouillon',
+            statut: APPLICATION_STATUS.BROUILLON,
             createdBy: req.user?._id
         });
 
@@ -139,7 +181,7 @@ exports.updateApplication = async (req, res) => {
             });
         }
 
-        if (application.statut !== 'Brouillon') {
+        if (application.statut !== APPLICATION_STATUS.BROUILLON) {
             return res.status(400).json({
                 success: false,
                 message: 'Seule une candidature en brouillon peut être modifiée'
@@ -178,22 +220,32 @@ exports.submitApplication = async (req, res) => {
             });
         }
 
-        if (application.statut !== 'Brouillon') {
+        if (application.statut !== APPLICATION_STATUS.BROUILLON) {
             return res.status(400).json({
                 success: false,
                 message: 'Seule une candidature en brouillon peut être soumise'
             });
         }
 
+        // RG-013 : le CV est un document obligatoire pour toute candidature.
+        const documents = await Document.find({ _id: { $in: application.documents } }).select('type');
+        const hasCv = documents.some((doc) => doc.type === 'CV');
+        if (!hasCv) {
+            return res.status(400).json({
+                success: false,
+                message: 'Un CV est obligatoire avant de soumettre la candidature (RG-013).'
+            });
+        }
+
         const ancienStatut = application.statut;
 
-        application.statut = 'Soumise';
+        application.statut = APPLICATION_STATUS.SOUMISE;
         application.dateSoumission = new Date();
         application.updatedBy = req.user?._id;
 
         application.historique.push({
             ancienStatut,
-            nouveauStatut: 'Soumise',
+            nouveauStatut: APPLICATION_STATUS.SOUMISE,
             commentaire: 'Candidature soumise par l’étudiant',
             auteurId: req.user?._id
         });
@@ -256,6 +308,8 @@ exports.changeApplicationStatus = async (req, res) => {
         });
 
         await application.save();
+
+        await notifyStudentStatusChanged(application, statut);
 
         return res.status(200).json({
             success: true,

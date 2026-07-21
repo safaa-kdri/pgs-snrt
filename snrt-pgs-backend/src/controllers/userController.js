@@ -3,6 +3,7 @@ const UtilisateurInterne = require('../models/UtilisateurInterne');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const Role = require('../models/Role');
 const Department = require('../models/Department');
+const { hashPassword } = require('../utils/argon2');
 
 const getUserModel = (type) => {
     if (type === 'interne') return UtilisateurInterne;
@@ -12,15 +13,17 @@ const getUserModel = (type) => {
 
 exports.createInternalUser = async (req, res) => {
     try {
+        const motDePasseHash = await hashPassword(req.body.motDePasse);
         const user = await UtilisateurInterne.create({
             ...req.body,
+            motDePasse: motDePasseHash,
             createdBy: req.user?._id
         });
 
         const userResponse = await UtilisateurInterne.findById(user._id)
             .select('-motDePasse')
             .populate('roleId')
-            .populate('departmentId');
+            .populate('departementId');
 
         return res.status(201).json({
             success: true,
@@ -38,8 +41,10 @@ exports.createInternalUser = async (req, res) => {
 
 exports.createExternalUser = async (req, res) => {
     try {
+        const motDePasseHash = await hashPassword(req.body.motDePasse);
         const user = await UtilisateurExterne.create({
             ...req.body,
+            motDePasse: motDePasseHash,
             createdBy: req.user?._id
         });
 
@@ -69,7 +74,7 @@ exports.getAllUsers = async (req, res) => {
             const users = await UtilisateurInterne.find()
                 .select('-motDePasse')
                 .populate('roleId')
-                .populate('departmentId')
+                .populate('departementId')
                 .sort({ createdAt: -1 });
 
             return res.status(200).json({
@@ -97,7 +102,7 @@ exports.getAllUsers = async (req, res) => {
         const internalUsers = await UtilisateurInterne.find()
             .select('-motDePasse')
             .populate('roleId')
-            .populate('departmentId')
+            .populate('departementId')
             .sort({ createdAt: -1 });
 
         const externalUsers = await UtilisateurExterne.find()
@@ -134,10 +139,9 @@ exports.getUserById = async (req, res) => {
             });
         }
 
-        const user = await UserModel.findById(id)
-            .select('-motDePasse')
-            .populate('roleId')
-            .populate('departmentId');
+        let query = UserModel.findById(id).select('-motDePasse').populate('roleId');
+        if (type === 'interne') query = query.populate('departementId');
+        const user = await query;
 
         if (!user) {
             return res.status(404).json({
@@ -174,13 +178,11 @@ exports.updateUser = async (req, res) => {
         const updateData = { ...req.body, updatedBy: req.user?._id };
         delete updateData.motDePasse;
 
-        const user = await UserModel.findByIdAndUpdate(id, updateData, {
-            new: true,
-            runValidators: true
-        })
+        let query = UserModel.findByIdAndUpdate(id, updateData, { new: true, runValidators: true })
             .select('-motDePasse')
-            .populate('roleId')
-            .populate('departmentId');
+            .populate('roleId');
+        if (type === 'interne') query = query.populate('departementId');
+        const user = await query;
 
         if (!user) {
             return res.status(404).json({
@@ -261,14 +263,15 @@ exports.changeUserRole = async (req, res) => {
             });
         }
 
-        const user = await UserModel.findByIdAndUpdate(
+        let query = UserModel.findByIdAndUpdate(
             id,
             { roleId, updatedBy: req.user?._id },
             { new: true, runValidators: true }
         )
             .select('-motDePasse')
-            .populate('roleId')
-            .populate('departmentId');
+            .populate('roleId');
+        if (type === 'interne') query = query.populate('departementId');
+        const user = await query;
 
         if (!user) {
             return res.status(404).json({
@@ -294,9 +297,9 @@ exports.changeUserRole = async (req, res) => {
 exports.assignDepartment = async (req, res) => {
     try {
         const { id } = req.params;
-        const { departmentId } = req.body;
+        const { departementId } = req.body;
 
-        const department = await Department.findById(departmentId);
+        const department = await Department.findById(departementId);
 
         if (!department) {
             return res.status(404).json({
@@ -307,12 +310,12 @@ exports.assignDepartment = async (req, res) => {
 
         const user = await UtilisateurInterne.findByIdAndUpdate(
             id,
-            { departmentId, updatedBy: req.user?._id },
+            { departementId, updatedBy: req.user?._id },
             { new: true, runValidators: true }
         )
             .select('-motDePasse')
             .populate('roleId')
-            .populate('departmentId');
+            .populate('departementId');
 
         if (!user) {
             return res.status(404).json({
@@ -348,14 +351,15 @@ exports.changeUserStatus = async (req, res) => {
             });
         }
 
-        const user = await UserModel.findByIdAndUpdate(
+        let query = UserModel.findByIdAndUpdate(
             id,
             { actif, updatedBy: req.user?._id },
             { new: true, runValidators: true }
         )
             .select('-motDePasse')
-            .populate('roleId')
-            .populate('departmentId');
+            .populate('roleId');
+        if (type === 'interne') query = query.populate('departementId');
+        const user = await query;
 
         if (!user) {
             return res.status(404).json({

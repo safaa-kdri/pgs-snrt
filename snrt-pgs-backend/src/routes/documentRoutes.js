@@ -4,6 +4,9 @@ const router = express.Router();
 
 const upload = require('../middlewares/upload');
 const documentController = require('../controllers/documentController');
+const { authenticate } = require('../middlewares/auth');
+
+router.use(authenticate());
 
 router.post(
     '/',

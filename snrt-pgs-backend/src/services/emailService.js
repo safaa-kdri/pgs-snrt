@@ -1,99 +1,155 @@
-// src/services/emailService.js
 const nodemailer = require('nodemailer');
+const { CONFIG } = require('../config/constants');
+const logger = require('../utils/logger');
 
-const createTransporter = () => {
-    return nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-        }
-    });
-};
+/**
+ * NOTE D'EQUIPE : ce fichier releve du perimetre de Mohammed dans
+ * l'arborescence du projet. Il est fourni ici deja fonctionnel car
+ * controllers/authController.js (Badr) et controllers/interviewController.js
+ * (Badr) en dependent directement pour l'envoi des codes 2FA, des liens de
+ * reinitialisation et des notifications d'entretien. Mohammed peut
+ * librement l'etendre (nouveaux templates, files d'attente, etc.).
+ *
+ * Fusion (2026-07) : les fonctions liees aux candidatures et documents
+ * (module Mohammed - applicationController/documentController) ont ete
+ * rebranchees sur ce meme transporteur/CONFIG plutot que sur une seconde
+ * config SMTP (process.env.SMTP_PASS / EMAIL_FROM) afin d'eviter deux
+ * sources de verite pour les identifiants SMTP.
+ */
+const transporter = nodemailer.createTransport({
+  host: CONFIG.smtp.host,
+  port: CONFIG.smtp.port,
+  secure: CONFIG.smtp.secure,
+  auth: CONFIG.smtp.user ? { user: CONFIG.smtp.user, pass: CONFIG.smtp.password } : undefined,
+});
 
-const isEmailConfigured = () => {
-    return Boolean(
-        process.env.SMTP_HOST &&
-        process.env.SMTP_USER &&
-        process.env.SMTP_PASS &&
-        process.env.EMAIL_FROM
-    );
-};
+async function sendMail({ to, subject, html, text }) {
+  try {
+    await transporter.sendMail({ from: CONFIG.smtp.from, to, subject, text, html });
+  } catch (err) {
+    logger.error(`[Email] Echec d'envoi vers ${to}: ${err.message}`);
+    throw err;
+  }
+}
 
-exports.sendEmail = async ({ to, subject, html, text }) => {
-    if (!isEmailConfigured()) {
-        return {
-            skipped: true,
-            message: 'Configuration SMTP absente'
-        };
-    }
+function baseTemplate(title, bodyHtml) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; color: #1f2933;">
+      <h2 style="color: #0b3d91;">${title}</h2>
+      ${bodyHtml}
+      <hr style="margin-top: 24px; border: none; border-top: 1px solid #e5e7eb;" />
+      <p style="font-size: 12px; color: #6b7280;">
+        Societe Nationale de Radiodiffusion et de Television - Plateforme de Gestion des Stages.
+        Ceci est un message automatique, merci de ne pas y repondre.
+      </p>
+    </div>
+  `;
+}
 
-    const transporter = createTransporter();
+async function sendTwoFactorCodeEmail(to, code) {
+  const html = baseTemplate(
+    'Code de verification',
+    `<p>Votre code de connexion a la Plateforme de Gestion des Stages est :</p>
+     <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px;">${code}</p>
+     <p>Ce code est valable ${CONFIG.twoFactor.ttlMinutes} minutes. Si vous n'etes pas a l'origine de cette demande, ignorez cet email.</p>`
+  );
+  await sendMail({ to, subject: 'Votre code de verification PGS', html, text: `Votre code de verification est : ${code}` });
+}
 
-    const info = await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to,
-        subject,
-        html,
-        text
-    });
+async function sendPasswordResetEmail(to, resetUrl) {
+  const html = baseTemplate(
+    'Reinitialisation de votre mot de passe',
+    `<p>Vous avez demande la reinitialisation de votre mot de passe.</p>
+     <p><a href="${resetUrl}" style="background:#0b3d91;color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none;">Reinitialiser mon mot de passe</a></p>
+     <p>Ce lien expire dans ${CONFIG.resetPassword.ttlMinutes} minutes. Si vous n'etes pas a l'origine de cette demande, ignorez cet email.</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Reinitialisation de votre mot de passe - PGS',
+    html,
+    text: `Reinitialisez votre mot de passe via ce lien (valable ${CONFIG.resetPassword.ttlMinutes} min) : ${resetUrl}`,
+  });
+}
 
-    return {
-        skipped: false,
-        messageId: info.messageId
-    };
-};
+async function sendWelcomeEmail(to, prenom) {
+  const html = baseTemplate(
+    'Bienvenue sur la Plateforme de Gestion des Stages',
+    `<p>Bonjour ${prenom},</p>
+     <p>Votre compte candidat a bien ete cree. Vous pouvez desormais consulter les offres de stage et postuler en ligne.</p>`
+  );
+  await sendMail({ to, subject: 'Bienvenue sur la Plateforme de Gestion des Stages', html, text: `Bonjour ${prenom}, votre compte a bien ete cree.` });
+}
 
-exports.sendApplicationSubmittedEmail = async ({ to, studentName, offerTitle }) => {
-    return exports.sendEmail({
-        to,
-        subject: 'Candidature soumise avec succès',
-        text: `Bonjour ${studentName}, votre candidature pour l’offre ${offerTitle} a été soumise avec succès.`,
-        html: `
-            <p>Bonjour ${studentName},</p>
-            <p>Votre candidature pour l’offre <strong>${offerTitle}</strong> a été soumise avec succès.</p>
-            <p>Vous pouvez suivre son avancement depuis votre espace candidat.</p>
-        `
-    });
-};
+// Signature conservee (to, {date, heure, type, lieu, lienVisio}) : c'est
+// celle appelee par interviewController.notifyStudentInterviewScheduled.
+async function sendInterviewScheduledEmail(to, { date, heure, type, lieu, lienVisio }) {
+  const lieuLigne = type === 'Visio' ? `Lien : ${lienVisio}` : `Lieu : ${lieu || 'a confirmer'}`;
+  const html = baseTemplate(
+    'Entretien planifie',
+    `<p>Un entretien a ete planifie dans le cadre de votre candidature :</p>
+     <p><strong>Date :</strong> ${new Date(date).toLocaleDateString('fr-FR')} a ${heure}<br/>
+     <strong>Type :</strong> ${type}<br/>${lieuLigne}</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Entretien planifie - PGS',
+    html,
+    text: `Un entretien a ete planifie le ${new Date(date).toLocaleDateString('fr-FR')} a ${heure} (${type}).`,
+  });
+}
 
-exports.sendApplicationStatusChangedEmail = async ({ to, studentName, offerTitle, status }) => {
-    return exports.sendEmail({
-        to,
-        subject: 'Mise à jour de votre candidature',
-        text: `Bonjour ${studentName}, le statut de votre candidature pour ${offerTitle} est maintenant : ${status}.`,
-        html: `
-            <p>Bonjour ${studentName},</p>
-            <p>Le statut de votre candidature pour <strong>${offerTitle}</strong> est maintenant : <strong>${status}</strong>.</p>
-        `
-    });
-};
+// --- Nouveau (module candidatures/documents) ---------------------------
 
-exports.sendInterviewScheduledEmail = async ({ to, studentName, date, heure, lieu, lienVisio }) => {
-    return exports.sendEmail({
-        to,
-        subject: 'Entretien de stage planifié',
-        text: `Bonjour ${studentName}, votre entretien est planifié le ${date} à ${heure}.`,
-        html: `
-            <p>Bonjour ${studentName},</p>
-            <p>Votre entretien de stage est planifié le <strong>${date}</strong> à <strong>${heure}</strong>.</p>
-            ${lieu ? `<p>Lieu : ${lieu}</p>` : ''}
-            ${lienVisio ? `<p>Lien visio : <a href="${lienVisio}">${lienVisio}</a></p>` : ''}
-        `
-    });
-};
+async function sendApplicationSubmittedEmail({ to, studentName, offerTitle }) {
+  const html = baseTemplate(
+    'Candidature soumise avec succès',
+    `<p>Bonjour ${studentName},</p>
+     <p>Votre candidature pour l'offre <strong>${offerTitle}</strong> a été soumise avec succès.</p>
+     <p>Vous pouvez suivre son avancement depuis votre espace candidat.</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Candidature soumise avec succès',
+    html,
+    text: `Bonjour ${studentName}, votre candidature pour l'offre ${offerTitle} a été soumise avec succès.`,
+  });
+}
 
-exports.sendDocumentRejectedEmail = async ({ to, studentName, documentName, reason }) => {
-    return exports.sendEmail({
-        to,
-        subject: 'Document refusé',
-        text: `Bonjour ${studentName}, votre document ${documentName} a été refusé. Motif : ${reason || 'Non précisé'}.`,
-        html: `
-            <p>Bonjour ${studentName},</p>
-            <p>Votre document <strong>${documentName}</strong> a été refusé.</p>
-            <p>Motif : ${reason || 'Non précisé'}</p>
-        `
-    });
+async function sendApplicationStatusChangedEmail({ to, studentName, offerTitle, status }) {
+  const html = baseTemplate(
+    'Mise à jour de votre candidature',
+    `<p>Bonjour ${studentName},</p>
+     <p>Le statut de votre candidature pour <strong>${offerTitle}</strong> est maintenant : <strong>${status}</strong>.</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Mise à jour de votre candidature',
+    html,
+    text: `Bonjour ${studentName}, le statut de votre candidature pour ${offerTitle} est maintenant : ${status}.`,
+  });
+}
+
+async function sendDocumentRejectedEmail({ to, studentName, documentName, reason }) {
+  const html = baseTemplate(
+    'Document refusé',
+    `<p>Bonjour ${studentName},</p>
+     <p>Votre document <strong>${documentName}</strong> a été refusé.</p>
+     <p>Motif : ${reason || 'Non précisé'}</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Document refusé',
+    html,
+    text: `Bonjour ${studentName}, votre document ${documentName} a été refusé. Motif : ${reason || 'Non précisé'}.`,
+  });
+}
+
+module.exports = {
+  sendTwoFactorCodeEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+  sendInterviewScheduledEmail,
+  sendApplicationSubmittedEmail,
+  sendApplicationStatusChangedEmail,
+  sendDocumentRejectedEmail,
 };

@@ -59,7 +59,7 @@ documents: [{
     ancienStatut: String,
     nouveauStatut: {
         type: String,
-        enum: ['Brouillon', 'Soumise', 'Analyse', 'Entretien', 'Acceptee', 'Refusee']
+        enum: ['Brouillon', 'Soumise', 'EnAnalyse', 'Entretien', 'Acceptee', 'Refusee']
     },
     commentaire: String,
     auteurId: {

@@ -4,6 +4,9 @@ const fs = require('fs');
 
 const Document = require('../models/Document');
 const Application = require('../models/Application');
+const UtilisateurExterne = require('../models/UtilisateurExterne');
+const { sendDocumentRejectedEmail } = require('./emailService');
+const logger = require('../utils/logger');
 
 const getDocumentType = (type) => {
     const allowedTypes = ['CV', 'LettreMotivation', 'Convention', 'Attestation', 'ReleveNotes', 'Autre'];
@@ -95,6 +98,22 @@ exports.verifyDocument = async ({ documentId, statut, commentaire, verifiedBy })
     document.verifiedAt = new Date();
 
     await document.save();
+
+    if (statut === 'Refuse') {
+        try {
+            const student = await UtilisateurExterne.findById(document.candidatId).select('email nom prenom');
+            if (student) {
+                await sendDocumentRejectedEmail({
+                    to: student.email,
+                    studentName: `${student.prenom} ${student.nom}`,
+                    documentName: document.nomOriginal,
+                    reason: commentaire,
+                });
+            }
+        } catch (err) {
+            logger.warn(`[Document] Email de refus non envoye: ${err.message}`);
+        }
+    }
 
     return document;
 };

@@ -23,7 +23,7 @@ const InternshipSchema = new mongoose.Schema({
     },
     remarques: String,
     
-    // Références
+    
     etudiantId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'UtilisateurExterne',
@@ -45,7 +45,7 @@ const InternshipSchema = new mongoose.Schema({
         required: true
     },
     
-    // Embedded
+    
     livrables: [{
         nom: String,
         type: {
