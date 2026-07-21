@@ -11,7 +11,11 @@ const path = require('path');
 const connectDB = require('./src/config/database');
 const logger = require('./src/utils/logger');
 const errorHandler = require('./src/middlewares/errorHandler');
-
+const departmentRoutes = require('./src/routes/departmentRoutes');
+const userRoutes = require('./src/routes/userRoutes');
+const applicationRoutes = require('./src/routes/applicationRoutes');
+const documentRoutes = require('./src/routes/documentRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
 const app = express();
 
 // ============ CONNEXION DATABASE ============
@@ -53,7 +57,12 @@ app.use(morgan('combined', {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============ ROUTES ============
-// (À importer plus tard)
+
+app.use('/api/departments', departmentRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/documents', documentRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // ============ HEALTH CHECK ============
 app.get('/health', (req, res) => {
