@@ -117,7 +117,10 @@ const login = asyncHandler(async (req, res) => {
   const { email, motDePasse } = req.body;
   const genericError = 'Adresse email ou mot de passe incorrect.';
 
-  const found = await userLookup.findByEmail(email, '+motDePasse +security +twoFactor');
+  const found = await userLookup.findByEmail(
+    email,
+    '+motDePasse +security.failedLoginAttempts +security.lockUntil +twoFactor.codeHash +twoFactor.expiresAt'
+  );
   if (!found) {
     logger.audit('LOGIN_FAILED_UNKNOWN_EMAIL', { email });
     throw ApiError.unauthorized(genericError);
@@ -189,7 +192,11 @@ const verifyTwoFactor = asyncHandler(async (req, res) => {
     throw ApiError.unauthorized('Session expiree. Veuillez vous reconnecter.');
   }
 
-  const user = await userLookup.findById(payload.sub, payload.userType, '+twoFactor +refreshTokens');
+  const user = await userLookup.findById(
+    payload.sub,
+    payload.userType,
+    '+twoFactor.codeHash +twoFactor.expiresAt +refreshTokens'
+  );
   if (!user) {
     clearPreAuthCookie(res);
     throw ApiError.unauthorized('Compte introuvable.');
@@ -227,7 +234,11 @@ const resendTwoFactorCode = asyncHandler(async (req, res) => {
   const payload = verifyPreAuthToken(preAuthToken);
   if (!payload) throw ApiError.unauthorized('Session expiree. Veuillez vous reconnecter.');
 
-  const user = await userLookup.findById(payload.sub, payload.userType, '+twoFactor');
+  const user = await userLookup.findById(
+    payload.sub,
+    payload.userType,
+    '+twoFactor.codeHash +twoFactor.expiresAt'
+  );
   if (!user) throw ApiError.unauthorized('Compte introuvable.');
 
   const { code, codeHash, expiresAt } = generateTwoFactorCode();

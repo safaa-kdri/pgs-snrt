@@ -37,13 +37,13 @@ PeriodSchema.add(BaseSchema);
 
 PeriodSchema.pre('validate', function(next) {
     if (this.dateFin <= this.dateDebut) {
-        next(new Error('La date de fin doit être postérieure à la date de début'));
+        next(new Error('...'));
     }
     if (this.dateFermetureCandidatures <= this.dateOuvertureCandidatures) {
-        next(new Error('La date de fermeture doit être postérieure à la date d\'ouverture'));
+        next(new Error('...'));
     }
     if (this.dateDebut <= this.dateFermetureCandidatures) {
-        next(new Error('Le stage doit commencer après la fin des candidatures'));
+        next(new Error('...'));
     }
     next();
 });
