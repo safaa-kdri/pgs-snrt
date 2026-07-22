@@ -2,30 +2,49 @@ const nodemailer = require('nodemailer');
 const { CONFIG } = require('../config/constants');
 const logger = require('../utils/logger');
 
-/**
- * NOTE D'EQUIPE : ce fichier releve du perimetre de Mohammed dans
- * l'arborescence du projet. Il est fourni ici deja fonctionnel car
- * controllers/authController.js (Badr) et controllers/interviewController.js
- * (Badr) en dependent directement pour l'envoi des codes 2FA, des liens de
- * reinitialisation et des notifications d'entretien. Mohammed peut
- * librement l'etendre (nouveaux templates, files d'attente, etc.).
- *
- * Fusion (2026-07) : les fonctions liees aux candidatures et documents
- * (module Mohammed - applicationController/documentController) ont ete
- * rebranchees sur ce meme transporteur/CONFIG plutot que sur une seconde
- * config SMTP (process.env.SMTP_PASS / EMAIL_FROM) afin d'eviter deux
- * sources de verite pour les identifiants SMTP.
- */
-const transporter = nodemailer.createTransport({
-  host: CONFIG.smtp.host,
-  port: CONFIG.smtp.port,
-  secure: CONFIG.smtp.secure,
-  auth: CONFIG.smtp.user ? { user: CONFIG.smtp.user, pass: CONFIG.smtp.password } : undefined,
-});
+
+let transporterPromise = null;
+
+function buildTransporter() {
+  if (CONFIG.smtp.host) {
+    return Promise.resolve(
+      nodemailer.createTransport({
+        host: CONFIG.smtp.host,
+        port: CONFIG.smtp.port,
+        secure: CONFIG.smtp.secure,
+        auth: CONFIG.smtp.user ? { user: CONFIG.smtp.user, pass: CONFIG.smtp.password } : undefined,
+      })
+    );
+  }
+
+  logger.warn(
+    "[Email] Aucun SMTP_HOST defini : utilisation d'un compte de test Ethereal (dev uniquement, aucun email reellement envoye)."
+  );
+
+  return nodemailer.createTestAccount().then((testAccount) =>
+    nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: { user: testAccount.user, pass: testAccount.pass },
+    })
+  );
+}
+
+function getTransporter() {
+  if (!transporterPromise) transporterPromise = buildTransporter();
+  return transporterPromise;
+}
 
 async function sendMail({ to, subject, html, text }) {
   try {
-    await transporter.sendMail({ from: CONFIG.smtp.from, to, subject, text, html });
+    const transporter = await getTransporter();
+    const info = await transporter.sendMail({ from: CONFIG.smtp.from, to, subject, text, html });
+
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    if (previewUrl) {
+      logger.info(`[Email] (Ethereal) Previsualisation de l'email envoye a ${to} : ${previewUrl}`);
+    }
   } catch (err) {
     logger.error(`[Email] Echec d'envoi vers ${to}: ${err.message}`);
     throw err;
@@ -98,7 +117,6 @@ async function sendInterviewScheduledEmail(to, { date, heure, type, lieu, lienVi
   });
 }
 
-// --- Nouveau (module candidatures/documents) ---------------------------
 
 async function sendApplicationSubmittedEmail({ to, studentName, offerTitle }) {
   const html = baseTemplate(

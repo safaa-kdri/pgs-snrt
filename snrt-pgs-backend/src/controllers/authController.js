@@ -375,7 +375,17 @@ const forgotPassword = asyncHandler(async (req, res) => {
     await sendPasswordResetEmail(user.email, resetUrl);
     logger.audit('FORGOT_PASSWORD_EMAIL_SENT', { userId: user._id.toString() });
   } catch (err) {
-    logger.error(`[ForgotPassword] Echec envoi email a ${user.email}`);
+    logger.error(`[ForgotPassword] Echec envoi email a ${user.email}: ${err.message}`);
+
+    // Fallback : en mode dev, afficher le lien dans la console pour ne pas
+    // bloquer le flux (memes symptomes/cause que login() / resendTwoFactorCode()
+    // quand aucun serveur SMTP n'est joignable).
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info('==================================================');
+      logger.info(`[DEV MODE] LIEN DE REINITIALISATION : ${resetUrl}`);
+      logger.info('==================================================');
+    }
+    // Ne pas bloquer la route, juste logger l'erreur.
   }
 
   return res.status(200).json(genericResponse);
