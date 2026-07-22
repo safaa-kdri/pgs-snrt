@@ -246,7 +246,20 @@ const resendTwoFactorCode = asyncHandler(async (req, res) => {
   user.twoFactor.expiresAt = expiresAt;
   await user.save();
 
-  await sendTwoFactorCodeEmail(user.email, code);
+  try {
+    await sendTwoFactorCodeEmail(user.email, code);
+    logger.info(`[2FA] Email resent successfully to ${user.email}`);
+  } catch (err) {
+    logger.error(`[2FA Resend Failed] SMTP error: ${err.message}`);
+
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`==================================================`);
+      logger.info(`[DEV MODE] 2FA CODE (RESEND) FOR ${user.email}: ${code}`);
+      logger.info(`==================================================`);
+    } else {
+      throw ApiError.internal("Impossible d'envoyer le code de verification. Veuillez reessayer.");
+    }
+  }
 
   const newPreAuthToken = signPreAuthToken({ sub: user._id.toString(), userType: payload.userType });
   setPreAuthCookie(res, newPreAuthToken);
@@ -346,6 +359,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
   const { user } = found;
 
   const rawToken = generateRandomToken(32);
+  
+  // next 3 lines ila nsit nms7hom they need to go
+  console.log('\n==================================================');
+  console.log('[DEV MODE] RAW RESET TOKEN:', rawToken);
+  console.log('==================================================\n');
+
   user.passwordReset.tokenHash = hashToken(rawToken);
   user.passwordReset.expiresAt = new Date(Date.now() + CONFIG.resetPassword.ttlMinutes * 60 * 1000);
   await user.save();

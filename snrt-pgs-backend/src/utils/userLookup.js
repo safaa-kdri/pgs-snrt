@@ -36,10 +36,13 @@ async function findById(userId, userType, selectExtra = '') {
 }
 
 async function findByPasswordResetHash(tokenHash) {
-  const interne = await UtilisateurInterne.findOne({ 'passwordReset.tokenHash': tokenHash }).select('+passwordReset +security');
+  const selectFields =
+    '+passwordReset.tokenHash +passwordReset.expiresAt +security.failedLoginAttempts +security.lockUntil';
+
+  const interne = await UtilisateurInterne.findOne({ 'passwordReset.tokenHash': tokenHash }).select(selectFields);
   if (interne) return { user: interne, userType: 'interne' };
 
-  const externe = await UtilisateurExterne.findOne({ 'passwordReset.tokenHash': tokenHash }).select('+passwordReset +security');
+  const externe = await UtilisateurExterne.findOne({ 'passwordReset.tokenHash': tokenHash }).select(selectFields);
   if (externe) return { user: externe, userType: 'externe' };
 
   return null;
