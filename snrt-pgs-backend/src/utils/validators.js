@@ -20,6 +20,15 @@ const LOWERCASE_RE = /[a-z]/;
 const DIGIT_RE = /[0-9]/;
 const SPECIAL_RE = /[^A-Za-z0-9]/;
 
+// CIN marocaine : 1 ou 2 lettres suivies d'exactement 6 chiffres (ex: A123456, AB123456).
+const CIN_RE = /^[A-Z]{1,2}[0-9]{6}$/;
+const CIN_MESSAGE = 'CIN invalide (format attendu : 1 ou 2 lettres suivies de 6 chiffres, ex: AB123456).';
+
+// Telephone marocain : mobile (06/07) ou fixe (05), en local (0XXXXXXXXX,
+// 10 chiffres) ou avec l'indicatif (+212XXXXXXXXX, 9 chiffres apres +212).
+const PHONE_RE = /^(?:\+212|0)[5-7][0-9]{8}$/;
+const PHONE_MESSAGE = 'Numero de telephone invalide (format attendu : 06XXXXXXXX, 07XXXXXXXX ou +212XXXXXXXXX).';
+
 function validatePasswordPolicy(password, userType) {
   const minLength = PASSWORD_MIN_LENGTH[userType];
   const errors = [];
@@ -46,10 +55,11 @@ const registerSchema = Joi.object({
   email: Joi.string().trim().email().required(),
   motDePasse: Joi.string().min(16).max(128).required(),
   telephone: Joi.string()
-    .pattern(/^[0-9+()\s-]{8,20}$/)
+    .trim()
+    .pattern(PHONE_RE)
     .required()
-    .messages({ 'string.pattern.base': 'Numero de telephone invalide.' }),
-  cin: Joi.string().trim().min(4).max(20).required(),
+    .messages({ 'string.pattern.base': PHONE_MESSAGE }),
+  cin: Joi.string().trim().uppercase().pattern(CIN_RE).required().messages({ 'string.pattern.base': CIN_MESSAGE }),
   civilite: Joi.string().valid('Mme', 'Mr').required(),
   dateNaissance: Joi.date().less('now').required(),
   adresse: Joi.string().trim().min(2).max(200).required(),
@@ -62,7 +72,7 @@ const registerSchema = Joi.object({
 });
 
 const loginSchema = Joi.object({
-  email: Joi.string().trim().email().required(),
+  cin: Joi.string().trim().uppercase().pattern(CIN_RE).required().messages({ 'string.pattern.base': CIN_MESSAGE }),
   motDePasse: Joi.string().required(),
 });
 
@@ -224,10 +234,13 @@ const createInternalUserSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(60).required(),
   prenom: Joi.string().trim().min(2).max(60).required(),
   email: Joi.string().trim().email().required(),
+  cin: Joi.string().trim().uppercase().pattern(CIN_RE).required().messages({ 'string.pattern.base': CIN_MESSAGE }),
   motDePasse: Joi.string().min(PASSWORD_MIN_LENGTH.interne).max(128).required(),
   telephone: Joi.string()
-    .pattern(/^[0-9+()\s-]{8,20}$/)
-    .allow(null, ''),
+    .trim()
+    .pattern(PHONE_RE)
+    .allow(null, '')
+    .messages({ 'string.pattern.base': PHONE_MESSAGE }),
   roleId: Joi.string().hex().length(24).required(),
   departementId: Joi.string().hex().length(24).allow(null),
   actif: Joi.boolean().default(true),

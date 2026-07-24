@@ -30,6 +30,22 @@ async function emailExists(email) {
   return Boolean(await findByEmail(email));
 }
 
+async function findByCin(cin, selectExtra = '') {
+  const normalizedCin = cin.trim().toUpperCase();
+
+  const interne = await UtilisateurInterne.findOne({ cin: normalizedCin }).select(selectExtra);
+  if (interne) return { user: interne, userType: 'interne' };
+
+  const externe = await UtilisateurExterne.findOne({ cin: normalizedCin }).select(selectExtra);
+  if (externe) return { user: externe, userType: 'externe' };
+
+  return null;
+}
+
+async function cinExists(cin) {
+  return Boolean(await findByCin(cin));
+}
+
 async function findById(userId, userType, selectExtra = '') {
   const Model = getModel(userType);
   return Model.findById(userId).select(selectExtra);
@@ -48,4 +64,4 @@ async function findByPasswordResetHash(tokenHash) {
   return null;
 }
 
-module.exports = { getModel, findByEmail, emailExists, findById, findByPasswordResetHash };
+module.exports = { getModel, findByEmail, emailExists, findByCin, cinExists, findById, findByPasswordResetHash };

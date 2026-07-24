@@ -28,7 +28,8 @@ const listOffers = asyncHandler(async (req, res) => {
   const filter = {};
 
 
-  if (req.user.role === ROLES.ETUDIANT) {
+
+  if (!req.user || req.user.role === ROLES.ETUDIANT) {
     filter.statut = OFFER_STATUS.PUBLIEE;
   } else if (statut) {
     filter.statut = statut;
@@ -62,8 +63,7 @@ const getOfferById = asyncHandler(async (req, res) => {
   const offer = await Offer.findById(req.params.id);
   if (!offer) throw ApiError.notFound('Offre introuvable.');
 
-  if (req.user.role === ROLES.ETUDIANT && offer.statut !== OFFER_STATUS.PUBLIEE) {
-    
+  if ((!req.user || req.user.role === ROLES.ETUDIANT) && offer.statut !== OFFER_STATUS.PUBLIEE) {
     throw ApiError.notFound('Offre introuvable.');
   }
 

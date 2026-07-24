@@ -46,6 +46,40 @@ function authorize(...allowedRoles) {
 }
 
 
+// Auth optionnelle : utilisee pour les routes publiques qui doivent tout de
+// meme adapter leur reponse si un utilisateur est connecte (ex: GET /offers,
+// GET /offers/:id - consultation publique d'apres le CDC 2.4.2, mais le
+// controleur affine le filtrage si req.user est present). Ne bloque jamais
+// la requete : token absent, invalide, expire ou compte inactif => on
+// continue simplement sans req.user, comme un visiteur anonyme.
+function optionalAuthenticate() {
+  return async (req, res, next) => {
+    try {
+      const token = req.cookies?.accessToken;
+      if (!token) return next();
+
+      const payload = verifyAccessToken(token);
+      if (!payload) return next();
+
+      const user = await userLookup.findById(payload.sub, payload.userType);
+      if (!user || !user.actif) return next();
+
+      req.user = {
+        id: user._id.toString(),
+        _id: user._id.toString(),
+        userType: payload.userType,
+        role: payload.role,
+        departementId: payload.departementId || null,
+      };
+
+      return next();
+    } catch (err) {
+      return next();
+    }
+  };
+}
+
+
 const rateLimitHandler = (req, res, next) => next(ApiError.tooManyRequests());
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler });
@@ -55,6 +89,7 @@ const forgotPasswordLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, st
 
 module.exports = {
   authenticate,
+  optionalAuthenticate,
   authorize,
   loginLimiter,
   registerLimiter,

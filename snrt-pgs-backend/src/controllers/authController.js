@@ -84,7 +84,7 @@ const register = asyncHandler(async (req, res) => {
     throw ApiError.conflict('Un compte existe deja avec cette adresse email.');
   }
 
-  const cinExists = await UtilisateurExterne.exists({ cin: rest.cin.trim().toUpperCase() });
+  const cinExists = await userLookup.cinExists(rest.cin);
   if (cinExists) {
     throw ApiError.conflict('Un compte existe deja avec ce numero de CIN.');
   }
@@ -114,15 +114,15 @@ const register = asyncHandler(async (req, res) => {
 
 
 const login = asyncHandler(async (req, res) => {
-  const { email, motDePasse } = req.body;
-  const genericError = 'Adresse email ou mot de passe incorrect.';
+  const { cin, motDePasse } = req.body;
+  const genericError = 'Numero CIN ou mot de passe incorrect.';
 
-  const found = await userLookup.findByEmail(
-    email,
+  const found = await userLookup.findByCin(
+    cin,
     '+motDePasse +security.failedLoginAttempts +security.lockUntil +twoFactor.codeHash +twoFactor.expiresAt'
   );
   if (!found) {
-    logger.audit('LOGIN_FAILED_UNKNOWN_EMAIL', { email });
+    logger.audit('LOGIN_FAILED_UNKNOWN_CIN', { cin });
     throw ApiError.unauthorized(genericError);
   }
 

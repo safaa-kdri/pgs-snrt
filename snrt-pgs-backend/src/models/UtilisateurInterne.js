@@ -19,9 +19,29 @@ const utilisateurInterneSchema = new mongoose.Schema(
       match: [/^\S+@\S+\.\S+$/, 'Adresse email invalide.'],
     },
     motDePasse: { type: String, required: true, select: false }, // hash Argon2id
-    telephone: { type: String, default: null },
+    telephone: {
+      type: String,
+      default: null,
+      match: [/^(?:\+212|0)[5-7][0-9]{8}$/, 'Numero de telephone invalide.'],
+    },
     dateInscription: { type: Date, default: Date.now },
     actif: { type: Boolean, default: true },
+
+    // Ajoute pour permettre la connexion par CIN (comme utilisateurs_externes) :
+    // desormais tous les comptes (internes et externes) se connectent avec
+    // leur CIN + mot de passe, l'email restant utilise pour les notifications
+    // et la reinitialisation de mot de passe. RG-002 : unique dans la base de
+    // donnees, donc verifie cote applicatif a travers les deux collections
+    // (voir utils/userLookup.js) puisque Mongoose ne peut pas imposer une
+    // contrainte unique cross-collection.
+    cin: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      uppercase: true,
+      match: [/^[A-Z]{1,2}[0-9]{6}$/, 'CIN invalide.'],
+    },
 
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', required: true },
     departementId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
