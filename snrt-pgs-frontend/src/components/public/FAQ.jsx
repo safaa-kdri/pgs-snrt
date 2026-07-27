@@ -15,7 +15,7 @@ import {
 import { styled } from '@mui/material/styles';
 
 // ============================================
-// STYLES PERSONNALISÉS (IDENTIQUE À HOME)
+// STYLES
 // ============================================
 
 const SideCard = styled(Card)({
@@ -169,20 +169,20 @@ const LinksCard = styled(Card)({
     },
 });
 
-// ============================================
-// STYLES RECHERCHE (MODIFIÉS COMME HOME)
-// ============================================
-
+// ✅ SEARCH CARD - Exactement comme Home.jsx
 const SearchCard = styled(Card)({
     backgroundColor: '#f7f7f7',
     borderRadius: '19px',
     padding: '32px 20px 20px',
-    minHeight: '480px',
+    minHeight: '400px',
+    maxHeight: '560px',
+    position: 'sticky',
+    top: '20px',
     boxShadow: 'none',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-
+    overflowY: 'auto',
     '& h2': {
         marginBottom: '18px',
         color: '#07111b',
@@ -190,6 +190,7 @@ const SearchCard = styled(Card)({
         fontWeight: 400,
         textAlign: 'center',
         fontFamily: '"Inria Sans", sans-serif',
+        flexShrink: 0,
     },
 });
 
@@ -197,25 +198,15 @@ const SearchField = styled(TextField)({
     width: '100%',
     maxWidth: '220px',
     marginBottom: '10px',
-
+    flexShrink: 0,
     '& .MuiOutlinedInput-root': {
         height: '42px',
         borderRadius: '27px',
         background: '#fff',
-
-        '& fieldset': {
-            borderColor: '#e1e6eb',
-        },
-
-        '&:hover fieldset': {
-            borderColor: '#e1e6eb',
-        },
-
-        '&.Mui-focused fieldset': {
-            borderColor: '#148aa0',
-        },
+        '& fieldset': { borderColor: '#e1e6eb' },
+        '&:hover fieldset': { borderColor: '#e1e6eb' },
+        '&.Mui-focused fieldset': { borderColor: '#148aa0' },
     },
-
     '& .MuiInputBase-input': {
         padding: '0 28px',
         fontSize: '15px',
@@ -227,25 +218,15 @@ const DateField = styled(TextField)({
     width: '100%',
     maxWidth: '220px',
     marginBottom: '10px',
-
+    flexShrink: 0,
     '& .MuiOutlinedInput-root': {
         height: '42px',
         borderRadius: '27px',
         background: '#fff',
-
-        '& fieldset': {
-            borderColor: '#e1e6eb',
-        },
-
-        '&:hover fieldset': {
-            borderColor: '#e1e6eb',
-        },
-
-        '&.Mui-focused fieldset': {
-            borderColor: '#148aa0',
-        },
+        '& fieldset': { borderColor: '#e1e6eb' },
+        '&:hover fieldset': { borderColor: '#e1e6eb' },
+        '&.Mui-focused fieldset': { borderColor: '#148aa0' },
     },
-
     '& .MuiInputBase-input': {
         padding: '0 45px 0 28px',
         fontSize: '15px',
@@ -263,10 +244,8 @@ const SearchButton = styled(Button)({
     fontWeight: 700,
     fontSize: '15px',
     textTransform: 'none',
-
-    '&:hover': {
-        background: '#0b7890',
-    },
+    flexShrink: 0,
+    '&:hover': { background: '#0b7890' },
 });
 
 // ============================================
@@ -365,11 +344,7 @@ const FAQ = () => {
     };
 
     return (
-        <Container maxWidth="xl" sx={{
-            padding: 0,
-            margin: 0,
-            maxWidth: '100%'
-        }}>
+        <Container maxWidth="xl" sx={{ padding: 0, margin: 0, maxWidth: '100%' }}>
             <Grid container spacing={0}>
                 {/* ===== SIDEBAR GAUCHE ===== */}
                 <Grid item xs={12} md={3} sx={{ px: { xs: 2, md: 1 }, py: { xs: 2, md: 3 } }}>
@@ -435,8 +410,8 @@ const FAQ = () => {
                         <ForgotLink href="#">Mot de passe oublié !</ForgotLink>
 
                         <TermsText>
-    En vous connectant, vous acceptez nos <a href="/terms">Termes et Conditions</a> du service
-</TermsText>
+                            En vous connectant, vous acceptez nos <a href="/terms">Termes et Conditions</a> du service
+                        </TermsText>
                     </SideCard>
 
                     <LinksCard sx={{ display: { xs: 'none', md: 'block' } }}>

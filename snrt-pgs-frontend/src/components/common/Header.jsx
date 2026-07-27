@@ -1,5 +1,6 @@
 // src/components/common/Header.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux'; // ✅ AJOUTER
 import {
     AppBar,
     Toolbar,
@@ -8,9 +9,27 @@ import {
     Box,
     Container
 } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { logout, loadCurrentUser } from '../../store/slices/authSlice'; // ✅ AJOUTER
 
 const Header = () => {
+    const navigate = useNavigate();
+    const dispatch = useDispatch(); // ✅ AJOUTER
+    
+    // ✅ UTILISER REDUX AU LIEU DE localStorage
+    const { isAuthenticated, user } = useSelector((state) => state.auth);
+    
+    // ✅ CHARGER L'UTILISATEUR AU DÉMARRAGE
+    useEffect(() => {
+        dispatch(loadCurrentUser());
+    }, [dispatch]);
+
+    // ✅ DÉCONNEXION AVEC REDUX
+    const handleLogout = () => {
+        dispatch(logout()); // ✅ Redux gère tout (supprime localStorage aussi)
+        navigate('/');
+    };
+
     return (
         <AppBar
             position="sticky"
@@ -29,14 +48,10 @@ const Header = () => {
             <Container maxWidth="xl">
                 <Toolbar disableGutters sx={{ 
                     display: 'flex', 
-                    justifyContent: 'space-between',  /* ← ESPACE ENTRE GAUCHE ET DROITE */
+                    justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '0 20px',
                     height: '74px',
-                    marginBlockStart: 0,
-                    marginBlockEnd: '16px',
-                    marginInlineStart: 0,
-                    marginInlineEnd: 0,
                     marginTop: 0,
                     marginBottom: '16px'
                 }}>
@@ -45,15 +60,15 @@ const Header = () => {
                     <Box sx={{ 
                         display: 'flex', 
                         alignItems: 'center', 
-                        gap: 20,  /* ← ESPACE ENTRE E-stages ET LE MENU */
-                        flexShrink: 0  /* ← EMPÊCHE LA ZONE DE RÉTRÉCIR */
+                        gap: 20,
+                        flexShrink: 0
                     }}>
 
                         {/* E-stages */}
                         <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
-                            gap: 0.5,  /* ← ESPACE ENTRE LE LOGO ET LE TEXTE */
+                            gap: 0.5,
                             flexShrink: 0
                         }}>
                             <img
@@ -154,31 +169,57 @@ const Header = () => {
                         </Box>
                     </Box>
 
-                    {/* ===== BOUTON S'INSCRIRE (PARTIE DROITE) ===== */}
-                    <Button
-                        component={Link}
-                        to="/register"
-                        variant="contained"
-                        sx={{
-                            backgroundColor: 'white',
-                            color: '#43455a',
-                            borderRadius: '50px',
-                            px: 3,  /* ← AJUSTE LA LARGEUR DU BOUTON ICI */
-                            py: 0.8,  /* ← AJUSTE LA HAUTEUR DU BOUTON ICI */
-                            fontFamily: '"Inria Sans", sans-serif',
-                            fontSize: '15px',
-                            fontWeight: 400,
-                            textTransform: 'none',
-                            letterSpacing: '0.5px',
-                            minWidth: '120px',  /* ← AJUSTE LA LARGEUR MINIMUM */
-                            flexShrink: 0,  /* ← EMPÊCHE LE BOUTON DE RÉTRÉCIR */
-                            '&:hover': { backgroundColor: '#f8f6f5' },
-                            '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
-                        }}
-                    >
-                        <i className="fa-solid fa-user-plus"></i>
-                        S'inscrire
-                    </Button>
+                    {/* ===== PARTIE DROITE ===== */}
+                    {isAuthenticated ? (
+                        <Button
+                            onClick={handleLogout}
+                            variant="contained"
+                            sx={{
+                                backgroundColor: 'white',
+                                color: '#43455a',
+                                borderRadius: '50px',
+                                px: 3,
+                                py: 0.8,
+                                fontFamily: '"Inria Sans", sans-serif',
+                                fontSize: '15px',
+                                fontWeight: 400,
+                                textTransform: 'none',
+                                letterSpacing: '0.5px',
+                                minWidth: '120px',
+                                flexShrink: 0,
+                                '&:hover': { backgroundColor: '#f8f6f5' },
+                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
+                            }}
+                        >
+                            <i className="fa-solid fa-sign-out-alt"></i>
+                            Déconnexion
+                        </Button>
+                    ) : (
+                        <Button
+                            component={Link}
+                            to="/register"
+                            variant="contained"
+                            sx={{
+                                backgroundColor: 'white',
+                                color: '#43455a',
+                                borderRadius: '50px',
+                                px: 3,
+                                py: 0.8,
+                                fontFamily: '"Inria Sans", sans-serif',
+                                fontSize: '15px',
+                                fontWeight: 400,
+                                textTransform: 'none',
+                                letterSpacing: '0.5px',
+                                minWidth: '120px',
+                                flexShrink: 0,
+                                '&:hover': { backgroundColor: '#f8f6f5' },
+                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
+                            }}
+                        >
+                            <i className="fa-solid fa-user-plus"></i>
+                            S'inscrire
+                        </Button>
+                    )}
 
                 </Toolbar>
             </Container>
