@@ -475,6 +475,8 @@ const seed = async () => {
         logger.info(`   🔔 1 notification`);
         logger.info('='.repeat(60));
 
+        // Ensure all data is flushed to database before exit
+        await mongoose.connection.close();
         process.exit(0);
     } catch (error) {
         logger.error(`❌ Erreur lors du seed: ${error.message}`);
