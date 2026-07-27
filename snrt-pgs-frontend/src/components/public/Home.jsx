@@ -1,6 +1,6 @@
 // src/components/public/Home.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     Typography,
@@ -19,7 +19,7 @@ import {
 import { styled } from '@mui/material/styles';
 import { authService } from '../../services/auth';
 import { fetchOffers, fetchDepartments, setPage } from '../../store/slices/offerSlice';
-import { fetchResults, searchResultByCin, setPage as setResultPage } from '../../store/slices/resultSlice';
+import { fetchResults, setPage as setResultPage } from '../../store/slices/resultSlice';
 import OfferCard from './OfferCard';
 import ResultCard from './ResultCard';
 
@@ -353,6 +353,7 @@ const EmptyBox = styled(Box)({
 
 const Home = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const dispatch = useDispatch();
 
     // ========================================== //
@@ -367,9 +368,6 @@ const Home = () => {
         total: resultsTotal,
         page: resultsPage,
         pages: resultsPages,
-        searchResult,
-        searchLoading,
-        searchError,
     } = useSelector((state) => state.results);
 
     // ========================================== //
@@ -384,10 +382,29 @@ const Home = () => {
     const [activeTab, setActiveTab] = useState('offres');
     const [attempts, setAttempts] = useState(0);
     const [loadingLogin, setLoadingLogin] = useState(false);
-    const [searchCin, setSearchCin] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     // ========================================== //
-    // 3️⃣ REDIRECTION
+    // 3️⃣ VÉRIFICATION CONNEXION (2FA + TOKEN)
+    // ========================================== //
+
+    useEffect(() => {
+        if (location.state?.isAuthenticated) {
+            setIsAuthenticated(true);
+            return;
+        }
+        
+        const token = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
+        if (token && storedUser) {
+            setIsAuthenticated(true);
+        } else {
+            setIsAuthenticated(false);
+        }
+    }, [location]);
+
+    // ========================================== //
+    // 4️⃣ REDIRECTION PAR RÔLE (SI DÉJÀ CONNECTÉ)
     // ========================================== //
 
     useEffect(() => {
@@ -398,6 +415,10 @@ const Home = () => {
             try {
                 const userData = JSON.parse(storedUser);
                 const role = userData?.role || userData?.userType;
+
+                if (location.state?.isAuthenticated) {
+                    return;
+                }
 
                 switch (role) {
                     case 'Administrateur':
@@ -420,10 +441,10 @@ const Home = () => {
                 console.error('Erreur parsing user:', e);
             }
         }
-    }, [navigate]);
+    }, [navigate, location]);
 
     // ========================================== //
-    // 4️⃣ CHARGEMENT DES OFFRES
+    // 5️⃣ CHARGEMENT DES OFFRES
     // ========================================== //
 
     useEffect(() => {
@@ -432,7 +453,7 @@ const Home = () => {
     }, [dispatch]);
 
     // ========================================== //
-    // 5️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF)
+    // 6️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF)
     // ========================================== //
 
     useEffect(() => {
@@ -442,7 +463,7 @@ const Home = () => {
     }, [activeTab, dispatch]);
 
     // ========================================== //
-    // 6️⃣ FONCTIONS
+    // 7️⃣ FONCTIONS
     // ========================================== //
 
     const regenerateCaptcha = () => {
@@ -479,7 +500,6 @@ const Home = () => {
         setLoadingLogin(true);
 
         try {
-            // ✅ CORRECTION : Envoyer "cin" au lieu de "email"
             const response = await authService.login({
                 cin: cin,
                 motDePasse: password,
@@ -536,16 +556,10 @@ const Home = () => {
         dispatch(fetchOffers({ ...filters, statut: 'Publiée', page: 1, limit: 10 }));
     };
 
-    const handleSearchByCin = (e) => {
-        e.preventDefault();
-        if (!searchCin.trim()) return;
-        dispatch(searchResultByCin(searchCin.trim()));
-    };
-
     const isBlocked = attempts >= 3;
 
     // ========================================== //
-    // 7️⃣ RENDU DE LA PAGINATION - TOUJOURS VISIBLE
+    // 8️⃣ RENDU DE LA PAGINATION - TOUJOURS VISIBLE
     // ========================================== //
 
     const renderPagination = () => {
@@ -657,7 +671,7 @@ const Home = () => {
     };
 
     // ========================================== //
-    // 8️⃣ AFFICHAGE
+    // 9️⃣ AFFICHAGE
     // ========================================== //
 
     return (
@@ -795,6 +809,74 @@ const Home = () => {
                         margin: '8px 0 16px 0'
                     }} />
 
+                    {/* ========================================== */}
+                    {/* ✅ BOUTONS DE NAVIGATION (UNIQUEMENT SI CONNECTÉ) */}
+                    {/* ========================================== */}
+                    {isAuthenticated && (
+                        <Box sx={{ display: 'flex', gap: '12px', mb: 3, justifyContent: 'center' }}>
+                            <Button
+                                variant="outlined"
+                                onClick={() => navigate('/')}
+                                sx={{
+                                    borderRadius: '30px',
+                                    padding: '8px 24px',
+                                    borderColor: '#148aa0',
+                                    color: '#148aa0',
+                                    fontFamily: 'Inter, sans-serif',
+                                    fontWeight: 500,
+                                    fontSize: '14px',
+                                    textTransform: 'none',
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(20, 138, 160, 0.05)',
+                                        borderColor: '#148aa0',
+                                    }
+                                }}
+                            >
+                                <i className="fa-solid fa-arrow-left" style={{ marginRight: '8px' }}></i>
+                                Accueil
+                            </Button>
+
+                            <Button
+                                variant="contained"
+                                onClick={() => {
+                                    const token = localStorage.getItem('token');
+                                    const storedUser = localStorage.getItem('user');
+                                    if (token && storedUser) {
+                                        try {
+                                            const userData = JSON.parse(storedUser);
+                                            const role = userData?.role || userData?.userType;
+                                            switch (role) {
+                                                case 'Administrateur': navigate('/admin'); break;
+                                                case 'RH': navigate('/rh'); break;
+                                                case 'Departement': navigate('/department'); break;
+                                                case 'Encadrant': navigate('/supervisor'); break;
+                                                default: navigate('/dashboard'); break;
+                                            }
+                                        } catch (e) { navigate('/dashboard'); }
+                                    } else {
+                                        navigate('/dashboard');
+                                    }
+                                }}
+                                sx={{
+                                    borderRadius: '30px',
+                                    padding: '8px 24px',
+                                    backgroundColor: '#148aa0',
+                                    color: '#ffffff',
+                                    fontFamily: 'Inter, sans-serif',
+                                    fontWeight: 500,
+                                    fontSize: '14px',
+                                    textTransform: 'none',
+                                    '&:hover': {
+                                        backgroundColor: '#0b7890',
+                                    }
+                                }}
+                            >
+                                Dashboard
+                                <i className="fa-solid fa-arrow-right" style={{ marginLeft: '8px' }}></i>
+                            </Button>
+                        </Box>
+                    )}
+
                     {/* ===== ONGLETS STYLE SNRT ===== */}
                     <Box sx={{ display: 'flex', gap: '2px', mb: 3 }}>
                         <Button
@@ -866,76 +948,12 @@ const Home = () => {
                                         <OfferCard key={offer._id} offer={offer} />
                                     ))}
                                 </Box>
-                                {/* Pagination toujours visible */}
                                 {renderPagination()}
                             </>
                         )
                     ) : (
                         // ===== ONGLET RÉSULTATS =====
                         <>
-                            {/* Barre de recherche individuelle par CIN */}
-                            <Box
-                                component="form"
-                                onSubmit={handleSearchByCin}
-                                sx={{
-                                    display: 'flex',
-                                    gap: 1,
-                                    mb: 3,
-                                    mt: 2,
-                                    maxWidth: '480px',
-                                    mx: 'auto',
-                                }}
-                            >
-                                <TextField
-                                    placeholder="Entrez votre CIN pour vérifier votre statut"
-                                    variant="outlined"
-                                    size="small"
-                                    fullWidth
-                                    value={searchCin}
-                                    onChange={(e) => setSearchCin(e.target.value)}
-                                    sx={{
-                                        '& .MuiOutlinedInput-root': {
-                                            borderRadius: '23px',
-                                            backgroundColor: '#fff',
-                                        },
-                                    }}
-                                />
-                                <Button
-                                    type="submit"
-                                    disabled={searchLoading}
-                                    sx={{
-                                        borderRadius: '23px',
-                                        backgroundColor: '#148aa0',
-                                        color: '#fff',
-                                        px: 3,
-                                        textTransform: 'none',
-                                        fontWeight: 700,
-                                        whiteSpace: 'nowrap',
-                                        fontFamily: 'Inter, sans-serif',
-                                        '&:hover': { backgroundColor: '#0b7890' },
-                                    }}
-                                >
-                                    {searchLoading ? '...' : 'Vérifier'}
-                                </Button>
-                            </Box>
-
-                            {/* Résultat de la recherche individuelle */}
-                            {searchError && (
-                                <Alert severity="warning" sx={{ mb: 3, maxWidth: '480px', mx: 'auto' }}>
-                                    {searchError}
-                                </Alert>
-                            )}
-                            {searchResult && (
-                                <Alert
-                                    severity={searchResult.statut === 'Retenu' ? 'success' : 'info'}
-                                    sx={{ mb: 3, maxWidth: '480px', mx: 'auto' }}
-                                >
-                                    Statut pour {searchCin} : <strong>{searchResult.statut}</strong>
-                                    {searchResult.offre?.titre && ` — ${searchResult.offre.titre}`}
-                                </Alert>
-                            )}
-
-                            {/* Liste publique des résultats publiés */}
                             {resultsLoading ? (
                                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                                     <CircularProgress sx={{ color: '#148aa0' }} />
@@ -954,9 +972,6 @@ const Home = () => {
                                 </Box>
                             ) : (
                                 <>
-                                    <Typography sx={{ textAlign: 'center', color: '#6d7884', fontSize: '14px', mb: 2, fontFamily: 'Inter, sans-serif' }}>
-                                        {resultsTotal} résultat(s) publié(s)
-                                    </Typography>
                                     <Box sx={{ border: '1px solid #e8edf0', borderRadius: '8px', overflow: 'hidden' }}>
                                         {results.map((result) => (
                                             <ResultCard key={result._id} result={result} />

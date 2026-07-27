@@ -43,20 +43,8 @@ const InfoText = styled(Typography)({
     lineHeight: 1.6,
 });
 
-const BadgeStyled = styled(Badge)({
-    backgroundColor: '#e8edf0',
-    color: '#2d3748',
-    fontWeight: 500,
-    fontSize: '13px',
-    padding: '4px 12px',
-    borderRadius: '4px',
-    fontFamily: 'Inter, sans-serif',
-    float: 'right',
-    marginTop: '4px',
-});
-
 // ============================================
-// BOUTON "Voir résultat de l'entretien"
+// BOUTON "Voir résultat"
 // ============================================
 
 const ResultButton = styled(Button)({
@@ -78,6 +66,38 @@ const ResultButton = styled(Button)({
         border: '1px solid #0F8DB5 !important',
         boxShadow: 'none !important',
     },
+});
+
+// ============================================
+// COULEURS DES TYPES DE STAGE
+// ============================================
+
+const getTypeColor = (type) => {
+    const colors = {
+        'PFE': { bg: '#dbeafe', color: '#1d4ed8' },
+        'PFA': { bg: '#dcfce7', color: '#15803d' },
+        'Initiation': { bg: '#fef3c7', color: '#b45309' },
+        'Ete': { bg: '#fce4ec', color: '#b91c1c' },
+        'Master': { bg: '#e0e7ff', color: '#4338ca' },
+        'Licence': { bg: '#f3e8ff', color: '#7c3aed' },
+        'Technicien': { bg: '#e8edf0', color: '#4b5563' },
+    };
+    return colors[type] || { bg: '#e8edf0', color: '#4b5563' };
+};
+
+const TypeBadge = styled(Badge)(({ type }) => {
+    const colors = getTypeColor(type);
+    return {
+        backgroundColor: colors.bg,
+        color: colors.color,
+        fontWeight: 600,
+        fontSize: '12px',
+        padding: '4px 12px',
+        borderRadius: '4px',
+        fontFamily: 'Inter, sans-serif',
+        float: 'right',
+        marginTop: '4px',
+    };
 });
 
 // ============================================
@@ -105,7 +125,7 @@ const ResultCard = ({ result }) => {
         });
     };
 
-    const getBadgeLabel = () => {
+    const getTypeLabel = () => {
         const types = {
             'PFE': 'PFE',
             'PFA': 'PFA',
@@ -128,22 +148,23 @@ const ResultCard = ({ result }) => {
                         </a>
                     </ResultTitle>
                     <InfoText>
-                        Nombre postes : {result.nbPostes || 1}
+                        Candidat : {result.candidatNom || 'Non spécifié'}
                         <br />
-                        Délai dépôt : {formatDate(result.dateLimiteCandidature || result.dateFin)}
+                        Date : {formatDate(result.dateResultat || result.datePublication || result.createdAt)}
                     </InfoText>
                     <ResultButton 
                         onClick={handleVoirResultat}
                         disableRipple={true}
                         disableFocusRipple={true}
+                        disableElevation={true}
                         sx={{ mt: 1 }}
                     >
-                        Voir résultat de l'entretien
+                        Voir résultat
                     </ResultButton>
                 </Box>
-                <BadgeStyled>
-                    {getBadgeLabel()}
-                </BadgeStyled>
+                <TypeBadge type={result.typeStage}>
+                    {getTypeLabel()}
+                </TypeBadge>
             </Box>
         </CardWrapper>
     );
