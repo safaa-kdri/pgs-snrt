@@ -6,7 +6,11 @@ const { CONFIG } = require('../config/constants');
 const COOKIE_BASE_OPTIONS = {
   httpOnly: true,
   secure: CONFIG.cookies.secure,
-  sameSite: 'strict',
+  // Pilote par COOKIE_SAMESITE ('strict' par defaut). Passer a 'none' (avec
+  // COOKIE_SECURE=true) si le frontend est sur un domaine different du
+  // backend, sinon le navigateur ignore silencieusement le Set-Cookie et
+  // /auth/me renvoie 401 en boucle malgre un login/2FA reussi.
+  sameSite: CONFIG.cookies.sameSite,
   domain: CONFIG.nodeEnv === 'production' ? CONFIG.cookies.domain : undefined,
   path: '/',
 };

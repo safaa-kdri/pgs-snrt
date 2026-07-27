@@ -71,6 +71,9 @@ const CONFIG = Object.freeze({
   cookies: {
     domain: process.env.COOKIE_DOMAIN || 'localhost',
     secure: process.env.COOKIE_SECURE === 'true',
+    // 'strict' (defaut, meme site), 'lax', ou 'none' (cross-site, exige secure=true).
+    // A mettre a 'none' si le frontend est sur un domaine different du backend en prod.
+    sameSite: process.env.COOKIE_SAMESITE || 'strict',
   },
 
   twoFactor: {
@@ -104,6 +107,16 @@ function assertRequiredEnv() {
   const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
   if (missing.length > 0) {
     console.error(`[CONFIG] Variables d'environnement manquantes: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+
+  // Les navigateurs rejettent silencieusement SameSite=None si Secure n'est
+  // pas egalement positionne (cookie jamais envoye => 401 en boucle cote
+  // frontend). On previent tout de suite plutot que de laisser deviner.
+  if (CONFIG.cookies.sameSite.toLowerCase() === 'none' && !CONFIG.cookies.secure) {
+    console.error(
+      "[CONFIG] COOKIE_SAMESITE=none exige COOKIE_SECURE=true (et HTTPS), sinon les navigateurs refusent le cookie."
+    );
     process.exit(1);
   }
 }
