@@ -1,6 +1,7 @@
 const express = require('express');
 const offerController = require('../controllers/offerController');
 const validate = require('../middlewares/validation');
+const uploadConcours = require('../middlewares/uploadConcours');
 const { authenticate, optionalAuthenticate } = require('../middlewares/auth');
 const { createOfferSchema, updateOfferSchema, validateOfferSchema } = require('../utils/validators');
 
@@ -17,5 +18,14 @@ router.put('/:id/submit', authenticate(), offerController.submitOffer);
 router.put('/:id/validate', authenticate(), validate(validateOfferSchema), offerController.validateOffer);
 router.put('/:id/archive', authenticate(), offerController.archiveOffer);
 router.delete('/:id', authenticate(), offerController.deleteOffer);
+
+
+router.post(
+  '/:id/concours-documents',
+  authenticate(),
+  uploadConcours.single('document'),
+  offerController.uploadConcoursDocument
+);
+router.delete('/:id/concours-documents/:docId', authenticate(), offerController.deleteConcoursDocument);
 
 module.exports = router;

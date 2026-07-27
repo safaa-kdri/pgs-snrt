@@ -1,11 +1,8 @@
 const mongoose = require('mongoose');
+const BaseSchema = require('./BaseModel');
 
-/**
- * Collection "utilisateurs_internes" (Dossier de Conception - 3.1).
- * Personnel SNRT : Administrateur, RH, Departement, Encadrant.
- * Ces comptes sont crees par un Administrateur (module Administration,
- * hors perimetre du module Authentification) - pas d'auto-inscription.
- */
+const { CIN_REGEX, PHONE_REGEX } = require('../utils/regex');
+
 const utilisateurInterneSchema = new mongoose.Schema(
   {
     nom: { type: String, required: true, trim: true },
@@ -22,25 +19,19 @@ const utilisateurInterneSchema = new mongoose.Schema(
     telephone: {
       type: String,
       default: null,
-      match: [/^(?:\+212|0)[5-7][0-9]{8}$/, 'Numero de telephone invalide.'],
+      match: [PHONE_REGEX, 'Numero de telephone invalide.'],
     },
     dateInscription: { type: Date, default: Date.now },
     actif: { type: Boolean, default: true },
 
-    // Ajoute pour permettre la connexion par CIN (comme utilisateurs_externes) :
-    // desormais tous les comptes (internes et externes) se connectent avec
-    // leur CIN + mot de passe, l'email restant utilise pour les notifications
-    // et la reinitialisation de mot de passe. RG-002 : unique dans la base de
-    // donnees, donc verifie cote applicatif a travers les deux collections
-    // (voir utils/userLookup.js) puisque Mongoose ne peut pas imposer une
-    // contrainte unique cross-collection.
+  
     cin: {
       type: String,
       required: true,
       unique: true,
       trim: true,
       uppercase: true,
-      match: [/^[A-Z]{1,2}[0-9]{6}$/, 'CIN invalide.'],
+      match: [CIN_REGEX, 'CIN invalide.'],
     },
 
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', required: true },
@@ -80,6 +71,9 @@ const utilisateurInterneSchema = new mongoose.Schema(
   { timestamps: true, collection: 'utilisateurs_internes' }
 );
 
+
+utilisateurInterneSchema.add(BaseSchema);
+
 utilisateurInterneSchema.index({ roleId: 1 });
 utilisateurInterneSchema.index({ departementId: 1 });
 
@@ -95,4 +89,8 @@ utilisateurInterneSchema.set('toJSON', {
   },
 });
 
-module.exports = mongoose.model('UtilisateurInterne', utilisateurInterneSchema);
+module.exports = mongoose.model(
+  'UtilisateurInterne',
+  utilisateurInterneSchema, 
+  'utilisateurs_internes'
+);

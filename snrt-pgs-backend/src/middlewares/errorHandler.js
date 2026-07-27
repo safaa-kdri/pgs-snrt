@@ -1,50 +1,68 @@
 // src/middlewares/errorHandler.js
 const logger = require('../utils/logger');
+const { CONFIG } = require('../config/constants');
+
 
 const errorHandler = (err, req, res, next) => {
-    let error = { ...err };
-    error.message = err.message;
+    let statusCode = err.statusCode;
+    let message = err.message;
+    let details = err.details;
+    let isOperational = err.isOperational || false;
 
-    logger.error(`💥 Error: ${error.message}`);
-    logger.error(`📍 Path: ${req.originalUrl}`);
-    logger.error(`📋 Stack: ${err.stack}`);
-
-    // Duplicate key
+    // Cle dupliquee (index unique Mongo, ex: email/CIN/nom deja utilise)
     if (err.code === 11000) {
-        const field = Object.keys(err.keyPattern)[0];
-        error = { statusCode: 400, message: `Le champ "${field}" existe déjà.` };
+        const field = err.keyPattern ? Object.keys(err.keyPattern)[0] : 'valeur';
+        statusCode = 400;
+        message = `Le champ "${field}" existe déjà.`;
+        details = undefined;
+        isOperational = true;
     }
 
-    // Validation Error
+    // Erreur de validation Mongoose (ex: contrainte de schema violee)
     if (err.name === 'ValidationError') {
-        const messages = Object.values(err.errors).map(val => val.message);
-        error = { statusCode: 400, message: messages.join(', ') };
+        const messages = Object.values(err.errors).map((val) => val.message);
+        statusCode = 400;
+        message = messages.join(', ');
+        details = messages;
+        isOperational = true;
     }
 
-    // Cast Error
+    // ObjectId invalide dans un parametre d'URL
     if (err.name === 'CastError') {
-        error = { statusCode: 404, message: `ID invalide: ${err.value}` };
+        statusCode = 404;
+        message = `ID invalide: ${err.value}`;
+        details = undefined;
+        isOperational = true;
     }
 
-    // JWT Errors
+    // JWT
     if (err.name === 'JsonWebTokenError') {
-        error = { statusCode: 401, message: 'Token invalide. Veuillez vous reconnecter.' };
+        statusCode = 401;
+        message = 'Token invalide. Veuillez vous reconnecter.';
+        isOperational = true;
     }
-
     if (err.name === 'TokenExpiredError') {
-        error = { statusCode: 401, message: 'Token expiré. Veuillez vous reconnecter.' };
+        statusCode = 401;
+        message = 'Token expiré. Veuillez vous reconnecter.';
+        isOperational = true;
     }
 
-    const statusCode = error.statusCode || 500;
-    const message = error.message || 'Erreur interne du serveur';
+    statusCode = statusCode || 500;
 
-    res.status(statusCode).json({
+    if (!isOperational) {
+        logger.error(`[Unhandled] ${err.message}\nPath: ${req.originalUrl}\n${err.stack}`);
+    } else {
+        logger.error(`[Operational] ${statusCode} ${req.method} ${req.originalUrl} - ${message}`);
+    }
+
+    const response = {
         success: false,
-        statusCode,
-        message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-        path: req.originalUrl
-    });
+        message: isOperational ? message : 'Erreur interne du serveur.',
+    };
+    if (isOperational && details) response.details = details;
+    if (CONFIG.nodeEnv === 'development' && !isOperational) response.stack = err.stack;
+
+    res.status(statusCode).json(response);
 };
 
 module.exports = errorHandler;

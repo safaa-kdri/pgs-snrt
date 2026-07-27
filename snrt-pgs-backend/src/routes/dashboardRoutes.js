@@ -15,6 +15,7 @@ router.get('/student', authorize(ROLES.ETUDIANT), dashboardController.getStudent
 router.get('/admin', authorize(ROLES.ADMIN), dashboardController.getAdminDashboard);
 router.get('/rh', authorize(ROLES.RH), dashboardController.getRhDashboard);
 router.get('/supervisor', authorize(ROLES.ENCADRANT), dashboardController.getSupervisorDashboard);
+router.get('/department', authorize(ROLES.DEPARTEMENT), dashboardController.getDepartmentDashboard);
 
 router.get('/stats/global', statsController.getGlobalStats);
 router.get('/stats/export', statsController.exportOfferStats);

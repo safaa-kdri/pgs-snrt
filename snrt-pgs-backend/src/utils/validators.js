@@ -1,32 +1,19 @@
 const Joi = require('joi');
 const ApiError = require('./ApiError');
 const { PASSWORD_MIN_LENGTH, OFFER_TYPES, INTERVIEW_TYPES } = require('../config/constants');
+const { CIN_REGEX, PHONE_REGEX } = require('./regex');
 
-/**
- * Regroupe :
- *  - la validation fine de la politique de mot de passe (RG-003)
- *  - tous les schemas Joi utilises par middlewares/validation.js
- * pour les modules dont Badr a la charge (auth, offres, entretiens).
- */
 
-// ---------------------------------------------------------------------------
-// Politique de mots de passe
-//   Etudiants (externe) : 16 caracteres minimum
-//   Personnel (interne)  : 20 caracteres minimum
-//   Dans les deux cas : majuscule + minuscule + chiffre + caractere special
-// ---------------------------------------------------------------------------
 const UPPERCASE_RE = /[A-Z]/;
 const LOWERCASE_RE = /[a-z]/;
 const DIGIT_RE = /[0-9]/;
 const SPECIAL_RE = /[^A-Za-z0-9]/;
 
-// CIN marocaine : 1 ou 2 lettres suivies d'exactement 6 chiffres (ex: A123456, AB123456).
-const CIN_RE = /^[A-Z]{1,2}[0-9]{6}$/;
+const CIN_RE = CIN_REGEX;
 const CIN_MESSAGE = 'CIN invalide (format attendu : 1 ou 2 lettres suivies de 6 chiffres, ex: AB123456).';
 
-// Telephone marocain : mobile (06/07) ou fixe (05), en local (0XXXXXXXXX,
-// 10 chiffres) ou avec l'indicatif (+212XXXXXXXXX, 9 chiffres apres +212).
-const PHONE_RE = /^(?:\+212|0)[5-7][0-9]{8}$/;
+
+const PHONE_RE = PHONE_REGEX;
 const PHONE_MESSAGE = 'Numero de telephone invalide (format attendu : 06XXXXXXXX, 07XXXXXXXX ou +212XXXXXXXXX).';
 
 function validatePasswordPolicy(password, userType) {
@@ -46,9 +33,7 @@ function validatePasswordPolicy(password, userType) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Schemas Joi - Authentification
-// ---------------------------------------------------------------------------
+
 const registerSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(60).required(),
   prenom: Joi.string().trim().min(2).max(60).required(),
@@ -91,9 +76,7 @@ const resetPasswordSchema = Joi.object({
   motDePasse: Joi.string().min(16).max(128).required(),
 });
 
-// ---------------------------------------------------------------------------
-// Schemas Joi - Offres de stage
-// ---------------------------------------------------------------------------
+
 const subjectSchema = Joi.object({
   titre: Joi.string().trim().min(2).max(150).required(),
   description: Joi.string().trim().min(10).max(3000).required(),
@@ -128,7 +111,8 @@ const createOfferSchema = Joi.object({
   }),
   periodeId: Joi.string().hex().length(24).required(),
   sujets: Joi.array().items(subjectSchema).min(1).required().messages({
-    'array.min': 'Une offre doit comporter au moins un sujet (RG-007).',
+
+    'array.min': 'Une offre doit comporter au moins un sujet (RG-010).',
   }),
   documentsRequis: Joi.array().items(documentRequisSchema).default([]),
 });
@@ -143,9 +127,7 @@ const validateOfferSchema = Joi.object({
   motifRefus: Joi.string().trim().max(500).when('decision', { is: 'Refusee', then: Joi.required() }),
 });
 
-// ---------------------------------------------------------------------------
-// Schemas Joi - Entretiens
-// ---------------------------------------------------------------------------
+
 const createInterviewSchema = Joi.object({
   applicationId: Joi.string().hex().length(24).required(),
   date: Joi.date().greater('now').required(),
@@ -180,9 +162,7 @@ const updateInterviewSchema = Joi.object({
   resultat: Joi.string().valid('EnAttente', 'Positive', 'Negative'),
 }).min(1);
 
-// ---------------------------------------------------------------------------
-// Schemas Joi - Candidatures (applications)
-// ---------------------------------------------------------------------------
+
 const createApplicationSchema = Joi.object({
   etudiantId: Joi.string().hex().length(24).required(),
   offreId: Joi.string().hex().length(24).required(),
@@ -206,9 +186,7 @@ const addDocumentToApplicationSchema = Joi.object({
   documentId: Joi.string().hex().length(24).required(),
 });
 
-// ---------------------------------------------------------------------------
-// Schemas Joi - Departements
-// ---------------------------------------------------------------------------
+
 const createDepartmentSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(150).required(),
   description: Joi.string().trim().max(1000).allow('', null),
@@ -227,14 +205,13 @@ const departmentMemberSchema = Joi.object({
   userId: Joi.string().hex().length(24).required(),
 });
 
-// ---------------------------------------------------------------------------
-// Schemas Joi - Utilisateurs (creation/administration par un Administrateur)
-// ---------------------------------------------------------------------------
+
 const createInternalUserSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(60).required(),
   prenom: Joi.string().trim().min(2).max(60).required(),
   email: Joi.string().trim().email().required(),
   cin: Joi.string().trim().uppercase().pattern(CIN_RE).required().messages({ 'string.pattern.base': CIN_MESSAGE }),
+  
   motDePasse: Joi.string().min(PASSWORD_MIN_LENGTH.interne).max(128).required(),
   telephone: Joi.string()
     .trim()
@@ -245,6 +222,38 @@ const createInternalUserSchema = Joi.object({
   departementId: Joi.string().hex().length(24).allow(null),
   actif: Joi.boolean().default(true),
 });
+
+
+const createExternalUserSchema = registerSchema.keys({
+  actif: Joi.boolean().default(true),
+});
+
+
+const updateInternalUserSchema = Joi.object({
+  nom: Joi.string().trim().min(2).max(60),
+  prenom: Joi.string().trim().min(2).max(60),
+  telephone: Joi.string()
+    .trim()
+    .pattern(PHONE_RE)
+    .allow(null, '')
+    .messages({ 'string.pattern.base': PHONE_MESSAGE }),
+}).min(1);
+
+const updateExternalUserSchema = Joi.object({
+  nom: Joi.string().trim().min(2).max(60),
+  prenom: Joi.string().trim().min(2).max(60),
+  telephone: Joi.string()
+    .trim()
+    .pattern(PHONE_RE)
+    .messages({ 'string.pattern.base': PHONE_MESSAGE }),
+  adresse: Joi.string().trim().min(2).max(200),
+  ville: Joi.string().trim().min(2).max(100),
+  pays: Joi.string().trim().min(2).max(100),
+  universite: Joi.string().trim().max(150).allow('', null),
+  filiere: Joi.string().trim().max(150).allow('', null),
+  niveau: Joi.string().trim().max(50).allow('', null),
+  annee: Joi.string().trim().max(20).allow('', null),
+}).min(1);
 
 const changeUserRoleSchema = Joi.object({
   roleId: Joi.string().hex().length(24).required(),
@@ -279,6 +288,9 @@ module.exports = {
   assignResponsableSchema,
   departmentMemberSchema,
   createInternalUserSchema,
+  createExternalUserSchema,
+  updateInternalUserSchema,
+  updateExternalUserSchema,
   changeUserRoleSchema,
   assignDepartmentToUserSchema,
   changeUserStatusSchema,

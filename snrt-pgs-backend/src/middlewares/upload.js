@@ -1,13 +1,9 @@
 // src/middlewares/upload.js
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const { createDiskStorage } = require('../utils/diskStorage');
 
 const uploadDir = path.join(__dirname, '../../uploads/documents');
-
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
 
 const allowedExtensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
 
@@ -19,16 +15,7 @@ const allowedMimeTypes = [
     'image/png'
 ];
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const extension = path.extname(file.originalname).toLowerCase();
-        const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${extension}`;
-        cb(null, uniqueName);
-    }
-});
+const storage = createDiskStorage(uploadDir);
 
 const fileFilter = (req, file, cb) => {
     const extension = path.extname(file.originalname).toLowerCase();

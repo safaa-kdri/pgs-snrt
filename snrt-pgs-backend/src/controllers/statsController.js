@@ -5,7 +5,7 @@ const Interview = require('../models/Interview');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { getModelSafe } = require('../utils/lazyModel');
-const { ROLES, OFFER_STATUS } = require('../config/constants');
+const { ROLES, OFFER_STATUS, HR_ADMIN_ROLES } = require('../config/constants');
 
 
 const getGlobalStats = asyncHandler(async (req, res) => {
@@ -64,7 +64,7 @@ const getGlobalStats = asyncHandler(async (req, res) => {
 
 
 const exportOfferStats = asyncHandler(async (req, res) => {
-  if (![ROLES.RH, ROLES.ADMIN].includes(req.user.role)) {
+  if (!HR_ADMIN_ROLES.includes(req.user.role)) {
     throw ApiError.forbidden('Reserve au RH et a l\'administrateur.');
   }
 

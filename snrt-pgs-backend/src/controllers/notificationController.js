@@ -1,8 +1,23 @@
 // src/controllers/notificationController.js
 const Notification = require('../models/Notification');
+const { ROLES } = require('../config/constants');
+
+const STAFF_ROLES = [ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT, ROLES.ENCADRANT];
 
 exports.createNotification = async (req, res) => {
     try {
+        // Critique : seul le personnel interne peut declencher une
+        // notification vers un utilisateur. Avant ce correctif, n'importe
+        // quel etudiant authentifie pouvait fabriquer une notification
+        // arbitraire au nom du systeme et la faire apparaitre chez
+        // n'importe quel utilisateur (usurpation / spam).
+        if (!STAFF_ROLES.includes(req.user?.role)) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas les droits pour créer une notification"
+            });
+        }
+
         const { type, titre, message, lien, userId, userModel } = req.body;
 
         const notification = await Notification.create({
@@ -32,6 +47,18 @@ exports.createNotification = async (req, res) => {
 exports.getUserNotifications = async (req, res) => {
     try {
         const { userId } = req.params;
+
+        // IDOR (critique) : un utilisateur ne peut consulter que ses propres
+        // notifications (sauf administrateur). Avant ce correctif,
+        // n'importe quel utilisateur authentifie pouvait lire les
+        // notifications de n'importe qui en changeant l'id dans l'URL.
+        if (req.user?.id !== userId && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas accès aux notifications de cet utilisateur"
+            });
+        }
+
         const { lue, type } = req.query;
 
         const filter = { userId };
@@ -65,6 +92,14 @@ exports.getUnreadCount = async (req, res) => {
     try {
         const { userId } = req.params;
 
+        // IDOR (critique) : meme protection que getUserNotifications.
+        if (req.user?.id !== userId && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas accès aux notifications de cet utilisateur"
+            });
+        }
+
         const count = await Notification.countDocuments({
             userId,
             lue: false
@@ -94,6 +129,15 @@ exports.markAsRead = async (req, res) => {
             });
         }
 
+        // IDOR (critique) : un utilisateur ne peut marquer comme lue qu'une
+        // notification qui lui appartient.
+        if (req.user?.id !== notification.userId.toString() && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas accès à cette notification"
+            });
+        }
+
         notification.lue = true;
         notification.updatedBy = req.user?._id;
 
@@ -116,6 +160,14 @@ exports.markAsRead = async (req, res) => {
 exports.markAllAsRead = async (req, res) => {
     try {
         const { userId } = req.params;
+
+        // IDOR (critique) : meme protection que getUserNotifications.
+        if (req.user?.id !== userId && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas accès aux notifications de cet utilisateur"
+            });
+        }
 
         const result = await Notification.updateMany(
             { userId, lue: false },
@@ -147,6 +199,15 @@ exports.deleteNotification = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Notification non trouvée'
+            });
+        }
+
+        // IDOR (critique) : un utilisateur ne peut supprimer qu'une
+        // notification qui lui appartient.
+        if (req.user?.id !== notification.userId.toString() && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas accès à cette notification"
             });
         }
 

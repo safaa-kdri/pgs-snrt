@@ -1,6 +1,7 @@
 // src/models/Application.js
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
+const { APPLICATION_STATUS, INTERVIEW_TYPES, INTERVIEW_RESULTS } = require('../config/constants');
 
 const ApplicationSchema = new mongoose.Schema({
     dateSoumission: {
@@ -9,8 +10,14 @@ const ApplicationSchema = new mongoose.Schema({
     },
     statut: {
         type: String,
-        enum: ['Brouillon', 'Soumise', 'EnAnalyse', 'Entretien', 'Acceptee', 'Refusee'],
-        default: 'Brouillon'
+        // BUGFIX (mineur, coherence) : enum recopiee a la main auparavant
+        // ('Brouillon', 'Soumise', ...), desormais alignee sur
+        // APPLICATION_STATUS (config/constants.js) - la meme source de
+        // verite deja utilisee par applicationController.js et
+        // validators.js, pour eviter tout desalignement si la liste des
+        // statuts venait a changer.
+        enum: Object.values(APPLICATION_STATUS),
+        default: APPLICATION_STATUS.BROUILLON
     },
     commentaire: String,
     
@@ -44,12 +51,12 @@ documents: [{
         lienVisio: String,
         type: {
             type: String,
-            enum: ['Presentiel', 'Visio', 'Telephonique']
+            enum: INTERVIEW_TYPES
         },
         commentaires: String,
         resultat: {
             type: String,
-            enum: ['EnAttente', 'Positive', 'Negative'],
+            enum: INTERVIEW_RESULTS,
             default: 'EnAttente'
         }
     },
@@ -59,7 +66,7 @@ documents: [{
     ancienStatut: String,
     nouveauStatut: {
         type: String,
-        enum: ['Brouillon', 'Soumise', 'EnAnalyse', 'Entretien', 'Acceptee', 'Refusee']
+        enum: Object.values(APPLICATION_STATUS)
     },
     commentaire: String,
     auteurId: {
@@ -76,5 +83,11 @@ ApplicationSchema.add(BaseSchema);
 ApplicationSchema.index({ etudiantId: 1 });
 ApplicationSchema.index({ offreId: 1 });
 ApplicationSchema.index({ statut: 1 });
+
+
+ApplicationSchema.index(
+    { etudiantId: 1, offreId: 1 },
+    { unique: true, partialFilterExpression: { isDeleted: false } }
+);
 
 module.exports = mongoose.model('Application', ApplicationSchema);

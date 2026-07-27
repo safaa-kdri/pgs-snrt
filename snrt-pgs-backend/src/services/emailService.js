@@ -32,7 +32,23 @@ function buildTransporter() {
 }
 
 function getTransporter() {
-  if (!transporterPromise) transporterPromise = buildTransporter();
+  if (!transporterPromise) {
+    transporterPromise = buildTransporter().catch((err) => {
+      // BUGFIX (important) : si buildTransporter() echoue une seule fois
+      // (SMTP injoignable au demarrage, Ethereal indisponible en dev...),
+      // la promesse REJETEE restait en cache indefiniment
+      // (transporterPromise n'etait jamais reinitialise). Consequence :
+      // plus aucun email ne pouvait jamais partir pour le reste de la vie
+      // du process, meme si le SMTP redevenait disponible 30 secondes plus
+      // tard - seul un redemarrage complet du serveur reglait le probleme.
+      // On reinitialise explicitement le cache pour qu'un prochain appel a
+      // getTransporter() retente une construction fraiche, plutot que de
+      // rester bloque sur l'echec initial.
+      logger.error(`[Email] Echec de creation du transporteur SMTP: ${err.message}`);
+      transporterPromise = null;
+      throw err;
+    });
+  }
   return transporterPromise;
 }
 
