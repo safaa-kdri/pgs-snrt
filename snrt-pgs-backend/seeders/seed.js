@@ -41,6 +41,7 @@ const initialData = {
         email: 'admin@snrt.ma',
         motDePasse: 'SafaaAdmin@2026!SecurePassword',
         telephone: '0600000000',
+        cin: 'SA100001',
         actif: true
     },
 
@@ -52,6 +53,7 @@ const initialData = {
             email: 'rh@snrt.ma',
             motDePasse: 'RH@snrt2026!Secure',
             telephone: '0612345678',
+            cin: 'KB100002',
             actif: true
         },
         department: {
@@ -60,6 +62,7 @@ const initialData = {
             email: 'departement@snrt.ma',
             motDePasse: 'Dept@snrt2026!Secure',
             telephone: '0687654321',
+            cin: 'AF100003',
             actif: true
         },
         encadrant: {
@@ -68,6 +71,7 @@ const initialData = {
             email: 'encadrant@snrt.ma',
             motDePasse: 'Enc@snrt2026!Secure',
             telephone: '0654321876',
+            cin: 'CM100004',
             actif: true
         }
     },
@@ -80,7 +84,7 @@ const initialData = {
         motDePasse: 'Etudiant2026!Secure',
         telephone: '0612345987',
         cin: 'AB123456',
-        civilite: 'M.',
+        civilite: 'Mr',
         dateNaissance: new Date('2000-01-15'),
         adresse: '12 Rue Mohammed V, Rabat',
         ville: 'Rabat',
@@ -322,12 +326,7 @@ const seed = async () => {
             etudiantId: etudiant._id,
             offreId: offer._id,
             traiteurId: rh._id,
-            documents: [{
-                nom: 'CV_Youssef_EL_HASSANI.pdf',
-                type: 'CV',
-                chemin: '/uploads/cv_youssef.pdf',
-                dateUpload: new Date()
-            }],
+            documents: [],
             historique: [{
                 date: new Date(),
                 ancienStatut: 'Brouillon',
@@ -411,6 +410,7 @@ const seed = async () => {
         logger.info('🔔 Création d\'une notification de test...');
         await Notification.create({
             type: 'InApp',
+            titre: 'Candidature Soumise',
             message: `Votre candidature pour l'offre "${offer.titre}" a été soumise avec succès.`,
             dateEnvoi: new Date(),
             lue: false,
@@ -430,30 +430,35 @@ const seed = async () => {
         logger.info('👤 ADMINISTRATEUR:');
         logger.info(`   📧 Email: ${admin.email}`);
         logger.info(`   🔑 Mot de passe: ${initialData.admin.motDePasse}`);
+        logger.info(`   🆔 CIN: ${initialData.admin.cin}`);
         logger.info(`   👤 Rôle: ${roleAdmin.nom}`);
         logger.info('');
 
         logger.info('👤 RESPONSABLE RH:');
         logger.info(`   📧 Email: ${rh.email}`);
         logger.info(`   🔑 Mot de passe: ${initialData.users.rh.motDePasse}`);
+        logger.info(`   🆔 CIN: ${initialData.users.rh.cin}`);
         logger.info(`   👤 Rôle: ${roleRH.nom}`);
         logger.info('');
 
         logger.info('👤 RESPONSABLE DÉPARTEMENT:');
         logger.info(`   📧 Email: ${deptUser.email}`);
         logger.info(`   🔑 Mot de passe: ${initialData.users.department.motDePasse}`);
+        logger.info(`   🆔 CIN: ${initialData.users.department.cin}`);
         logger.info(`   👤 Rôle: ${roleDepartement.nom}`);
         logger.info('');
 
         logger.info('👤 ENCADRANT:');
         logger.info(`   📧 Email: ${encadrant.email}`);
         logger.info(`   🔑 Mot de passe: ${initialData.users.encadrant.motDePasse}`);
+        logger.info(`   🆔 CIN: ${initialData.users.encadrant.cin}`);
         logger.info(`   👤 Rôle: ${roleEncadrant.nom}`);
         logger.info('');
 
         logger.info('👤 ÉTUDIANT:');
         logger.info(`   📧 Email: ${etudiant.email}`);
         logger.info(`   🔑 Mot de passe: ${initialData.etudiant.motDePasse}`);
+        logger.info(`   🆔 CIN: ${initialData.etudiant.cin}`);
         logger.info(`   👤 Rôle: ${roleEtudiant.nom}`);
         logger.info('');
 
