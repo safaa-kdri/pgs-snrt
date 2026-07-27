@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
+import LoginInterne from './components/auth/LoginInterne';
 
 import Layout from './components/common/Layout';
 import ScrollToTop from './components/common/ScrollToTop';
@@ -116,6 +117,8 @@ function App() {
 
                     {/* ===== ROUTES AUTHENTIFICATION ===== */}
                     <Route path="/login" element={<Login />} />
+                    <Route path="/login-interne" element={<LoginInterne />} />
+
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/verify-2fa" element={<Verify2FA />} />

@@ -1,6 +1,6 @@
 // src/components/common/Header.jsx
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux'; // ✅ AJOUTER
+import { useDispatch, useSelector } from 'react-redux';
 import {
     AppBar,
     Toolbar,
@@ -9,27 +9,91 @@ import {
     Box,
     Container
 } from '@mui/material';
-import { Link, useNavigate } from 'react-router-dom';
-import { logout, loadCurrentUser } from '../../store/slices/authSlice'; // ✅ AJOUTER
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { logout, loadCurrentUser } from '../../store/slices/authSlice';
 
 const Header = () => {
     const navigate = useNavigate();
-    const dispatch = useDispatch(); // ✅ AJOUTER
+    const dispatch = useDispatch();
+    const location = useLocation();
     
-    // ✅ UTILISER REDUX AU LIEU DE localStorage
     const { isAuthenticated, user } = useSelector((state) => state.auth);
     
-    // ✅ CHARGER L'UTILISATEUR AU DÉMARRAGE
+    // ✅ NE PAS CHARGER L'UTILISATEUR SUR LA PAGE LOGIN INTERNE
     useEffect(() => {
-        dispatch(loadCurrentUser());
-    }, [dispatch]);
+        if (location.pathname !== '/login-interne') {
+            dispatch(loadCurrentUser());
+        }
+    }, [dispatch, location.pathname]);
 
-    // ✅ DÉCONNEXION AVEC REDUX
     const handleLogout = () => {
-        dispatch(logout()); // ✅ Redux gère tout (supprime localStorage aussi)
+        dispatch(logout());
         navigate('/');
     };
 
+    // ✅ SI ON EST SUR LOGIN INTERNE, HEADER VIDE (UNIQUEMENT LOGO)
+    if (location.pathname === '/login-interne') {
+        return (
+            <AppBar
+                position="sticky"
+                sx={{
+                    backgroundColor: '#06455b',
+                    backgroundImage: 'url(/navbar-bg.jpeg)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                    height: '74px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}
+            >
+                <Container maxWidth="xl">
+                    <Toolbar disableGutters sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0 20px',
+                        height: '74px',
+                    }}>
+                        <Box sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 0.5,
+                            flexShrink: 0
+                        }}>
+                            <img
+                                src="/logo_snrt_final.png"
+                                alt="SNRT"
+                                style={{ width: '80px', height: 'auto', display: 'block' }}
+                            />
+                            <Typography
+                                variant="h5"
+                                component={Link}
+                                to="/"
+                                sx={{
+                                    color: 'white',
+                                    textDecoration: 'none',
+                                    fontWeight: 600,
+                                    fontSize: '17px',
+                                    fontFamily: '"Inria Sans", sans-serif',
+                                    ml: '-6px',
+                                    letterSpacing: '1px',
+                                    lineHeight: 1,
+                                    margin: 0,
+                                    padding: 0
+                                }}
+                            >
+                                E-stages
+                            </Typography>
+                        </Box>
+                    </Toolbar>
+                </Container>
+            </AppBar>
+        );
+    }
+
+    // ✅ HEADER NORMAL POUR LES AUTRES PAGES
     return (
         <AppBar
             position="sticky"
@@ -52,19 +116,14 @@ const Header = () => {
                     alignItems: 'center',
                     padding: '0 20px',
                     height: '74px',
-                    marginTop: 0,
-                    marginBottom: '16px'
                 }}>
 
-                    {/* ===== PARTIE GAUCHE : E-stages + MENU ===== */}
                     <Box sx={{ 
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: 20,
                         flexShrink: 0
                     }}>
-
-                        {/* E-stages */}
                         <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -97,7 +156,6 @@ const Header = () => {
                             </Typography>
                         </Box>
 
-                        {/* MENU */}
                         <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -169,7 +227,6 @@ const Header = () => {
                         </Box>
                     </Box>
 
-                    {/* ===== PARTIE DROITE ===== */}
                     {isAuthenticated ? (
                         <Button
                             onClick={handleLogout}

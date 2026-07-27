@@ -1,120 +1,201 @@
 // src/components/admin/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import {
     Box,
     Container,
     Grid,
-    Paper,
-    Typography,
     Card,
+    CardContent,
+    Typography,
     Button,
-    Avatar,
-    Chip,
+    IconButton,
+    Drawer,
     List,
     ListItem,
+    ListItemIcon,
     ListItemText,
-    ListItemAvatar,
-    CircularProgress,
-    Alert,
+    Divider,
+    Avatar,
+    Badge,
+    Paper,
+    CircularProgress
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
-    People,
-    Business,
-    Work,
-    School,
-    TrendingUp,
-    Assignment,
-    Event,
-    NotificationsActive,
-    ArrowForward,
-    Refresh,
-    Download,
+    Menu as MenuIcon,
+    Dashboard as DashboardIcon,
+    People as PeopleIcon,
+    Work as WorkIcon,
+    Description as DescriptionIcon,
+    Business as BusinessIcon,
+    CalendarToday as CalendarIcon,
+    Settings as SettingsIcon,
+    Help as HelpIcon,
+    ContactMail as ContactIcon,
+    Logout as LogoutIcon,
+    Notifications as NotificationsIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../hooks/useAuth';
-import api from '../../services/api';
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip as ChartTooltip,
-    Legend,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Filler,
-} from 'chart.js';
-import { Bar, Pie, Line } from 'react-chartjs-2';
-
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    ChartTooltip,
-    Legend,
-    ArcElement,
-    PointElement,
-    LineElement,
-    Filler
-);
+import { loadCurrentUser, logout } from '../../store/slices/authSlice';
 
 // ============================================
-// STYLES - CHARTE SNRT PROFESSIONNELLE
+// STYLES
 // ============================================
 
-const StatCard = styled(Card)(({ color }) => ({
-    borderRadius: '14px',
-    padding: '22px 24px',
-    height: '100%',
-    background: '#ffffff',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    border: '1px solid #eef1f3',
-    borderLeft: `4px solid ${color || '#148aa0'}`,
-    transition: 'all 0.25s ease',
-    '&:hover': {
-        boxShadow: '0 6px 20px rgba(0,0,0,0.07)',
-        transform: 'translateY(-2px)',
+const drawerWidth = 280;
+
+const AppBar = styled(Box)({
+    backgroundColor: '#06455b',
+    backgroundImage: 'url(/navbar-bg.jpeg)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    height: '74px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 24px',
+    position: 'sticky',
+    top: 0,
+    zIndex: 1100,
+});
+
+const Logo = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    '& img': {
+        width: '50px',
+        height: 'auto',
     },
-}));
+    '& span': {
+        color: 'white',
+        fontSize: '18px',
+        fontWeight: 600,
+        fontFamily: '"Inria Sans", sans-serif',
+        letterSpacing: '1px',
+    },
+});
 
-const StatIconWrapper = styled(Box)({
-    width: '44px',
-    height: '44px',
-    borderRadius: '12px',
-    backgroundColor: '#eaf5f7',
+const MenuButton = styled(IconButton)({
+    color: 'white',
+    '&:hover': {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+});
+
+const DrawerStyled = styled(Drawer)({
+    '& .MuiDrawer-paper': {
+        width: drawerWidth,
+        backgroundColor: '#f7f7f7',
+        border: 'none',
+        boxShadow: '2px 0 12px rgba(0,0,0,0.08)',
+    },
+});
+
+const DrawerHeader = styled(Box)({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#148aa0',
-    flexShrink: 0,
+    padding: '24px 16px',
+    backgroundColor: '#06455b',
+    backgroundImage: 'url(/navbar-bg.jpeg)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    '& img': {
+        width: '60px',
+        height: 'auto',
+    },
+    '& span': {
+        color: 'white',
+        fontSize: '18px',
+        fontWeight: 600,
+        fontFamily: '"Inria Sans", sans-serif',
+        marginLeft: '10px',
+        letterSpacing: '1px',
+    },
 });
 
-const SectionTitle = styled(Typography)({
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#1a2332',
-    marginBottom: '16px',
-    letterSpacing: '0.2px',
-    fontFamily: '"Inter", "Segoe UI", sans-serif',
+const DrawerUser = styled(Box)({
+    padding: '20px 16px',
+    textAlign: 'center',
+    borderBottom: '1px solid #e8edf0',
+    '& .MuiAvatar-root': {
+        width: 56,
+        height: 56,
+        margin: '0 auto 8px',
+        backgroundColor: '#148aa0',
+    },
+    '& .name': {
+        fontSize: '16px',
+        fontWeight: 600,
+        color: '#1a1a2e',
+        fontFamily: 'Inter, sans-serif',
+    },
+    '& .role': {
+        fontSize: '13px',
+        color: '#6d7884',
+        fontFamily: 'Inter, sans-serif',
+    },
 });
 
-const ActivityItem = styled(ListItem)({
-    padding: '12px 0',
-    borderBottom: '1px solid #f0f2f5',
-    '&:last-child': { borderBottom: 'none' },
+const DrawerItem = styled(ListItem)(({ active }) => ({
+    borderRadius: '10px',
+    margin: '4px 12px',
+    padding: '10px 16px',
+    backgroundColor: active ? '#148aa0' : 'transparent',
+    color: active ? '#ffffff' : '#1a1a2e',
+    '&:hover': {
+        backgroundColor: active ? '#148aa0' : 'rgba(20, 138, 160, 0.08)',
+    },
+    '& .MuiListItemIcon-root': {
+        color: active ? '#ffffff' : '#148aa0',
+        minWidth: '40px',
+    },
+    '& .MuiListItemText-root .MuiTypography-root': {
+        fontSize: '14px',
+        fontWeight: active ? 600 : 400,
+        fontFamily: 'Inter, sans-serif',
+    },
+}));
+
+// ===== STATS CARDS =====
+const StatsCard = styled(Card)({
+    borderRadius: '16px',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+    border: '1px solid #e8edf0',
+    transition: 'all 0.2s ease',
+    '&:hover': {
+        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+        transform: 'translateY(-2px)',
+    },
 });
 
-const ChartCard = styled(Paper)({
-    borderRadius: '14px',
-    padding: '24px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    border: '1px solid #eef1f3',
-    height: '100%',
-    background: '#ffffff',
+const StatsIcon = styled(Box)(({ color }) => ({
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    backgroundColor: color || '#e8edf0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    '& svg': {
+        color: '#ffffff',
+        fontSize: '24px',
+    },
+}));
+
+const StatsValue = styled(Typography)({
+    fontSize: '28px',
+    fontWeight: 700,
+    color: '#1a1a2e',
+    fontFamily: 'Inter, sans-serif',
+});
+
+const StatsLabel = styled(Typography)({
+    fontSize: '14px',
+    color: '#6d7884',
+    fontFamily: 'Inter, sans-serif',
 });
 
 // ============================================
@@ -123,332 +204,314 @@ const ChartCard = styled(Paper)({
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const dispatch = useDispatch();
+    const { user, isAuthenticated } = useSelector((state) => state.auth);
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [stats, setStats] = useState({
-        users: { total: 0, active: 0, new: 0 },
-        departments: { total: 0, active: 0 },
-        offres: { total: 0, active: 0, pending: 0 },
-        internships: { total: 0, ongoing: 0, completed: 0 },
-        applications: { total: 0, pending: 0, accepted: 0, rejected: 0 },
-        chartData: { labels: [], datasets: [] },
-        distribution: { labels: [], datasets: [] },
-    });
-    const [recentActivities, setRecentActivities] = useState([]);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [activeItem, setActiveItem] = useState('dashboard');
 
+    // ✅ Vérifier l'authentification
     useEffect(() => {
-        fetchDashboardData();
-    }, []);
-
-    const fetchDashboardData = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const response = await api.get('/dashboard');
-            const data = response.data;
-            if (data.role === 'Administrateur' || data.role === 'ADMIN') {
-                const d = data.dashboard || {};
-                setStats({
-                    users: d.users || { total: 0, active: 0, new: 0 },
-                    departments: d.departments || { total: 0, active: 0 },
-                    offres: d.offres || { total: 0, active: 0, pending: 0 },
-                    internships: d.internships || { total: 0, ongoing: 0, completed: 0 },
-                    applications: d.applications || { total: 0, pending: 0, accepted: 0, rejected: 0 },
-                    chartData: d.chartData || { labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil'], datasets: [{ data: [8, 12, 15, 10, 18, 22, 28], backgroundColor: '#148aa0' }] },
-                    distribution: d.distribution || { labels: ['En attente', 'Acceptées', 'Refusées', 'En cours'], datasets: [{ data: [23, 42, 24, 15], backgroundColor: ['#f59e0b', '#22c55e', '#ef4444', '#4f46e5'] }] },
-                });
-                setRecentActivities(d.recentActivities || []);
-            }
-        } catch (err) {
-            console.error('Erreur chargement dashboard:', err);
-            setError(err.response?.data?.message || 'Erreur de chargement');
-            setStats({
-                users: { total: 156, active: 142, new: 8 },
-                departments: { total: 12, active: 10 },
-                offres: { total: 45, active: 28, pending: 7 },
-                internships: { total: 32, ongoing: 15, completed: 17 },
-                applications: { total: 89, pending: 23, accepted: 42, rejected: 24 },
-                chartData: { labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil'], datasets: [{ data: [8, 12, 15, 10, 18, 22, 28], backgroundColor: '#148aa0' }] },
-                distribution: { labels: ['En attente', 'Acceptées', 'Refusées', 'En cours'], datasets: [{ data: [23, 42, 24, 15], backgroundColor: ['#f59e0b', '#22c55e', '#ef4444', '#4f46e5'] }] },
-            });
-            setRecentActivities([
-                { id: 1, title: 'Nouvel utilisateur inscrit', description: 'Ahmed Benjelloun — Étudiant', date: 'Il y a 1h', icon: '👤', status: 'new' },
-                { id: 2, title: 'Offre publiée', description: 'Stage en Cybersécurité — DSI', date: 'Il y a 3h', icon: '📋', status: 'accepted' },
-                { id: 3, title: 'Département créé', description: 'Direction Innovation & Digital', date: 'Il y a 1j', icon: '🏢', status: 'info' },
-            ]);
-        } finally {
-            setLoading(false);
+        const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/login-interne', { replace: true });
         }
-    };
+        dispatch(loadCurrentUser());
+    }, [dispatch, navigate]);
 
-    const statCards = [
-        { title: 'Utilisateurs', value: stats.users.total, subtitle: `${stats.users.active} actifs`, icon: <People sx={{ fontSize: 22 }} />, color: '#4f46e5' },
-        { title: 'Départements', value: stats.departments.total, subtitle: `${stats.departments.active} actifs`, icon: <Business sx={{ fontSize: 22 }} />, color: '#8b5cf6' },
-        { title: 'Offres', value: stats.offres.total, subtitle: `${stats.offres.active} publiées`, icon: <Work sx={{ fontSize: 22 }} />, color: '#f59e0b' },
-        { title: 'Stages', value: stats.internships.total, subtitle: `${stats.internships.ongoing} en cours`, icon: <School sx={{ fontSize: 22 }} />, color: '#22c55e' },
-    ];
-
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { beginAtZero: true, grid: { color: '#f0f2f5' }, ticks: { font: { family: '"Inter", sans-serif', size: 11 } } },
-            x: { grid: { display: false }, ticks: { font: { family: '"Inter", sans-serif', size: 11 } } },
-        },
-    };
-
-    const pieOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'bottom',
-                labels: {
-                    usePointStyle: true,
-                    padding: 16,
-                    font: { size: 11, family: '"Inter", sans-serif' },
-                },
-            },
-        },
-        cutout: '68%',
-    };
-
-    if (loading) {
+    // ✅ Si pas authentifié, rediriger
+    if (!isAuthenticated && !localStorage.getItem('token')) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={44} thickness={4} sx={{ color: '#148aa0' }} />
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress sx={{ color: '#148aa0' }} />
             </Box>
         );
     }
 
+    const handleLogout = () => {
+        dispatch(logout());
+        navigate('/');
+    };
+
+    const handleNavigate = (path, item) => {
+        setActiveItem(item);
+        navigate(path);
+        setDrawerOpen(false);
+    };
+
+    const menuItems = [
+        { text: 'Tableau de bord', icon: <DashboardIcon />, path: '/admin', key: 'dashboard' },
+        { text: 'Utilisateurs', icon: <PeopleIcon />, path: '/admin/users', key: 'users' },
+        { text: 'Offres de stage', icon: <WorkIcon />, path: '/admin/offres', key: 'offres' },
+        { text: 'Départements', icon: <BusinessIcon />, path: '/admin/departments', key: 'departments' },
+        { text: 'Périodes', icon: <CalendarIcon />, path: '/admin/periods', key: 'periods' },
+        { text: 'Logs', icon: <DescriptionIcon />, path: '/admin/logs', key: 'logs' },
+        { text: 'Paramètres', icon: <SettingsIcon />, path: '/admin/settings', key: 'settings' },
+        { divider: true },
+        { text: 'FAQ', icon: <HelpIcon />, path: '/faq', key: 'faq' },
+        { text: 'Contact', icon: <ContactIcon />, path: '/contact', key: 'contact' },
+    ];
+
+    // ========================================== //
+    // STATS MOCK (à remplacer par API)
+    // ========================================== //
+
+    const stats = [
+        { label: 'Total Utilisateurs', value: '1,284', icon: <PeopleIcon />, color: '#4f46e5' },
+        { label: 'Offres Publiées', value: '47', icon: <WorkIcon />, color: '#148aa0' },
+        { label: 'Candidatures', value: '312', icon: <DescriptionIcon />, color: '#f59e0b' },
+        { label: 'Stages en cours', value: '23', icon: <BusinessIcon />, color: '#10b981' },
+    ];
+
+    const recentActivities = [
+        { user: 'Ahmed Benali', action: 'a postulé à "Stage Développeur"', time: 'il y a 2 min' },
+        { user: 'Sarah El Fassi', action: 'a été acceptée pour "Stage Marketing"', time: 'il y a 15 min' },
+        { user: 'Karim Tazi', action: 'a déposé son rapport final', time: 'il y a 1h' },
+        { user: 'Leila Amrani', action: 'a créé une nouvelle offre', time: 'il y a 3h' },
+    ];
+
     return (
-        <Container maxWidth="xl" sx={{ py: 4, px: { xs: 2, md: 3 } }}>
-            {error && (
-                <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>
-                    {error}
-                </Alert>
-            )}
-
-            {/* ===== EN-TÊTE ===== */}
-            <Box sx={{ mb: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                <Box>
-                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#148aa0', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                        Administration
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332', letterSpacing: '-0.02em', mt: 0.5 }}>
-                        Tableau de bord
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: '#687480', mt: 0.5 }}>
-                        Vue d'ensemble de la plateforme
-                    </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+            
+            {/* ===== HEADER ===== */}
+            <AppBar>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <MenuButton onClick={() => setDrawerOpen(true)}>
+                        <MenuIcon sx={{ fontSize: 28 }} />
+                    </MenuButton>
+                    <Logo>
+                        <img src="/logo_snrt_final.png" alt="SNRT" />
+                        <span>E-stages</span>
+                    </Logo>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <IconButton sx={{ color: 'white' }}>
+                        <Badge badgeContent={4} color="error">
+                            <NotificationsIcon />
+                        </Badge>
+                    </IconButton>
                     <Button
-                        variant="outlined"
-                        startIcon={<Refresh sx={{ fontSize: 18 }} />}
-                        onClick={fetchDashboardData}
+                        onClick={handleLogout}
                         sx={{
-                            textTransform: 'none',
-                            borderRadius: '10px',
-                            borderColor: '#e0e4e8',
-                            color: '#20242b',
-                            fontSize: '13px',
-                            fontWeight: 500,
+                            color: 'white',
+                            backgroundColor: 'rgba(255,255,255,0.15)',
+                            borderRadius: '50px',
                             px: 3,
-                            '&:hover': { borderColor: '#148aa0', backgroundColor: '#eaf5f7' },
+                            py: 0.8,
+                            fontFamily: 'Inter, sans-serif',
+                            fontSize: '14px',
+                            textTransform: 'none',
+                            '&:hover': { backgroundColor: 'rgba(255,255,255,0.25)' },
+                            '& i': { marginRight: '8px' },
                         }}
                     >
-                        Actualiser
-                    </Button>
-                    <Button
-                        variant="contained"
-                        startIcon={<Download sx={{ fontSize: 18 }} />}
-                        sx={{
-                            textTransform: 'none',
-                            borderRadius: '10px',
-                            backgroundColor: '#148aa0',
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            px: 3,
-                            '&:hover': { backgroundColor: '#0b7890' },
-                        }}
-                    >
-                        Exporter
+                        <i className="fa-solid fa-sign-out-alt"></i>
+                        Déconnexion
                     </Button>
                 </Box>
-            </Box>
+            </AppBar>
 
-            {/* ===== STATISTIQUES ===== */}
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                {statCards.map((stat, index) => (
-                    <Grid item xs={12} sm={6} lg={3} key={index}>
-                        <StatCard color={stat.color}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Box>
-                                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#1a2332', fontSize: '28px' }}>
-                                        {stat.value}
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 500, color: '#687480' }}>
-                                        {stat.title}
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ color: '#9aa4ac', display: 'block', mt: 0.5 }}>
-                                        {stat.subtitle}
-                                    </Typography>
-                                </Box>
-                                <StatIconWrapper>{stat.icon}</StatIconWrapper>
-                            </Box>
-                        </StatCard>
-                    </Grid>
-                ))}
-            </Grid>
+            {/* ===== DRAWER ===== */}
+            <DrawerStyled anchor="left" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+                <DrawerHeader>
+                    <img src="/logo_snrt_final.png" alt="SNRT" />
+                    <span>Administration</span>
+                </DrawerHeader>
 
-            {/* ===== GRAPHIQUES ===== */}
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} lg={8}>
-                    <ChartCard>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <SectionTitle sx={{ mb: 0 }}>
-                                <TrendingUp sx={{ color: '#148aa0', mr: 1, fontSize: 20 }} />
-                                Évolution des offres
-                            </SectionTitle>
-                            <Button size="small" sx={{ color: '#148aa0', textTransform: 'none', fontSize: '13px' }}>
-                                Voir plus <ArrowForward sx={{ fontSize: 16, ml: 0.5 }} />
-                            </Button>
-                        </Box>
-                        <Box sx={{ height: 250 }}>
-                            <Bar
-                                data={{
-                                    labels: stats.chartData.labels || ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil'],
-                                    datasets: [{
-                                        data: stats.chartData.datasets?.[0]?.data || [8, 12, 15, 10, 18, 22, 28],
-                                        backgroundColor: '#148aa0',
-                                        borderRadius: 4,
-                                        maxBarThickness: 32,
-                                    }],
-                                }}
-                                options={chartOptions}
-                            />
-                        </Box>
-                    </ChartCard>
-                </Grid>
-                <Grid item xs={12} lg={4}>
-                    <ChartCard>
-                        <SectionTitle sx={{ mb: 2 }}>
-                            <Assignment sx={{ color: '#f59e0b', mr: 1, fontSize: 20 }} />
-                            Répartition
-                        </SectionTitle>
-                        <Box sx={{ height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Pie
-                                data={{
-                                    labels: stats.distribution.labels || ['En attente', 'Acceptées', 'Refusées', 'En cours'],
-                                    datasets: [{
-                                        data: stats.distribution.datasets?.[0]?.data || [23, 42, 24, 15],
-                                        backgroundColor: ['#f59e0b', '#22c55e', '#ef4444', '#4f46e5'],
-                                        borderWidth: 0,
-                                    }],
-                                }}
-                                options={pieOptions}
-                            />
-                        </Box>
-                    </ChartCard>
-                </Grid>
-            </Grid>
+                <DrawerUser>
+                    <Avatar>
+                        {user?.prenom?.charAt(0) || 'A'}
+                    </Avatar>
+                    <Typography className="name">
+                        {user?.prenom} {user?.nom}
+                    </Typography>
+                    <Typography className="role">
+                        {user?.role || 'Administrateur'}
+                    </Typography>
+                </DrawerUser>
 
-            {/* ===== ACTIVITÉS ===== */}
-            <Grid container spacing={3}>
-                <Grid item xs={12} lg={8}>
-                    <Paper sx={{ p: 3, borderRadius: '14px', border: '1px solid #eef1f3', boxShadow: 'none' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <SectionTitle sx={{ mb: 0 }}>
-                                <TrendingUp sx={{ color: '#148aa0', mr: 1, fontSize: 20 }} />
-                                Activités récentes
-                            </SectionTitle>
-                            <Button size="small" sx={{ color: '#148aa0', textTransform: 'none', fontSize: '13px' }} onClick={() => navigate('/admin/logs')}>
-                                Voir tout <ArrowForward sx={{ fontSize: 16, ml: 0.5 }} />
-                            </Button>
-                        </Box>
-                        {recentActivities.length > 0 ? (
-                            <List sx={{ p: 0 }}>
-                                {recentActivities.map((activity) => (
-                                    <ActivityItem key={activity.id}>
-                                        <ListItemAvatar>
-                                            <Avatar sx={{ width: 32, height: 32, bgcolor: '#eaf5f7', color: '#148aa0', fontSize: 16 }}>
-                                                {activity.icon}
-                                            </Avatar>
-                                        </ListItemAvatar>
-                                        <ListItemText
-                                            primary={<Typography variant="body2" fontWeight={600} color="#1a2332">{activity.title}</Typography>}
-                                            secondary={
-                                                <>
-                                                    <Typography variant="caption" display="block" color="#687480">{activity.description}</Typography>
-                                                    <Typography variant="caption" display="block" color="#9aa4ac" sx={{ mt: 0.5 }}>{activity.date}</Typography>
-                                                </>
-                                            }
-                                        />
-                                        <Chip
-                                            label={activity.status === 'new' ? 'Nouveau' : activity.status === 'accepted' ? 'Approuvé' : 'Info'}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: activity.status === 'new' ? '#dbeafe' : activity.status === 'accepted' ? '#d1fae5' : '#e0e7ff',
-                                                color: activity.status === 'new' ? '#1d4ed8' : activity.status === 'accepted' ? '#065f46' : '#4338ca',
-                                                fontSize: '11px',
-                                                height: '22px',
-                                            }}
-                                        />
-                                    </ActivityItem>
-                                ))}
-                            </List>
+                <List sx={{ pt: 2 }}>
+                    {menuItems.map((item, index) => (
+                        item.divider ? (
+                            <Divider key={`divider-${index}`} sx={{ my: 1, mx: 2 }} />
                         ) : (
-                            <Typography variant="body2" color="#687480" sx={{ textAlign: 'center', py: 3 }}>
-                                Aucune activité récente
-                            </Typography>
-                        )}
-                    </Paper>
-                </Grid>
+                            <DrawerItem
+                                key={item.key}
+                                active={activeItem === item.key}
+                                onClick={() => handleNavigate(item.path, item.key)}
+                            >
+                                <ListItemIcon>{item.icon}</ListItemIcon>
+                                <ListItemText primary={item.text} />
+                            </DrawerItem>
+                        )
+                    ))}
+                </List>
 
-                <Grid item xs={12} lg={4}>
-                    <Paper sx={{ p: 3, borderRadius: '14px', border: '1px solid #eef1f3', boxShadow: 'none' }}>
-                        <SectionTitle>
-                            <NotificationsActive sx={{ color: '#148aa0', mr: 1, fontSize: 20 }} />
-                            Actions rapides
-                        </SectionTitle>
-                        <Grid container spacing={1.5}>
-                            {[
-                                { label: 'Utilisateurs', icon: <People sx={{ fontSize: 18 }} />, path: '/admin/users' },
-                                { label: 'Départements', icon: <Business sx={{ fontSize: 18 }} />, path: '/admin/departments' },
-                                { label: 'Périodes', icon: <Event sx={{ fontSize: 18 }} />, path: '/admin/periods' },
-                                { label: 'Paramètres', icon: <Assignment sx={{ fontSize: 18 }} />, path: '/admin/settings' },
-                            ].map((item) => (
-                                <Grid item xs={12} key={item.label}>
-                                    <Button
-                                        fullWidth
-                                        variant="outlined"
-                                        startIcon={item.icon}
-                                        onClick={() => navigate(item.path)}
+                <Box sx={{ p: 3, mt: 'auto', borderTop: '1px solid #e8edf0' }}>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        onClick={handleLogout}
+                        sx={{
+                            backgroundColor: '#dc3545',
+                            borderRadius: '10px',
+                            textTransform: 'none',
+                            fontFamily: 'Inter, sans-serif',
+                            fontSize: '14px',
+                            '&:hover': { backgroundColor: '#c82333' },
+                        }}
+                    >
+                        <i className="fa-solid fa-sign-out-alt" style={{ marginRight: '8px' }}></i>
+                        Se déconnecter
+                    </Button>
+                </Box>
+            </DrawerStyled>
+
+            {/* ===== CONTENU ===== */}
+            <Box sx={{ flex: 1, p: 3 }}>
+                <Container maxWidth="xl" sx={{ px: { xs: 0, md: 2 } }}>
+                    
+                    {/* TITRE */}
+                    <Box sx={{ mb: 4 }}>
+                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a1a2e', fontFamily: 'Inter, sans-serif' }}>
+                            Tableau de bord
+                        </Typography>
+                        <Typography sx={{ color: '#6d7884', fontFamily: 'Inter, sans-serif' }}>
+                            Bienvenue dans votre espace d'administration, {user?.prenom || 'Admin'}.
+                        </Typography>
+                    </Box>
+
+                    {/* STATS */}
+                    <Grid container spacing={3} sx={{ mb: 4 }}>
+                        {stats.map((stat, index) => (
+                            <Grid item xs={12} sm={6} md={3} key={index}>
+                                <StatsCard>
+                                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <StatsIcon color={stat.color}>
+                                            {stat.icon}
+                                        </StatsIcon>
+                                        <Box>
+                                            <StatsValue>{stat.value}</StatsValue>
+                                            <StatsLabel>{stat.label}</StatsLabel>
+                                        </Box>
+                                    </CardContent>
+                                </StatsCard>
+                            </Grid>
+                        ))}
+                    </Grid>
+
+                    {/* ACTIVITÉS RÉCENTES */}
+                    <Grid container spacing={3}>
+                        <Grid item xs={12} md={8}>
+                            <Paper sx={{ p: 3, borderRadius: '16px', border: '1px solid #e8edf0' }}>
+                                <Typography sx={{ fontWeight: 600, fontSize: '18px', mb: 2, fontFamily: 'Inter, sans-serif' }}>
+                                    Activités récentes
+                                </Typography>
+                                {recentActivities.map((activity, index) => (
+                                    <Box
+                                        key={index}
                                         sx={{
-                                            borderRadius: '10px',
-                                            py: 1.2,
-                                            borderColor: '#e0e4e8',
-                                            color: '#20242b',
-                                            textTransform: 'none',
-                                            justifyContent: 'flex-start',
-                                            fontSize: '14px',
-                                            fontWeight: 500,
-                                            '&:hover': { borderColor: '#148aa0', backgroundColor: '#eaf5f7' },
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            py: 1.5,
+                                            borderBottom: index < recentActivities.length - 1 ? '1px solid #f0f2f5' : 'none',
                                         }}
                                     >
-                                        {item.label}
-                                    </Button>
-                                </Grid>
-                            ))}
+                                        <Box>
+                                            <Typography sx={{ fontWeight: 500, fontFamily: 'Inter, sans-serif', fontSize: '14px' }}>
+                                                {activity.user}
+                                            </Typography>
+                                            <Typography sx={{ color: '#6d7884', fontFamily: 'Inter, sans-serif', fontSize: '13px' }}>
+                                                {activity.action}
+                                            </Typography>
+                                        </Box>
+                                        <Typography sx={{ color: '#aab1b8', fontSize: '12px', fontFamily: 'Inter, sans-serif' }}>
+                                            {activity.time}
+                                        </Typography>
+                                    </Box>
+                                ))}
+                            </Paper>
                         </Grid>
-                    </Paper>
-                </Grid>
-            </Grid>
-        </Container>
+
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 3, borderRadius: '16px', border: '1px solid #e8edf0' }}>
+                                <Typography sx={{ fontWeight: 600, fontSize: '18px', mb: 2, fontFamily: 'Inter, sans-serif' }}>
+                                    Actions rapides
+                                </Typography>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        sx={{
+                                            borderRadius: '10px',
+                                            textTransform: 'none',
+                                            fontFamily: 'Inter, sans-serif',
+                                            borderColor: '#148aa0',
+                                            color: '#148aa0',
+                                            '&:hover': { backgroundColor: 'rgba(20,138,160,0.05)' },
+                                        }}
+                                        onClick={() => navigate('/admin/users')}
+                                    >
+                                        <PeopleIcon sx={{ mr: 1, fontSize: 20 }} />
+                                        Gérer les utilisateurs
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        sx={{
+                                            borderRadius: '10px',
+                                            textTransform: 'none',
+                                            fontFamily: 'Inter, sans-serif',
+                                            borderColor: '#148aa0',
+                                            color: '#148aa0',
+                                            '&:hover': { backgroundColor: 'rgba(20,138,160,0.05)' },
+                                        }}
+                                        onClick={() => navigate('/admin/offres')}
+                                    >
+                                        <WorkIcon sx={{ mr: 1, fontSize: 20 }} />
+                                        Gérer les offres
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        sx={{
+                                            borderRadius: '10px',
+                                            textTransform: 'none',
+                                            fontFamily: 'Inter, sans-serif',
+                                            borderColor: '#148aa0',
+                                            color: '#148aa0',
+                                            '&:hover': { backgroundColor: 'rgba(20,138,160,0.05)' },
+                                        }}
+                                        onClick={() => navigate('/admin/departments')}
+                                    >
+                                        <BusinessIcon sx={{ mr: 1, fontSize: 20 }} />
+                                        Gérer les départements
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        sx={{
+                                            borderRadius: '10px',
+                                            textTransform: 'none',
+                                            fontFamily: 'Inter, sans-serif',
+                                            borderColor: '#148aa0',
+                                            color: '#148aa0',
+                                            '&:hover': { backgroundColor: 'rgba(20,138,160,0.05)' },
+                                        }}
+                                        onClick={() => navigate('/admin/settings')}
+                                    >
+                                        <SettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                                        Paramètres
+                                    </Button>
+                                </Box>
+                            </Paper>
+                        </Grid>
+                    </Grid>
+                </Container>
+            </Box>
+        </Box>
     );
 };
 
