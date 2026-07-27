@@ -2,7 +2,8 @@ const Offer = require('../models/Offer');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
-const { ROLES, OFFER_STATUS } = require('../config/constants');
+const storageService = require('../services/storageService');
+const { ROLES, OFFER_STATUS, CONCOURS_DOCUMENT_TYPES, STAFF_TREATMENT_ROLES, HR_ADMIN_ROLES } = require('../config/constants');
 
 
 const createOffer = asyncHandler(async (req, res) => {
@@ -119,7 +120,7 @@ const submitOffer = asyncHandler(async (req, res) => {
 
 
 const validateOffer = asyncHandler(async (req, res) => {
-  if (![ROLES.RH, ROLES.ADMIN].includes(req.user.role)) {
+  if (!HR_ADMIN_ROLES.includes(req.user.role)) {
     throw ApiError.forbidden('Seul le service RH peut valider une offre.');
   }
 
@@ -154,7 +155,7 @@ const archiveOffer = asyncHandler(async (req, res) => {
   if (!offer) throw ApiError.notFound('Offre introuvable.');
 
   const isOwner = offer.createurId.toString() === req.user.id;
-  if (!isOwner && ![ROLES.RH, ROLES.ADMIN].includes(req.user.role)) {
+  if (!isOwner && !HR_ADMIN_ROLES.includes(req.user.role)) {
     throw ApiError.forbidden("Vous n'avez pas les droits pour archiver cette offre.");
   }
 
@@ -185,6 +186,95 @@ const deleteOffer = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Brouillon supprime.' });
 });
 
+
+const uploadConcoursDocument = asyncHandler(async (req, res) => {
+  if (!STAFF_TREATMENT_ROLES.includes(req.user.role)) {
+    throw ApiError.forbidden('Seuls le departement ou le RH peuvent publier un document de concours.');
+  }
+
+  const offer = await Offer.findById(req.params.id);
+  if (!offer) throw ApiError.notFound('Offre introuvable.');
+
+  const isOwner = offer.createurId.toString() === req.user.id;
+  if (req.user.role === ROLES.DEPARTEMENT && !isOwner) {
+    throw ApiError.forbidden('Vous ne pouvez publier des documents que sur vos propres offres.');
+  }
+
+  const { type } = req.body;
+  if (!CONCOURS_DOCUMENT_TYPES.includes(type)) {
+    throw ApiError.badRequest(`Type de document invalide. Valeurs autorisees : ${CONCOURS_DOCUMENT_TYPES.join(', ')}.`);
+  }
+  if (!req.file) {
+    throw ApiError.badRequest('Aucun fichier fourni.');
+  }
+
+
+  const replacedDocs = offer.documentsConcours.filter((doc) => doc.type === type);
+  offer.documentsConcours = offer.documentsConcours.filter((doc) => doc.type !== type);
+  offer.documentsConcours.push({
+    type,
+    nomOriginal: req.file.originalname,
+    nomStocke: req.file.filename,
+    chemin: req.file.path,
+    url: `/uploads/concours/${req.file.filename}`,
+    mimeType: req.file.mimetype,
+    taille: req.file.size,
+    publieParId: req.user.id,
+  });
+
+  await offer.save();
+
+  if (replacedDocs.length > 0) {
+    await Promise.all(
+      replacedDocs.map((doc) =>
+        storageService.deletePhysicalFile(doc).catch((err) => {
+          logger.warn(`[Offer] Fichier de concours remplace non supprime du disque (${doc.chemin}): ${err.message}`);
+        })
+      )
+    );
+  }
+
+  logger.audit('OFFER_CONCOURS_DOCUMENT_UPLOADED', { offerId: offer._id.toString(), type, userId: req.user.id });
+
+  return res.status(201).json({ success: true, message: 'Document de concours publie avec succes.', offer });
+});
+
+const deleteConcoursDocument = asyncHandler(async (req, res) => {
+  if (!STAFF_TREATMENT_ROLES.includes(req.user.role)) {
+    throw ApiError.forbidden("Vous n'avez pas les droits pour supprimer ce document.");
+  }
+
+  const offer = await Offer.findById(req.params.id);
+  if (!offer) throw ApiError.notFound('Offre introuvable.');
+
+  const isOwner = offer.createurId.toString() === req.user.id;
+  if (req.user.role === ROLES.DEPARTEMENT && !isOwner) {
+    throw ApiError.forbidden('Vous ne pouvez supprimer que les documents de vos propres offres.');
+  }
+
+
+  const docToDelete = offer.documentsConcours.find((doc) => doc._id.toString() === req.params.docId);
+  if (!docToDelete) {
+    throw ApiError.notFound('Document introuvable.');
+  }
+
+  offer.documentsConcours = offer.documentsConcours.filter((doc) => doc._id.toString() !== req.params.docId);
+
+  await offer.save();
+
+  await storageService.deletePhysicalFile(docToDelete).catch((err) => {
+    logger.warn(`[Offer] Fichier de concours supprime non retire du disque (${docToDelete.chemin}): ${err.message}`);
+  });
+
+  logger.audit('OFFER_CONCOURS_DOCUMENT_DELETED', {
+    offerId: offer._id.toString(),
+    docId: req.params.docId,
+    userId: req.user.id,
+  });
+
+  return res.status(200).json({ success: true, message: 'Document supprime avec succes.' });
+});
+
 module.exports = {
   createOffer,
   listOffers,
@@ -194,4 +284,6 @@ module.exports = {
   validateOffer,
   archiveOffer,
   deleteOffer,
+  uploadConcoursDocument,
+  deleteConcoursDocument,
 };

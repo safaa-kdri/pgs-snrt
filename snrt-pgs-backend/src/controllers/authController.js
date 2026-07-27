@@ -39,7 +39,8 @@ async function registerFailedAttempt(user) {
   if (user.security.failedLoginAttempts >= CONFIG.bruteForce.maxAttempts) {
     user.security.lockUntil = new Date(Date.now() + CONFIG.bruteForce.lockMinutes * 60 * 1000);
   }
-  await user.save();
+
+  await user.save({ validateModifiedOnly: true });
 }
 
 function isLocked(user) {
@@ -66,7 +67,7 @@ async function issueSession(res, user, userType, req) {
     ip: req.ip,
   });
   user.derniereConnexion = new Date();
-  await user.save();
+  await user.save({ validateModifiedOnly: true });
 
   setAccessTokenCookie(res, accessToken);
   setRefreshTokenCookie(res, refreshToken);
@@ -150,7 +151,7 @@ const login = asyncHandler(async (req, res) => {
   const { code, codeHash, expiresAt } = generateTwoFactorCode();
   user.twoFactor.codeHash = codeHash;
   user.twoFactor.expiresAt = expiresAt;
-  await user.save();
+  await user.save({ validateModifiedOnly: true });
 
   try {
     await sendTwoFactorCodeEmail(user.email, code);
@@ -244,7 +245,7 @@ const resendTwoFactorCode = asyncHandler(async (req, res) => {
   const { code, codeHash, expiresAt } = generateTwoFactorCode();
   user.twoFactor.codeHash = codeHash;
   user.twoFactor.expiresAt = expiresAt;
-  await user.save();
+  await user.save({ validateModifiedOnly: true });
 
   try {
     await sendTwoFactorCodeEmail(user.email, code);
@@ -291,7 +292,7 @@ const refresh = asyncHandler(async (req, res) => {
 
   if (matchIndex === -1) {
     user.refreshTokens = [];
-    await user.save();
+    await user.save({ validateModifiedOnly: true });
     clearAuthCookies(res);
     logger.audit('REFRESH_TOKEN_REUSE_DETECTED', { userId: user._id.toString() });
     throw ApiError.unauthorized('Session invalide. Veuillez vous reconnecter.');
@@ -316,7 +317,7 @@ const refresh = asyncHandler(async (req, res) => {
     userAgent: req.get('user-agent') || null,
     ip: req.ip,
   });
-  await user.save();
+  await user.save({ validateModifiedOnly: true });
 
   setAccessTokenCookie(res, newAccessToken);
   setRefreshTokenCookie(res, newRefreshToken);
@@ -335,7 +336,7 @@ const logout = asyncHandler(async (req, res) => {
       if (user) {
         const incomingHash = hashToken(refreshTokenCookie);
         user.refreshTokens = user.refreshTokens.filter((rt) => rt.tokenHash !== incomingHash);
-        await user.save();
+        await user.save({ validateModifiedOnly: true });
         logger.audit('LOGOUT', { userId: user._id.toString() });
       }
     }
@@ -359,15 +360,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
   const { user } = found;
 
   const rawToken = generateRandomToken(32);
-  
-  // next 3 lines ila nsit nms7hom they need to go
-  console.log('\n==================================================');
-  console.log('[DEV MODE] RAW RESET TOKEN:', rawToken);
-  console.log('==================================================\n');
+
+
 
   user.passwordReset.tokenHash = hashToken(rawToken);
   user.passwordReset.expiresAt = new Date(Date.now() + CONFIG.resetPassword.ttlMinutes * 60 * 1000);
-  await user.save();
+  await user.save({ validateModifiedOnly: true });
 
   const resetUrl = `${CONFIG.clientUrl}/reset-password/${rawToken}`;
 
@@ -377,15 +375,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
   } catch (err) {
     logger.error(`[ForgotPassword] Echec envoi email a ${user.email}: ${err.message}`);
 
-    // Fallback : en mode dev, afficher le lien dans la console pour ne pas
-    // bloquer le flux (memes symptomes/cause que login() / resendTwoFactorCode()
-    // quand aucun serveur SMTP n'est joignable).
+   
     if (process.env.NODE_ENV !== 'production') {
       logger.info('==================================================');
       logger.info(`[DEV MODE] LIEN DE REINITIALISATION : ${resetUrl}`);
       logger.info('==================================================');
     }
-    // Ne pas bloquer la route, juste logger l'erreur.
   }
 
   return res.status(200).json(genericResponse);
@@ -414,7 +409,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   user.security.failedLoginAttempts = 0;
   user.security.lockUntil = null;
 
-  await user.save();
+  await user.save({ validateModifiedOnly: true });
 
   logger.audit('PASSWORD_RESET_SUCCESS', { userId: user._id.toString() });
 

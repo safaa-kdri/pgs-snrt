@@ -4,15 +4,23 @@ const UtilisateurExterne = require('../models/UtilisateurExterne');
 const Role = require('../models/Role');
 const Department = require('../models/Department');
 const { hashPassword } = require('../utils/argon2');
+const { validatePasswordPolicy } = require('../utils/validators');
+const userLookup = require('../utils/userLookup');
+
 
 const getUserModel = (type) => {
-    if (type === 'interne') return UtilisateurInterne;
-    if (type === 'externe') return UtilisateurExterne;
-    return null;
+    try {
+        return userLookup.getModel(type);
+    } catch (err) {
+        return null;
+    }
 };
 
 exports.createInternalUser = async (req, res) => {
     try {
+
+        validatePasswordPolicy(req.body.motDePasse, 'interne');
+
         const motDePasseHash = await hashPassword(req.body.motDePasse);
         const user = await UtilisateurInterne.create({
             ...req.body,
@@ -31,16 +39,22 @@ exports.createInternalUser = async (req, res) => {
             data: userResponse
         });
     } catch (error) {
-        return res.status(500).json({
+ 
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
             success: false,
-            message: 'Erreur lors de la création de l’utilisateur interne',
-            error: error.message
+            message: statusCode === 500 ? 'Erreur lors de la création de l’utilisateur interne' : error.message,
+            details: error.details,
+            error: statusCode === 500 ? error.message : undefined
         });
     }
 };
 
 exports.createExternalUser = async (req, res) => {
     try {
+
+        validatePasswordPolicy(req.body.motDePasse, 'externe');
+
         const motDePasseHash = await hashPassword(req.body.motDePasse);
         const user = await UtilisateurExterne.create({
             ...req.body,
@@ -58,10 +72,12 @@ exports.createExternalUser = async (req, res) => {
             data: userResponse
         });
     } catch (error) {
-        return res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
             success: false,
-            message: 'Erreur lors de la création de l’utilisateur externe',
-            error: error.message
+            message: statusCode === 500 ? 'Erreur lors de la création de l’utilisateur externe' : error.message,
+            details: error.details,
+            error: statusCode === 500 ? error.message : undefined
         });
     }
 };
@@ -175,8 +191,14 @@ exports.updateUser = async (req, res) => {
             });
         }
 
+
         const updateData = { ...req.body, updatedBy: req.user?._id };
         delete updateData.motDePasse;
+        delete updateData.roleId;
+        delete updateData.departementId;
+        delete updateData.actif;
+        delete updateData.email;
+        delete updateData.cin;
 
         let query = UserModel.findByIdAndUpdate(id, updateData, { new: true, runValidators: true })
             .select('-motDePasse')
@@ -226,6 +248,8 @@ exports.deleteUser = async (req, res) => {
             });
         }
 
+
+        user.actif = false;
         await user.softDelete(req.user?._id);
 
         return res.status(200).json({
@@ -236,6 +260,57 @@ exports.deleteUser = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la suppression de l’utilisateur',
+            error: error.message
+        });
+    }
+};
+
+
+exports.restoreUser = async (req, res) => {
+    try {
+        const { type, id } = req.params;
+        const UserModel = getUserModel(type);
+
+        if (!UserModel) {
+            return res.status(400).json({
+                success: false,
+                message: 'Type utilisateur invalide'
+            });
+        }
+
+      
+        const user = await UserModel.findByIdIncludingDeleted(id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Utilisateur non trouvé'
+            });
+        }
+
+        if (!user.isDeleted) {
+            return res.status(400).json({
+                success: false,
+                message: "Cet utilisateur n'est pas supprimé."
+            });
+        }
+
+        await user.restore();
+        user.actif = true;
+        user.updatedBy = req.user?._id;
+        await user.save();
+
+        const userResponse = await UserModel.findById(id).select('-motDePasse').populate('roleId');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Utilisateur restauré avec succès',
+            data: userResponse
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la restauration de l’utilisateur',
             error: error.message
         });
     }

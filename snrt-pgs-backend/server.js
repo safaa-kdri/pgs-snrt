@@ -8,6 +8,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 const connectDB = require('./src/config/database');
 const { CONFIG, assertRequiredEnv } = require('./src/config/constants');
 const logger = require('./src/utils/logger');
+const errorHandler = require('./src/middlewares/errorHandler');
 
 const authRoutes = require('./src/routes/authRoutes');
 const offerRoutes = require('./src/routes/offerRoutes');
@@ -18,6 +19,12 @@ const departmentRoutes = require('./src/routes/departmentRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+// BUGFIX (code mort) : resultsRoutes existait (routes + controller complets,
+// getResults/getResultDetail lisent bien documentsConcours.ResultatConcours
+// deja alimente par offerController.uploadConcoursDocument) mais n'etait
+// jamais monte ici - la fonctionnalite etait 100% inaccessible depuis
+// l'exterieur.
+const resultsRoutes = require('./src/routes/resultsRoutes');
 
 assertRequiredEnv();
 
@@ -58,6 +65,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/offers', offerRoutes);
 app.use('/api/v1/interviews', interviewRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/results', resultsRoutes);
 
 // --- Routes (perimetre Mohammed : candidatures, departements, documents,
 // notifications, utilisateurs) ---
@@ -76,19 +84,16 @@ app.use((req, res) => {
 });
 
 // --- Gestion globale des erreurs (doit rester le dernier middleware) ---
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-  const statusCode = err.statusCode || 500;
-  const isOperational = err.isOperational || false;
-
-  if (!isOperational) logger.error(`[Unhandled] ${err.message}\n${err.stack}`);
-
-  const response = { success: false, message: isOperational ? err.message : 'Erreur interne du serveur.' };
-  if (err.details) response.details = err.details;
-  if (CONFIG.nodeEnv === 'development' && !isOperational) response.stack = err.stack;
-
-  res.status(statusCode).json(response);
-});
+// BUGFIX (code mort / comportement) : ce bloc dupliquait moins bien
+// middlewares/errorHandler.js, qui existait deja dans le depot mais n'etait
+// jamais importe. errorHandler.js traduit en plus les erreurs Mongoose
+// (ValidationError, CastError, cle dupliquee 11000) et JWT en reponses
+// HTTP explicites (400/404/401) au lieu de les laisser tomber en 500
+// generique comme c'etait le cas ici. Voir src/middlewares/errorHandler.js
+// pour le detail de la fusion (la logique de masquage du message en cas
+// d'erreur non-operationnelle, qui existait ici, y a ete reportee pour ne
+// pas regresser sur ce point).
+app.use(errorHandler);
 
 // -----------------------------------------------------------------------------
 // Demarrage

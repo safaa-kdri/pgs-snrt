@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const subjectSchema = require('./Subject');
-const { OFFER_STATUS, OFFER_TYPES } = require('../config/constants');
+const { OFFER_STATUS, OFFER_TYPES, CONCOURS_DOCUMENT_TYPES } = require('../config/constants');
 
 
 const documentRequisSchema = new mongoose.Schema(
@@ -9,6 +9,21 @@ const documentRequisSchema = new mongoose.Schema(
     obligatoire: { type: Boolean, default: true },
   },
   { _id: false }
+);
+
+const concoursDocumentSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: CONCOURS_DOCUMENT_TYPES, required: true },
+    nomOriginal: { type: String, required: true, trim: true },
+    nomStocke: { type: String, required: true, trim: true },
+    chemin: { type: String, required: true },
+    url: { type: String, required: true },
+    mimeType: { type: String, required: true },
+    taille: { type: Number, required: true },
+    datePublication: { type: Date, default: Date.now },
+    publieParId: { type: mongoose.Schema.Types.ObjectId, ref: 'UtilisateurInterne' },
+  },
+  { _id: true, timestamps: false }
 );
 
 const offerSchema = new mongoose.Schema(
@@ -38,11 +53,14 @@ const offerSchema = new mongoose.Schema(
       type: [subjectSchema],
       validate: {
         validator: (arr) => Array.isArray(arr) && arr.length >= 1,
-        message: 'Une offre doit comporter au moins un sujet (RG-007).',
+
+        message: 'Une offre doit comporter au moins un sujet (RG-010).',
       },
     },
 
     documentsRequis: { type: [documentRequisSchema], default: [] },
+
+    documentsConcours: { type: [concoursDocumentSchema], default: [] },
 
     motifRefus: { type: String, default: null },
   },
@@ -59,7 +77,8 @@ offerSchema.index({ titre: 'text', description: 'text' });
 
 offerSchema.pre('validate', function preValidate(next) {
   if (this.dateDebut && this.dateLimiteCandidature && this.dateDebut <= this.dateLimiteCandidature) {
-    return next(new Error('La date de debut de stage doit etre posterieure a la date limite de candidature (RG-009).'));
+ 
+    return next(new Error('La date de debut de stage doit etre posterieure a la date limite de candidature (RG-012).'));
   }
   if (this.dateFin && this.dateDebut && this.dateFin <= this.dateDebut) {
     return next(new Error('La date de fin de stage doit etre posterieure a la date de debut.'));
@@ -70,7 +89,8 @@ offerSchema.pre('validate', function preValidate(next) {
 function blockDeleteIfPublished(next) {
   const statut = this.statut || this.getUpdate?.()?.statut;
   if (statut === OFFER_STATUS.PUBLIEE) {
-    return next(new Error('Une offre publiee ne peut pas etre supprimee (RG-011). Utilisez l\'archivage.'));
+ 
+    return next(new Error('Une offre publiee ne peut pas etre supprimee (RG-014). Utilisez l\'archivage.'));
   }
   return next();
 }

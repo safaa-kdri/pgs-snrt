@@ -23,10 +23,6 @@ function signPreAuthToken(payload) {
   return jwt.sign(payload, CONFIG.jwt.preAuthSecret, { expiresIn: CONFIG.jwt.preAuthExpires });
 }
 
-function signResetToken(payload) {
-  return jwt.sign(payload, CONFIG.jwt.resetSecret, { expiresIn: `${CONFIG.resetPassword.ttlMinutes}m` });
-}
-
 function verifyToken(token, secret) {
   try {
     return jwt.verify(token, secret);
@@ -38,7 +34,6 @@ function verifyToken(token, secret) {
 const verifyAccessToken = (token) => verifyToken(token, CONFIG.jwt.accessSecret);
 const verifyRefreshToken = (token) => verifyToken(token, CONFIG.jwt.refreshSecret);
 const verifyPreAuthToken = (token) => verifyToken(token, CONFIG.jwt.preAuthSecret);
-const verifyResetToken = (token) => verifyToken(token, CONFIG.jwt.resetSecret);
 
 function setAccessTokenCookie(res, token) {
   res.cookie('accessToken', token, { ...COOKIE_BASE_OPTIONS, maxAge: 15 * 60 * 1000 });
@@ -73,11 +68,9 @@ module.exports = {
   signAccessToken,
   signRefreshToken,
   signPreAuthToken,
-  signResetToken,
   verifyAccessToken,
   verifyRefreshToken,
   verifyPreAuthToken,
-  verifyResetToken,
   setAccessTokenCookie,
   setRefreshTokenCookie,
   setPreAuthCookie,

@@ -1,8 +1,4 @@
-/**
- * Erreur applicative standardisee, utilisee par tous les controleurs
- * (auth, offers, interviews, dashboard...) pour une gestion d'erreur
- * coherente a travers toute l'equipe.
- */
+
 class ApiError extends Error {
   constructor(statusCode, message, details = null) {
     super(message);

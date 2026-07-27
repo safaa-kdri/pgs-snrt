@@ -1,18 +1,5 @@
 require('dotenv').config();
 
-/**
- * Point unique de verite pour :
- *  - les enumerations metier partagees entre modules (statuts, types...)
- *    afin d'eviter les chaines "magiques" dupliquees dans chaque fichier
- *    ecrit par des developpeurs differents ;
- *  - la configuration derivee des variables d'environnement.
- *
- * NB: ce projet n'utilise pas Passport.js (pas de config/passport.js) :
- * l'authentification est geree "maison" via JWT + cookies HttpOnly + 2FA
- * (voir utils/jwt.js et controllers/authController.js), ce qui est plus
- * adapte a un flux de connexion en 2 etapes (mot de passe puis code email).
- */
-
 const ROLES = Object.freeze({
   ADMIN: 'Administrateur',
   RH: 'RH',
@@ -20,6 +7,12 @@ const ROLES = Object.freeze({
   ENCADRANT: 'Encadrant',
   ETUDIANT: 'Etudiant',
 });
+
+
+const STAFF_TREATMENT_ROLES = Object.freeze([ROLES.RH, ROLES.DEPARTEMENT, ROLES.ADMIN]);
+
+
+const HR_ADMIN_ROLES = Object.freeze([ROLES.RH, ROLES.ADMIN]);
 
 const OFFER_STATUS = Object.freeze({
   BROUILLON: 'Brouillon',
@@ -36,10 +29,15 @@ const INTERVIEW_RESULTS = ['EnAttente', 'Positive', 'Negative'];
 
 const SKILL_CATEGORIES = ['Technique', 'Langue', 'Autre'];
 
-// Rappel des statuts de candidature (source de verite : modele Application, module Mohammed).
-// Duplique ici uniquement en lecture seule pour que les controleurs de Badr
-// (interviewController) puissent reagir aux changements de statut sans
-// dependre du fichier models/Application.js.
+
+const CONCOURS_DOCUMENT_TYPES = [
+  'ArreteOuverture',
+  'ListeConvoquesEcrit',
+  'ListeConvoquesPratique',
+  'ResultatConcours',
+];
+
+
 const APPLICATION_STATUS = Object.freeze({
   BROUILLON: 'Brouillon',
   SOUMISE: 'Soumise',
@@ -68,7 +66,6 @@ const CONFIG = Object.freeze({
     refreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
     preAuthSecret: process.env.JWT_PREAUTH_SECRET,
     preAuthExpires: process.env.JWT_PREAUTH_EXPIRES || '5m',
-    resetSecret: process.env.JWT_RESET_SECRET,
   },
 
   cookies: {
@@ -86,8 +83,9 @@ const CONFIG = Object.freeze({
   },
 
   bruteForce: {
-    maxAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS, 10) || 5,
-    lockMinutes: parseInt(process.env.LOCK_DURATION_MINUTES, 10) || 15,
+
+    maxAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS, 10) || 3,
+    lockMinutes: parseInt(process.env.LOCK_DURATION_MINUTES, 10) || 60,
   },
 
   smtp: {
@@ -100,12 +98,11 @@ const CONFIG = Object.freeze({
   },
 });
 
-const REQUIRED_ENV = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'JWT_PREAUTH_SECRET', 'JWT_RESET_SECRET'];
+const REQUIRED_ENV = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'JWT_PREAUTH_SECRET'];
 
 function assertRequiredEnv() {
   const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
   if (missing.length > 0) {
-    // eslint-disable-next-line no-console
     console.error(`[CONFIG] Variables d'environnement manquantes: ${missing.join(', ')}`);
     process.exit(1);
   }
@@ -113,11 +110,14 @@ function assertRequiredEnv() {
 
 module.exports = {
   ROLES,
+  STAFF_TREATMENT_ROLES,
+  HR_ADMIN_ROLES,
   OFFER_STATUS,
   OFFER_TYPES,
   INTERVIEW_TYPES,
   INTERVIEW_RESULTS,
   SKILL_CATEGORIES,
+  CONCOURS_DOCUMENT_TYPES,
   APPLICATION_STATUS,
   PASSWORD_MIN_LENGTH,
   CONFIG,

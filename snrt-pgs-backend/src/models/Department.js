@@ -6,7 +6,7 @@ const DepartmentSchema = new mongoose.Schema({
     nom: {
         type: String,
         required: [true, 'Le nom du département est obligatoire'],
-        unique: true,
+   
         trim: true
     },
     description: {
@@ -35,7 +35,12 @@ const DepartmentSchema = new mongoose.Schema({
 
 DepartmentSchema.add(BaseSchema);
 
-
 DepartmentSchema.index({ actif: 1 });
+
+
+DepartmentSchema.index(
+    { nom: 1 },
+    { unique: true, partialFilterExpression: { isDeleted: false } }
+);
 
 module.exports = mongoose.model('Department', DepartmentSchema);

@@ -32,7 +32,14 @@ function buildTransporter() {
 }
 
 function getTransporter() {
-  if (!transporterPromise) transporterPromise = buildTransporter();
+  if (!transporterPromise) {
+    transporterPromise = buildTransporter().catch((err) => {
+
+      logger.error(`[Email] Echec de creation du transporteur SMTP: ${err.message}`);
+      transporterPromise = null;
+      throw err;
+    });
+  }
   return transporterPromise;
 }
 

@@ -18,9 +18,7 @@ function authenticate() {
 
       req.user = {
         id: user._id.toString(),
-        // Alias kept for controllers written against Mongoose's usual `_id`
-        // convention (applicationController, departmentController,
-        // documentController, notificationController, userController).
+       
         _id: user._id.toString(),
         userType: payload.userType,
         role: payload.role,
@@ -46,12 +44,7 @@ function authorize(...allowedRoles) {
 }
 
 
-// Auth optionnelle : utilisee pour les routes publiques qui doivent tout de
-// meme adapter leur reponse si un utilisateur est connecte (ex: GET /offers,
-// GET /offers/:id - consultation publique d'apres le CDC 2.4.2, mais le
-// controleur affine le filtrage si req.user est present). Ne bloque jamais
-// la requete : token absent, invalide, expire ou compte inactif => on
-// continue simplement sans req.user, comme un visiteur anonyme.
+
 function optionalAuthenticate() {
   return async (req, res, next) => {
     try {

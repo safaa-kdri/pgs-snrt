@@ -6,7 +6,7 @@ const PeriodSchema = new mongoose.Schema({
     nom: {
         type: String,
         required: [true, 'Le nom de la période est obligatoire'],
-        unique: true,
+
         trim: true
     },
     dateDebut: {
@@ -37,18 +37,23 @@ PeriodSchema.add(BaseSchema);
 
 PeriodSchema.pre('validate', function(next) {
     if (this.dateFin <= this.dateDebut) {
-        next(new Error('...'));
+        return next(new Error('La date de fin de la periode doit etre posterieure a la date de debut.'));
     }
     if (this.dateFermetureCandidatures <= this.dateOuvertureCandidatures) {
-        next(new Error('...'));
+        return next(new Error("La date de fermeture des candidatures doit etre posterieure a la date d'ouverture des candidatures."));
     }
     if (this.dateDebut <= this.dateFermetureCandidatures) {
-        next(new Error('...'));
+        return next(new Error('La date de debut de la periode de stage doit etre posterieure a la date de fermeture des candidatures.'));
     }
-    next();
+    return next();
 });
 
-PeriodSchema.index({ nom: 1 });
 PeriodSchema.index({ actif: 1 });
+
+
+PeriodSchema.index(
+    { nom: 1 },
+    { unique: true, partialFilterExpression: { isDeleted: false } }
+);
 
 module.exports = mongoose.model('Period', PeriodSchema);

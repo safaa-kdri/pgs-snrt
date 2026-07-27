@@ -8,9 +8,16 @@ const UtilisateurExterne = require('../models/UtilisateurExterne');
 const { sendDocumentRejectedEmail } = require('./emailService');
 const logger = require('../utils/logger');
 
+const ALLOWED_DOCUMENT_TYPES = ['CV', 'LettreMotivation', 'Convention', 'Attestation', 'ReleveNotes', 'Autre'];
+
+
 const getDocumentType = (type) => {
-    const allowedTypes = ['CV', 'LettreMotivation', 'Convention', 'Attestation', 'ReleveNotes', 'Autre'];
-    return allowedTypes.includes(type) ? type : 'Autre';
+    if (!ALLOWED_DOCUMENT_TYPES.includes(type)) {
+        throw new Error(
+            `Type de document invalide : "${type}". Valeurs autorisees : ${ALLOWED_DOCUMENT_TYPES.join(', ')}.`
+        );
+    }
+    return type;
 };
 
 exports.createDocumentFromUpload = async ({

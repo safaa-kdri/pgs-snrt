@@ -51,135 +51,108 @@ async function entretiensAVenirCount() {
 }
 
 
-const getDashboard = asyncHandler(async (req, res) => {
-  const { role, id: userId, departementId } = req.user;
 
-  if (role === ROLES.ETUDIANT) {
-    const Application = getModelSafe('Application');
-    const [favoris, candidatures] = await Promise.all([
-      Favorite.countDocuments({ etudiantId: userId }),
-      Application
-        ? applicationStatsFor({ etudiantId: userId })
-        : { pending: true, message: 'Module Candidatures non disponible sur cet environnement.' },
-    ]);
-
-    return res.status(200).json({
-      success: true,
-      role,
-      dashboard: { candidatures, favoris },
-    });
-  }
-
-  if (role === ROLES.DEPARTEMENT) {
-    const filter = departementId ? { departementId } : { createurId: userId };
-    const [offres, entretiensAVenir] = await Promise.all([offerStatsFor(filter), entretiensAVenirCount()]);
-
-    return res.status(200).json({ success: true, role, dashboard: { offres, entretiensAVenir } });
-  }
-
-  if (role === ROLES.RH) {
-    const [offres, candidatures, stages, entretiensAVenir] = await Promise.all([
-      offerStatsFor({}),
-      applicationStatsFor({}),
-      internshipStatsFor({}),
-      entretiensAVenirCount(),
-    ]);
-
-    return res.status(200).json({ success: true, role, dashboard: { offres, candidatures, stages, entretiensAVenir } });
-  }
-
-  if (role === ROLES.ENCADRANT) {
-    const Internship = getModelSafe('Internship');
-    const stagiairesSuivis = Internship ? await Internship.countDocuments({ encadrantId: userId, statut: 'EnCours' }) : null;
-
-    return res.status(200).json({
-      success: true,
-      role,
-      dashboard: {
-        stagiairesSuivis: stagiairesSuivis ?? { pending: true, message: 'Module Stages non disponible sur cet environnement.' },
-      },
-    });
-  }
-
-  const [offres, candidatures, stages] = await Promise.all([offerStatsFor({}), applicationStatsFor({}), internshipStatsFor({})]);
-
-  return res.status(200).json({ success: true, role, dashboard: { offres, candidatures, stages } });
-});
-
-
-
-const getStudentDashboard = asyncHandler(async (req, res) => {
-  const { id: userId } = req.user;
+async function buildStudentDashboard(userId) {
   const Application = getModelSafe('Application');
-
   const [favoris, candidatures] = await Promise.all([
     Favorite.countDocuments({ etudiantId: userId }),
     Application
       ? applicationStatsFor({ etudiantId: userId })
       : { pending: true, message: 'Module Candidatures non disponible sur cet environnement.' },
   ]);
+  return { candidatures, favoris };
+}
 
-  return res.status(200).json({
-    success: true,
-    data: { candidatures, favoris },
-  });
-});
+async function buildDepartmentDashboard(req) {
+  const { id: userId, departementId } = req.user;
+  const filter = departementId ? { departementId } : { createurId: userId };
+  const [offres, entretiensAVenir] = await Promise.all([offerStatsFor(filter), entretiensAVenirCount()]);
+  return { offres, entretiensAVenir };
+}
 
-const getAdminDashboard = asyncHandler(async (req, res) => {
-  const Department = getModelSafe('Department');
-
-  const [offres, candidatures, stages, entretiensAVenir, departementsActifs] = await Promise.all([
-    offerStatsFor({}),
-    applicationStatsFor({}),
-    internshipStatsFor({}),
-    entretiensAVenirCount(),
-    Department
-      ? Department.countDocuments({ actif: true })
-      : { pending: true, message: 'Module Departements non disponible sur cet environnement.' },
-  ]);
-
-  return res.status(200).json({
-    success: true,
-    data: { offres, candidatures, stages, entretiensAVenir, departementsActifs },
-  });
-});
-
-const getRhDashboard = asyncHandler(async (req, res) => {
+async function buildRhDashboard() {
   const [offres, candidatures, stages, entretiensAVenir] = await Promise.all([
     offerStatsFor({}),
     applicationStatsFor({}),
     internshipStatsFor({}),
     entretiensAVenirCount(),
   ]);
+  return { offres, candidatures, stages, entretiensAVenir };
+}
 
-  return res.status(200).json({
-    success: true,
-    data: { offres, candidatures, stages, entretiensAVenir },
-  });
-});
-
-const getSupervisorDashboard = asyncHandler(async (req, res) => {
-  const { id: userId } = req.user;
+async function buildSupervisorDashboard(userId) {
   const Internship = getModelSafe('Internship');
-
   if (!Internship) {
-    return res.status(200).json({
-      success: true,
-      data: {
-        stagiairesSuivis: { pending: true, message: 'Module Stages non disponible sur cet environnement.' },
-      },
-    });
+    return { stagiairesSuivis: { pending: true, message: 'Module Stages non disponible sur cet environnement.' } };
   }
 
   const [stagiairesSuivis, evaluationsEnAttente] = await Promise.all([
     Internship.countDocuments({ encadrantId: userId, statut: 'EnCours' }),
     Internship.countDocuments({ encadrantId: userId, statut: 'EnCours', 'evaluation.note': { $exists: false } }),
   ]);
+  return { stagiairesSuivis, evaluationsEnAttente };
+}
 
-  return res.status(200).json({
-    success: true,
-    data: { stagiairesSuivis, evaluationsEnAttente },
-  });
+async function buildAdminDashboard() {
+  const Department = getModelSafe('Department');
+  const [rhDashboard, departementsActifs] = await Promise.all([
+    buildRhDashboard(),
+    Department
+      ? Department.countDocuments({ actif: true })
+      : { pending: true, message: 'Module Departements non disponible sur cet environnement.' },
+  ]);
+  return { ...rhDashboard, departementsActifs };
+}
+
+async function buildDefaultDashboard() {
+  const [offres, candidatures, stages] = await Promise.all([
+    offerStatsFor({}),
+    applicationStatsFor({}),
+    internshipStatsFor({}),
+  ]);
+  return { offres, candidatures, stages };
+}
+
+
+const getDashboard = asyncHandler(async (req, res) => {
+  const { role, id: userId } = req.user;
+
+  let dashboard;
+  if (role === ROLES.ETUDIANT) dashboard = await buildStudentDashboard(userId);
+  else if (role === ROLES.DEPARTEMENT) dashboard = await buildDepartmentDashboard(req);
+  else if (role === ROLES.RH) dashboard = await buildRhDashboard();
+  else if (role === ROLES.ENCADRANT) dashboard = await buildSupervisorDashboard(userId);
+  else if (role === ROLES.ADMIN) dashboard = await buildAdminDashboard();
+  else dashboard = await buildDefaultDashboard();
+
+  return res.status(200).json({ success: true, role, dashboard });
+});
+
+
+
+const getStudentDashboard = asyncHandler(async (req, res) => {
+  const data = await buildStudentDashboard(req.user.id);
+  return res.status(200).json({ success: true, data });
+});
+
+const getAdminDashboard = asyncHandler(async (req, res) => {
+  const data = await buildAdminDashboard();
+  return res.status(200).json({ success: true, data });
+});
+
+const getRhDashboard = asyncHandler(async (req, res) => {
+  const data = await buildRhDashboard();
+  return res.status(200).json({ success: true, data });
+});
+
+const getSupervisorDashboard = asyncHandler(async (req, res) => {
+  const data = await buildSupervisorDashboard(req.user.id);
+  return res.status(200).json({ success: true, data });
+});
+
+const getDepartmentDashboard = asyncHandler(async (req, res) => {
+  const data = await buildDepartmentDashboard(req);
+  return res.status(200).json({ success: true, data });
 });
 
 module.exports = {
@@ -188,4 +161,5 @@ module.exports = {
   getAdminDashboard,
   getRhDashboard,
   getSupervisorDashboard,
+  getDepartmentDashboard,
 };

@@ -4,19 +4,24 @@ const Document = require('../models/Document');
 const Offer = require('../models/Offer');
 const Notification = require('../models/Notification');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
-const { APPLICATION_STATUS } = require('../config/constants');
-const { sendApplicationStatusChangedEmail } = require('../services/emailService');
+const { APPLICATION_STATUS, ROLES, STAFF_TREATMENT_ROLES } = require('../config/constants');
+const { sendApplicationStatusChangedEmail, sendApplicationSubmittedEmail } = require('../services/emailService');
+const { assertDepartmentOwnsOffer, departmentOfferIds } = require('../utils/departmentScope');
 const logger = require('../utils/logger');
 
-// RG-018 : toute etape cle du workflow de candidature declenche une
-// notification (plateforme + email). Non bloquant : un echec d'envoi ne doit
-// jamais faire echouer le changement de statut lui-meme.
+
+async function fetchApplicationParties(application) {
+    const [student, offer] = await Promise.all([
+        UtilisateurExterne.findById(application.etudiantId).select('email nom prenom'),
+        Offer.findById(application.offreId).select('titre'),
+    ]);
+    return { student, offer };
+}
+
+
 async function notifyStudentStatusChanged(application, statut) {
     try {
-        const [student, offer] = await Promise.all([
-            UtilisateurExterne.findById(application.etudiantId).select('email nom prenom'),
-            Offer.findById(application.offreId).select('titre'),
-        ]);
+        const { student, offer } = await fetchApplicationParties(application);
         if (!student) return;
 
         await Notification.create({
@@ -39,8 +44,32 @@ async function notifyStudentStatusChanged(application, statut) {
     }
 }
 
-// Source unique de verite pour les statuts : config/constants.js
-// (evite le desalignement Analyse/EnAnalyse entre schema et controleur).
+
+async function notifyStudentApplicationSubmitted(application) {
+    try {
+        const { student, offer } = await fetchApplicationParties(application);
+        if (!student) return;
+
+        await Notification.create({
+            type: 'InApp',
+            titre: 'Candidature soumise',
+            message: `Votre candidature pour "${offer?.titre || 'une offre'}" a ete soumise avec succes.`,
+            lien: `/candidatures/${application._id}`,
+            userId: student._id,
+            userModel: 'UtilisateurExterne',
+        });
+
+        await sendApplicationSubmittedEmail({
+            to: student.email,
+            studentName: `${student.prenom} ${student.nom}`,
+            offerTitle: offer?.titre || 'votre offre',
+        });
+    } catch (err) {
+        logger.warn(`[Application] Notification de soumission non envoyee: ${err.message}`);
+    }
+}
+
+
 const STATUTS = Object.values(APPLICATION_STATUS);
 
 const TRANSITIONS_AUTORISEES = {
@@ -60,9 +89,25 @@ const canChangeStatus = (ancienStatut, nouveauStatut) => {
     return TRANSITIONS_AUTORISEES[ancienStatut]?.includes(nouveauStatut);
 };
 
+
+const isOwnerOrStaff = (req, etudiantIdField) => {
+    if (req.user?.role !== ROLES.ETUDIANT) return true;
+    const ownerId = etudiantIdField?._id ? etudiantIdField._id.toString() : etudiantIdField?.toString();
+    return ownerId === req.user.id;
+};
+
 exports.createApplication = async (req, res) => {
     try {
-        const { etudiantId, offreId, commentaire, documents } = req.body;
+
+        if (req.user?.role !== ROLES.ETUDIANT) {
+            return res.status(403).json({
+                success: false,
+                message: 'Seul un etudiant peut creer une candidature.'
+            });
+        }
+
+        const etudiantId = req.user.id;
+        const { offreId, commentaire, documents } = req.body;
 
         const offer = await Offer.findById(offreId);
 
@@ -85,11 +130,28 @@ exports.createApplication = async (req, res) => {
             });
         }
 
+
+        let safeDocuments = [];
+        if (documents && documents.length > 0) {
+            const foundDocuments = await Document.find({ _id: { $in: documents } }).select('candidatId');
+            const allOwnedByCaller =
+                foundDocuments.length === documents.length &&
+                foundDocuments.every((doc) => doc.candidatId.toString() === etudiantId);
+
+            if (!allOwnedByCaller) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Vous ne pouvez associer que vos propres documents a votre candidature'
+                });
+            }
+            safeDocuments = documents;
+        }
+
         const application = await Application.create({
             etudiantId,
             offreId,
             commentaire,
-            documents,
+            documents: safeDocuments,
             statut: APPLICATION_STATUS.BROUILLON,
             createdBy: req.user?._id
         });
@@ -115,8 +177,24 @@ exports.getAllApplications = async (req, res) => {
         const filter = {};
 
         if (statut) filter.statut = statut;
-        if (etudiantId) filter.etudiantId = etudiantId;
-        if (offreId) filter.offreId = offreId;
+
+ 
+        if (req.user?.role === ROLES.ETUDIANT) {
+            filter.etudiantId = req.user.id;
+        } else if (etudiantId) {
+            filter.etudiantId = etudiantId;
+        }
+
+  
+        if (offreId) {
+            await assertDepartmentOwnsOffer(req, offreId);
+            filter.offreId = offreId;
+        } else {
+            const restrictedOfferIds = await departmentOfferIds(req);
+            if (restrictedOfferIds !== null) {
+                filter.offreId = { $in: restrictedOfferIds };
+            }
+        }
 
         const applications = await Application.find(filter)
             .populate('etudiantId', 'nom prenom email cin')
@@ -131,10 +209,11 @@ exports.getAllApplications = async (req, res) => {
             data: applications
         });
     } catch (error) {
-        return res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
             success: false,
-            message: 'Erreur lors de la récupération des candidatures',
-            error: error.message
+            message: statusCode === 500 ? 'Erreur lors de la récupération des candidatures' : error.message,
+            error: statusCode === 500 ? error.message : undefined
         });
     }
 };
@@ -143,7 +222,7 @@ exports.getApplicationById = async (req, res) => {
     try {
         const application = await Application.findById(req.params.id)
             .populate('etudiantId', 'nom prenom email cin telephone')
-            .populate('offreId', 'titre description typeStage statut dateDebut dateFin dateLimiteCandidature')
+            .populate('offreId', 'titre description typeStage statut dateDebut dateFin dateLimiteCandidature departementId')
             .populate('traiteurId', 'nom prenom email')
             .populate('documents')
             .populate('historique.auteurId', 'nom prenom email');
@@ -155,15 +234,26 @@ exports.getApplicationById = async (req, res) => {
             });
         }
 
+        if (!isOwnerOrStaff(req, application.etudiantId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas acces a cette candidature"
+            });
+        }
+
+       
+        await assertDepartmentOwnsOffer(req, application.offreId?._id || application.offreId);
+
         return res.status(200).json({
             success: true,
             data: application
         });
     } catch (error) {
-        return res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
             success: false,
-            message: 'Erreur lors de la récupération de la candidature',
-            error: error.message
+            message: statusCode === 500 ? 'Erreur lors de la récupération de la candidature' : error.message,
+            error: statusCode === 500 ? error.message : undefined
         });
     }
 };
@@ -178,6 +268,14 @@ exports.updateApplication = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Candidature non trouvée'
+            });
+        }
+
+        
+        if (!isOwnerOrStaff(req, application.etudiantId) && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas acces a cette candidature"
             });
         }
 
@@ -220,6 +318,13 @@ exports.submitApplication = async (req, res) => {
             });
         }
 
+        if (!isOwnerOrStaff(req, application.etudiantId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas acces a cette candidature"
+            });
+        }
+
         if (application.statut !== APPLICATION_STATUS.BROUILLON) {
             return res.status(400).json({
                 success: false,
@@ -227,13 +332,12 @@ exports.submitApplication = async (req, res) => {
             });
         }
 
-        // RG-013 : le CV est un document obligatoire pour toute candidature.
         const documents = await Document.find({ _id: { $in: application.documents } }).select('type');
         const hasCv = documents.some((doc) => doc.type === 'CV');
         if (!hasCv) {
             return res.status(400).json({
                 success: false,
-                message: 'Un CV est obligatoire avant de soumettre la candidature (RG-013).'
+                message: 'Un CV est obligatoire avant de soumettre la candidature (RG-016).'
             });
         }
 
@@ -252,6 +356,9 @@ exports.submitApplication = async (req, res) => {
 
         await application.save();
 
+
+        await notifyStudentApplicationSubmitted(application);
+
         return res.status(200).json({
             success: true,
             message: 'Candidature soumise avec succès',
@@ -268,6 +375,14 @@ exports.submitApplication = async (req, res) => {
 
 exports.changeApplicationStatus = async (req, res) => {
     try {
+   
+        if (!STAFF_TREATMENT_ROLES.includes(req.user?.role)) {
+            return res.status(403).json({
+                success: false,
+                message: "Seuls le RH, le departement ou un administrateur peuvent modifier le statut d'une candidature"
+            });
+        }
+
         const { statut, commentaire } = req.body;
 
         if (!STATUTS.includes(statut)) {
@@ -284,6 +399,14 @@ exports.changeApplicationStatus = async (req, res) => {
                 success: false,
                 message: 'Candidature non trouvée'
             });
+        }
+
+
+        try {
+            await assertDepartmentOwnsOffer(req, application.offreId);
+        } catch (scopeError) {
+            const statusCode = scopeError.statusCode || 403;
+            return res.status(statusCode).json({ success: false, message: scopeError.message });
         }
 
         const ancienStatut = application.statut;
@@ -329,13 +452,28 @@ exports.getApplicationHistory = async (req, res) => {
     try {
         const application = await Application.findById(req.params.id)
             .populate('historique.auteurId', 'nom prenom email')
-            .select('historique');
+            .select('historique etudiantId offreId');
 
         if (!application) {
             return res.status(404).json({
                 success: false,
                 message: 'Candidature non trouvée'
             });
+        }
+
+
+        if (!isOwnerOrStaff(req, application.etudiantId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas acces a cette candidature"
+            });
+        }
+
+        try {
+            await assertDepartmentOwnsOffer(req, application.offreId);
+        } catch (scopeError) {
+            const statusCode = scopeError.statusCode || 403;
+            return res.status(statusCode).json({ success: false, message: scopeError.message });
         }
 
         return res.status(200).json({
@@ -360,6 +498,13 @@ exports.deleteApplication = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Candidature non trouvée'
+            });
+        }
+
+        if (!isOwnerOrStaff(req, application.etudiantId) && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas acces a cette candidature"
             });
         }
 
@@ -391,12 +536,28 @@ exports.addDocumentToApplication = async (req, res) => {
             });
         }
 
+
+        if (!isOwnerOrStaff(req, application.etudiantId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas acces a cette candidature"
+            });
+        }
+
         const document = await Document.findById(documentId);
 
         if (!document) {
             return res.status(404).json({
                 success: false,
                 message: 'Document non trouvé'
+            });
+        }
+
+
+        if (document.candidatId.toString() !== application.etudiantId.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: "Ce document n'appartient pas au candidat de cette candidature"
             });
         }
 
