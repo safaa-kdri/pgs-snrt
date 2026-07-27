@@ -58,11 +58,13 @@ export const authService = {
     logout: async () => {
         try {
             await api.post('/auth/logout');
+        } catch (error) {
+            console.error('Erreur lors de la déconnexion:', error);
         } finally {
+            // ✅ Toujours nettoyer le localStorage, même si l'API échoue
             saveCurrentUser(null);
             localStorage.removeItem('2faEmail');
             localStorage.removeItem('2faUserId');
-            window.location.href = '/login';
         }
     },
 
@@ -70,8 +72,8 @@ export const authService = {
     me: async () => {
         try {
             const response = await api.get('/auth/me');
-            if (response.data) {
-                saveCurrentUser(response.data);
+            if (response.data?.user) {
+                saveCurrentUser(response.data.user);
                 return response.data;
             }
             return null;

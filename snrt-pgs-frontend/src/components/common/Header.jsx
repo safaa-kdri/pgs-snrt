@@ -19,7 +19,6 @@ const Header = () => {
     
     const { isAuthenticated, user } = useSelector((state) => state.auth);
     
-    // ✅ NE PAS CHARGER L'UTILISATEUR SUR LA PAGE LOGIN INTERNE
     useEffect(() => {
         if (location.pathname !== '/login-interne') {
             dispatch(loadCurrentUser());
@@ -31,7 +30,7 @@ const Header = () => {
         navigate('/');
     };
 
-    // ✅ SI ON EST SUR LOGIN INTERNE, HEADER VIDE (UNIQUEMENT LOGO)
+    // ✅ HEADER VIDE POUR LOGIN INTERNE
     if (location.pathname === '/login-interne') {
         return (
             <AppBar
@@ -93,7 +92,7 @@ const Header = () => {
         );
     }
 
-    // ✅ HEADER NORMAL POUR LES AUTRES PAGES
+    // ✅ HEADER NORMAL
     return (
         <AppBar
             position="sticky"
@@ -117,7 +116,6 @@ const Header = () => {
                     padding: '0 20px',
                     height: '74px',
                 }}>
-
                     <Box sx={{ 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -162,122 +160,22 @@ const Header = () => {
                             gap: 5,
                             flexShrink: 0
                         }}>
-                            <Link
-                                to="/"
-                                style={{
-                                    color: 'white',
-                                    textDecoration: 'none',
-                                    fontFamily: '"Inria Sans", sans-serif',
-                                    fontSize: '20px',
-                                    fontWeight: 200,
-                                    letterSpacing: '0.5px',
-                                    padding: '4px 0',
-                                    margin: 0
-                                }}
-                            >
-                                Accueil
-                            </Link>
-                            <Link
-                                to="/faq"
-                                style={{
-                                    color: 'white',
-                                    textDecoration: 'none',
-                                    fontFamily: '"Inria Sans", sans-serif',
-                                    fontSize: '18px',
-                                    fontWeight: 400,
-                                    letterSpacing: '0.5px',
-                                    padding: '4px 0',
-                                    margin: 0
-                                }}
-                            >
-                                FAQ
-                            </Link>
-                            <Link
-                                to="/contact"
-                                style={{
-                                    color: 'white',
-                                    textDecoration: 'none',
-                                    fontFamily: '"Inria Sans", sans-serif',
-                                    fontSize: '18px',
-                                    fontWeight: 400,
-                                    letterSpacing: '0.5px',
-                                    padding: '4px 0',
-                                    margin: 0
-                                }}
-                            >
-                                Contact
-                            </Link>
-                            <Link
-                                to="https://e-recrutement.snrt.ma/contact#contact"
-                                target="_blank"
-                                rel="noopener"
-                                style={{
-                                    color: 'white',
-                                    textDecoration: 'none',
-                                    fontFamily: '"Inria Sans", sans-serif',
-                                    fontSize: '18px',
-                                    fontWeight: 400,
-                                    letterSpacing: '0.5px',
-                                    padding: '4px 0',
-                                    margin: 0
-                                }}
-                            >
-                                E-recrutement
-                            </Link>
+                            <Link to="/" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '20px', fontWeight: 200, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>Accueil</Link>
+                            <Link to="/faq" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>FAQ</Link>
+                            <Link to="/contact" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>Contact</Link>
+                            <Link to="https://e-recrutement.snrt.ma/contact#contact" target="_blank" rel="noopener" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>E-recrutement</Link>
                         </Box>
                     </Box>
 
                     {isAuthenticated ? (
-                        <Button
-                            onClick={handleLogout}
-                            variant="contained"
-                            sx={{
-                                backgroundColor: 'white',
-                                color: '#43455a',
-                                borderRadius: '50px',
-                                px: 3,
-                                py: 0.8,
-                                fontFamily: '"Inria Sans", sans-serif',
-                                fontSize: '15px',
-                                fontWeight: 400,
-                                textTransform: 'none',
-                                letterSpacing: '0.5px',
-                                minWidth: '120px',
-                                flexShrink: 0,
-                                '&:hover': { backgroundColor: '#f8f6f5' },
-                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
-                            }}
-                        >
-                            <i className="fa-solid fa-sign-out-alt"></i>
-                            Déconnexion
+                        <Button onClick={handleLogout} variant="contained" sx={{ backgroundColor: 'white', color: '#43455a', borderRadius: '50px', px: 3, py: 0.8, fontFamily: '"Inria Sans", sans-serif', fontSize: '15px', fontWeight: 400, textTransform: 'none', letterSpacing: '0.5px', minWidth: '120px', flexShrink: 0, '&:hover': { backgroundColor: '#f8f6f5' }, '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' } }}>
+                            <i className="fa-solid fa-sign-out-alt"></i> Déconnexion
                         </Button>
                     ) : (
-                        <Button
-                            component={Link}
-                            to="/register"
-                            variant="contained"
-                            sx={{
-                                backgroundColor: 'white',
-                                color: '#43455a',
-                                borderRadius: '50px',
-                                px: 3,
-                                py: 0.8,
-                                fontFamily: '"Inria Sans", sans-serif',
-                                fontSize: '15px',
-                                fontWeight: 400,
-                                textTransform: 'none',
-                                letterSpacing: '0.5px',
-                                minWidth: '120px',
-                                flexShrink: 0,
-                                '&:hover': { backgroundColor: '#f8f6f5' },
-                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
-                            }}
-                        >
-                            <i className="fa-solid fa-user-plus"></i>
-                            S'inscrire
+                        <Button component={Link} to="/register" variant="contained" sx={{ backgroundColor: 'white', color: '#43455a', borderRadius: '50px', px: 3, py: 0.8, fontFamily: '"Inria Sans", sans-serif', fontSize: '15px', fontWeight: 400, textTransform: 'none', letterSpacing: '0.5px', minWidth: '120px', flexShrink: 0, '&:hover': { backgroundColor: '#f8f6f5' }, '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' } }}>
+                            <i className="fa-solid fa-user-plus"></i> S'inscrire
                         </Button>
                     )}
-
                 </Toolbar>
             </Container>
         </AppBar>

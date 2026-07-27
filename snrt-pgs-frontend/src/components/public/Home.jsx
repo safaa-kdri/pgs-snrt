@@ -24,7 +24,7 @@ import OfferCard from './OfferCard';
 import ResultCard from './ResultCard';
 
 // ============================================
-// STYLES - DESIGN SNRT PREMIUM
+// STYLES (inchangés)
 // ============================================
 
 const SideCard = styled(Card)({
@@ -444,26 +444,52 @@ const Home = () => {
     }, [navigate, location]);
 
     // ========================================== //
-    // 5️⃣ CHARGEMENT DES OFFRES
+    // 5️⃣ CHARGEMENT DES OFFRES - CORRIGÉ
     // ========================================== //
 
     useEffect(() => {
-        dispatch(fetchOffers({ statut: 'Publiée', page: 1, limit: 10 }));
-        dispatch(fetchDepartments());
+        // ✅ Vérifier si l'utilisateur est connecté
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        const isAuth = !!(token || user);
+        
+        // ✅ Charger les offres UNIQUEMENT si connecté
+        if (isAuth) {
+            dispatch(fetchOffers({ statut: 'Publiée', page: 1, limit: 10 }));
+        }
     }, [dispatch]);
 
     // ========================================== //
-    // 6️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF)
+    // 6️⃣ CHARGEMENT DES DÉPARTEMENTS - CORRIGÉ
     // ========================================== //
 
     useEffect(() => {
-        if (activeTab === 'resultats') {
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        const isAuth = !!(token || user);
+        
+        // ✅ NE PAS charger les départements si non connecté
+        if (isAuth) {
+            dispatch(fetchDepartments());
+        }
+    }, [dispatch]);
+
+    // ========================================== //
+    // 7️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF)
+    // ========================================== //
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        const isAuth = !!(token || user);
+        
+        if (activeTab === 'resultats' && isAuth) {
             dispatch(fetchResults({ page: 1, limit: 10 }));
         }
     }, [activeTab, dispatch]);
 
     // ========================================== //
-    // 7️⃣ FONCTIONS
+    // 8️⃣ FONCTIONS
     // ========================================== //
 
     const regenerateCaptcha = () => {
@@ -553,13 +579,21 @@ const Home = () => {
     };
 
     const handleSearch = () => {
-        dispatch(fetchOffers({ ...filters, statut: 'Publiée', page: 1, limit: 10 }));
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        const isAuth = !!(token || user);
+        
+        if (isAuth) {
+            dispatch(fetchOffers({ ...filters, statut: 'Publiée', page: 1, limit: 10 }));
+        } else {
+            setLoginError('Veuillez vous connecter pour rechercher des offres');
+        }
     };
 
     const isBlocked = attempts >= 3;
 
     // ========================================== //
-    // 8️⃣ RENDU DE LA PAGINATION - TOUJOURS VISIBLE
+    // 9️⃣ RENDU DE LA PAGINATION
     // ========================================== //
 
     const renderPagination = () => {
@@ -671,7 +705,7 @@ const Home = () => {
     };
 
     // ========================================== //
-    // 9️⃣ AFFICHAGE
+    // 🔟 AFFICHAGE
     // ========================================== //
 
     return (
