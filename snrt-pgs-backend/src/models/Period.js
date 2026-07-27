@@ -6,10 +6,7 @@ const PeriodSchema = new mongoose.Schema({
     nom: {
         type: String,
         required: [true, 'Le nom de la période est obligatoire'],
-        // BUGFIX (important) : meme defaut que Department.js - "unique: true"
-        // ici ignore isDeleted et empeche de recreer une periode avec un nom
-        // deja utilise par une periode archivee. Retire au profit de l'index
-        // partiel ci-dessous (meme pattern que Application.js/Department.js).
+
         trim: true
     },
     dateDebut: {
@@ -53,9 +50,7 @@ PeriodSchema.pre('validate', function(next) {
 
 PeriodSchema.index({ actif: 1 });
 
-// BUGFIX (important) : index unique scope aux periodes non supprimees.
-// ATTENTION AU DEPLOIEMENT : supprimer l'ancien index global si present :
-//   db.periods.dropIndex('nom_1')
+
 PeriodSchema.index(
     { nom: 1 },
     { unique: true, partialFilterExpression: { isDeleted: false } }

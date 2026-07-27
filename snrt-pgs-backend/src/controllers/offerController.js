@@ -186,11 +186,7 @@ const deleteOffer = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Brouillon supprime.' });
 });
 
-// Publie (ou remplace) un document de concours sur l'offre (arrete
-// d'ouverture, listes de convocation, resultat du concours). Un seul
-// document actif par type - un nouvel upload du meme type remplace
-// l'ancien plutot que de s'accumuler, pour eviter d'afficher plusieurs
-// boutons "Resultat du concours" contradictoires cote frontend.
+
 const uploadConcoursDocument = asyncHandler(async (req, res) => {
   if (!STAFF_TREATMENT_ROLES.includes(req.user.role)) {
     throw ApiError.forbidden('Seuls le departement ou le RH peuvent publier un document de concours.');
@@ -212,14 +208,7 @@ const uploadConcoursDocument = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Aucun fichier fourni.');
   }
 
-  // BUGFIX (important - fichiers orphelins) : on retirait l'ancien document
-  // du meme type du tableau documentsConcours sans jamais supprimer le
-  // fichier physique correspondant sur disque (uploads/concours/...). A
-  // chaque remplacement (ex: une nouvelle version de l'arrete d'ouverture),
-  // l'ancien fichier restait indefiniment sur le serveur. On garde
-  // maintenant une reference aux documents remplaces pour les supprimer
-  // physiquement APRES le save() reussi (on ne veut pas perdre le fichier
-  // si la sauvegarde en base echoue).
+
   const replacedDocs = offer.documentsConcours.filter((doc) => doc.type === type);
   offer.documentsConcours = offer.documentsConcours.filter((doc) => doc.type !== type);
   offer.documentsConcours.push({
@@ -263,11 +252,7 @@ const deleteConcoursDocument = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('Vous ne pouvez supprimer que les documents de vos propres offres.');
   }
 
-  // BUGFIX (important - fichiers orphelins) : meme probleme que
-  // uploadConcoursDocument ci-dessus - on ne supprimait que la reference
-  // Mongo, jamais le fichier physique. On le garde en memoire avant de le
-  // retirer du tableau pour pouvoir le supprimer du disque une fois le
-  // save() confirme.
+
   const docToDelete = offer.documentsConcours.find((doc) => doc._id.toString() === req.params.docId);
   if (!docToDelete) {
     throw ApiError.notFound('Document introuvable.');

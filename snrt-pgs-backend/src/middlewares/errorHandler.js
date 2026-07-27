@@ -9,7 +9,6 @@ const errorHandler = (err, req, res, next) => {
     let details = err.details;
     let isOperational = err.isOperational || false;
 
-    // Cle dupliquee (index unique Mongo, ex: email/CIN/nom deja utilise)
     if (err.code === 11000) {
         const field = err.keyPattern ? Object.keys(err.keyPattern)[0] : 'valeur';
         statusCode = 400;
@@ -18,7 +17,6 @@ const errorHandler = (err, req, res, next) => {
         isOperational = true;
     }
 
-    // Erreur de validation Mongoose (ex: contrainte de schema violee)
     if (err.name === 'ValidationError') {
         const messages = Object.values(err.errors).map((val) => val.message);
         statusCode = 400;
@@ -27,7 +25,6 @@ const errorHandler = (err, req, res, next) => {
         isOperational = true;
     }
 
-    // ObjectId invalide dans un parametre d'URL
     if (err.name === 'CastError') {
         statusCode = 404;
         message = `ID invalide: ${err.value}`;
@@ -35,7 +32,6 @@ const errorHandler = (err, req, res, next) => {
         isOperational = true;
     }
 
-    // JWT
     if (err.name === 'JsonWebTokenError') {
         statusCode = 401;
         message = 'Token invalide. Veuillez vous reconnecter.';

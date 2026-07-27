@@ -39,9 +39,7 @@ async function registerFailedAttempt(user) {
   if (user.security.failedLoginAttempts >= CONFIG.bruteForce.maxAttempts) {
     user.security.lockUntil = new Date(Date.now() + CONFIG.bruteForce.lockMinutes * 60 * 1000);
   }
-  // validateModifiedOnly: on ne veut pas qu'un compte legacy/incomplet
-  // (ex: cree a la main dans Mongo Compass sans roleId) fasse echouer
-  // TOUT le login juste parce qu'on incremente un compteur d'echecs.
+
   await user.save({ validateModifiedOnly: true });
 }
 
@@ -363,12 +361,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   const rawToken = generateRandomToken(32);
 
-  // BUGFIX (critique/securite) : ce bloc logait le token de reinitialisation
-  // en clair dans la console de facon INCONDITIONNELLE (meme en production),
-  // ce qui expose un identifiant permettant de reinitialiser le mot de passe
-  // de n'importe quel utilisateur a quiconque a acces aux logs. Supprime.
-  // Le mode dev dispose deja d'un fallback equivalent, correctement protege
-  // par un controle NODE_ENV, un peu plus bas si l'envoi d'email echoue.
+
 
   user.passwordReset.tokenHash = hashToken(rawToken);
   user.passwordReset.expiresAt = new Date(Date.now() + CONFIG.resetPassword.ttlMinutes * 60 * 1000);
@@ -382,15 +375,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
   } catch (err) {
     logger.error(`[ForgotPassword] Echec envoi email a ${user.email}: ${err.message}`);
 
-    // Fallback : en mode dev, afficher le lien dans la console pour ne pas
-    // bloquer le flux (memes symptomes/cause que login() / resendTwoFactorCode()
-    // quand aucun serveur SMTP n'est joignable).
+   
     if (process.env.NODE_ENV !== 'production') {
       logger.info('==================================================');
       logger.info(`[DEV MODE] LIEN DE REINITIALISATION : ${resetUrl}`);
       logger.info('==================================================');
     }
-    // Ne pas bloquer la route, juste logger l'erreur.
   }
 
   return res.status(200).json(genericResponse);

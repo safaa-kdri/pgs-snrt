@@ -8,17 +8,10 @@ const ROLES = Object.freeze({
   ETUDIANT: 'Etudiant',
 });
 
-// Rôles habilités à traiter candidatures/entretiens/documents/documents de
-// concours (RH + Departement + Admin). Recopié a l'identique dans 5
-// fichiers de controleurs avant ce correctif (applicationController,
-// documentController, interviewController x3, offerController x2) :
-// centralise ici pour eviter toute divergence future si la liste des
-// roles habilites venait a changer.
+
 const STAFF_TREATMENT_ROLES = Object.freeze([ROLES.RH, ROLES.DEPARTEMENT, ROLES.ADMIN]);
 
-// Rôles habilités a valider les offres et consulter les stats/exports
-// globaux (RH + Admin). Meme correctif que STAFF_TREATMENT_ROLES ci-dessus
-// (offerController, statsController).
+
 const HR_ADMIN_ROLES = Object.freeze([ROLES.RH, ROLES.ADMIN]);
 
 const OFFER_STATUS = Object.freeze({

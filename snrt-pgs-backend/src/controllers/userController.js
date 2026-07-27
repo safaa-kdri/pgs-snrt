@@ -7,14 +7,7 @@ const { hashPassword } = require('../utils/argon2');
 const { validatePasswordPolicy } = require('../utils/validators');
 const userLookup = require('../utils/userLookup');
 
-// BUGFIX (duplication) : ce fichier recopiait sa propre table de
-// correspondance type -> Modele ('interne'/'externe'), strictement
-// identique a celle deja definie et exportee par utils/userLookup.js
-// (MODELS_BY_TYPE) mais jamais reutilisee ailleurs. On delegue desormais a
-// userLookup.getModel pour n'avoir qu'une seule source de verite ; le
-// comportement observable est inchange (null pour un type inconnu, comme
-// avant, au lieu de laisser remonter l'exception levee par
-// userLookup.getModel).
+
 const getUserModel = (type) => {
     try {
         return userLookup.getModel(type);
@@ -25,14 +18,7 @@ const getUserModel = (type) => {
 
 exports.createInternalUser = async (req, res) => {
     try {
-        // BUGFIX (critique) : cette fonction hachait directement
-        // req.body.motDePasse sans jamais appeler validatePasswordPolicy(),
-        // contrairement a authController.register() qui le fait pour les
-        // etudiants. createInternalUserSchema (Joi) ne verifie que la
-        // LONGUEUR minimale (20 caracteres) - un mot de passe de 20
-        // minuscules passait le schema puis etait haches tel quel. On
-        // applique maintenant le meme controle de complexite que pour les
-        // etudiants, adapte au seuil "interne" (20 caracteres).
+
         validatePasswordPolicy(req.body.motDePasse, 'interne');
 
         const motDePasseHash = await hashPassword(req.body.motDePasse);
@@ -53,9 +39,7 @@ exports.createInternalUser = async (req, res) => {
             data: userResponse
         });
     } catch (error) {
-        // Les erreurs de politique de mot de passe (ApiError.badRequest,
-        // levees par validatePasswordPolicy) portent leur propre statusCode ;
-        // on les relaie plutot que de toujours repondre 500.
+ 
         const statusCode = error.statusCode || 500;
         return res.status(statusCode).json({
             success: false,
@@ -68,10 +52,7 @@ exports.createInternalUser = async (req, res) => {
 
 exports.createExternalUser = async (req, res) => {
     try {
-        // BUGFIX (critique) : idem createInternalUser - aucune verification
-        // de la politique de mot de passe n'etait faite ici (et la route
-        // POST /users/external n'avait meme aucun schema Joi avant ce
-        // correctif, voir routes/userRoutes.js et utils/validators.js).
+
         validatePasswordPolicy(req.body.motDePasse, 'externe');
 
         const motDePasseHash = await hashPassword(req.body.motDePasse);
@@ -210,21 +191,7 @@ exports.updateUser = async (req, res) => {
             });
         }
 
-        // BUGFIX (critique - mass assignment) : cette route n'avait aucun
-        // schema Joi avant ce correctif (voir routes/userRoutes.js), et
-        // `{ ...req.body, updatedBy }` + un simple
-        // `delete updateData.motDePasse` laissaient passer roleId,
-        // departementId, actif, cin, email... directement, en
-        // court-circuitant changeUserRole/assignDepartment/changeUserStatus
-        // qui, eux, verifient l'existence du role/departement cible.
-        //
-        // La route est desormais protegee par updateInternalUserSchema /
-        // updateExternalUserSchema (middlewares/validation.js, avec
-        // stripUnknown: true) : req.body ne peut plus contenir que les
-        // champs de profil explicitement autorises (nom, prenom, telephone,
-        // adresse...). On garde le `delete motDePasse` ci-dessous en
-        // defense en profondeur, au cas ou la route serait un jour appelee
-        // sans passer par le middleware de validation.
+
         const updateData = { ...req.body, updatedBy: req.user?._id };
         delete updateData.motDePasse;
         delete updateData.roleId;
@@ -281,11 +248,7 @@ exports.deleteUser = async (req, res) => {
             });
         }
 
-        // BUGFIX (critique) : user.softDelete() plantait avant car
-        // UtilisateurInterne/UtilisateurExterne n'etendaient pas BaseSchema
-        // (voir models/UtilisateurInterne.js et UtilisateurExterne.js).
-        // RG-006 / CU-07 : la "suppression" d'un utilisateur est en realite
-        // une desactivation + archivage, jamais une suppression definitive.
+
         user.actif = false;
         await user.softDelete(req.user?._id);
 
@@ -302,13 +265,7 @@ exports.deleteUser = async (req, res) => {
     }
 };
 
-// NOUVEAU : contrepartie de deleteUser (soft delete). Aucune route de
-// restauration n'existait jusqu'ici - une fois un utilisateur "supprime",
-// il etait invisible de toutes les requetes filtrees (find/findOne) et,
-// avec le correctif du filtre isDeleted sur findOneAndUpdate (voir
-// models/BaseModel.js), il n'y avait plus non plus aucun moyen indirect de
-// le retrouver. Reservee a l'Administrateur (meme regle que le reste de ce
-// controleur).
+
 exports.restoreUser = async (req, res) => {
     try {
         const { type, id } = req.params;
@@ -321,8 +278,7 @@ exports.restoreUser = async (req, res) => {
             });
         }
 
-        // findByIdIncludingDeleted (ajoute dans models/BaseModel.js) est le
-        // seul point d'entree qui bypass volontairement le filtre isDeleted.
+      
         const user = await UserModel.findByIdIncludingDeleted(id);
 
         if (!user) {

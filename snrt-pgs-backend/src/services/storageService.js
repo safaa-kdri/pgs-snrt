@@ -10,13 +10,7 @@ const logger = require('../utils/logger');
 
 const ALLOWED_DOCUMENT_TYPES = ['CV', 'LettreMotivation', 'Convention', 'Attestation', 'ReleveNotes', 'Autre'];
 
-// BUGFIX (important) : cette fonction remappait silencieusement tout type
-// non reconnu vers 'Autre' (ex: une faute de frappe 'cv' au lieu de 'CV').
-// Consequence concrete : un candidat qui uploadait bien son CV pouvait se
-// voir bloquer plus tard par applicationController.submitApplication avec
-// un message "CV obligatoire" trompeur, car le document avait ete
-// silencieusement enregistre comme 'Autre'. On leve maintenant une erreur
-// explicite plutot que de deviner/corrompre la donnee envoyee par l'appelant.
+
 const getDocumentType = (type) => {
     if (!ALLOWED_DOCUMENT_TYPES.includes(type)) {
         throw new Error(

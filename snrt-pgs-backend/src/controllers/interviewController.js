@@ -20,17 +20,12 @@ async function notifyStudentInterviewScheduled(application, interview) {
   }
 }
 
-// BUGFIX (important - controle d'acces, meme correctif que
-// applicationController.js) : un entretien n'est jamais consulte/modifie
-// directement par son applicationId dans ces fonctions - il faut donc
-// remonter jusqu'a l'offre via la candidature pour verifier l'appartenance
-// au departement de l'utilisateur DEPARTEMENT courant. Ne fait rien pour
-// RH/Admin (voir utils/departmentScope.js).
+
 async function assertDepartmentOwnsInterview(req, interview) {
   if (req.user.role !== ROLES.DEPARTEMENT) return;
 
   const Application = getModelSafe('Application');
-  if (!Application) return; // module Candidatures indisponible : rien a verifier ici
+  if (!Application) return; 
 
   const application = await Application.findById(interview.applicationId).select('offreId');
   if (!application) throw ApiError.notFound('Candidature associee introuvable.');
@@ -54,9 +49,7 @@ const createInterview = asyncHandler(async (req, res) => {
   const application = await Application.findById(req.body.applicationId);
   if (!application) throw ApiError.notFound('Candidature introuvable.');
 
-  // BUGFIX (important - controle d'acces) : un utilisateur DEPARTEMENT
-  // pouvait planifier un entretien pour une candidature liee a une offre
-  // d'un AUTRE departement.
+
   await assertDepartmentOwnsOffer(req, application.offreId);
 
   if (![APPLICATION_STATUS.EN_ANALYSE, APPLICATION_STATUS.SOUMISE].includes(application.statut)) {
@@ -100,14 +93,9 @@ const listInterviews = asyncHandler(async (req, res) => {
     if (to) filter.date.$lte = new Date(to);
   }
 
-  // BUGFIX (important - controle d'acces) : un utilisateur DEPARTEMENT
-  // voyait la liste complete des entretiens, tous departements confondus.
-  // On restreint aux entretiens dont la candidature est liee a une offre
-  // du departement de l'utilisateur.
+
   if (applicationId) {
-    // Cas cible : on delegue au controle par candidature (leve une erreur
-    // 403/404 explicite si l'entretien demande n'appartient pas au
-    // departement).
+ 
     const Application = getModelSafe('Application');
     if (Application) {
       const application = await Application.findById(applicationId).select('offreId');

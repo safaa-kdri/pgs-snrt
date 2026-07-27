@@ -9,10 +9,7 @@ const { sendApplicationStatusChangedEmail, sendApplicationSubmittedEmail } = req
 const { assertDepartmentOwnsOffer, departmentOfferIds } = require('../utils/departmentScope');
 const logger = require('../utils/logger');
 
-// Bloc de recuperation commun aux deux notifications ci-dessous (etudiant +
-// titre de l'offre concernee par la candidature). Auparavant recopie a
-// l'identique dans notifyStudentStatusChanged et
-// notifyStudentApplicationSubmitted.
+
 async function fetchApplicationParties(application) {
     const [student, offer] = await Promise.all([
         UtilisateurExterne.findById(application.etudiantId).select('email nom prenom'),
@@ -21,9 +18,7 @@ async function fetchApplicationParties(application) {
     return { student, offer };
 }
 
-// RG-018 : toute etape cle du workflow de candidature declenche une
-// notification (plateforme + email). Non bloquant : un echec d'envoi ne doit
-// jamais faire echouer le changement de statut lui-meme.
+
 async function notifyStudentStatusChanged(application, statut) {
     try {
         const { student, offer } = await fetchApplicationParties(application);
@@ -49,14 +44,7 @@ async function notifyStudentStatusChanged(application, statut) {
     }
 }
 
-// BUGFIX (important) : la soumission d'une candidature (Brouillon ->
-// Soumise) ne declenchait AUCUNE notification, contrairement a tous les
-// changements de statut ulterieurs (voir notifyStudentStatusChanged
-// ci-dessus, appelee par changeApplicationStatus). RG-018/RG-022 attendent
-// une notification a chaque etape cle du workflow, et la soumission en est
-// une - c'est aussi la seule confirmation que l'etudiant recoit que son
-// dossier a bien ete pris en compte. sendApplicationSubmittedEmail existait
-// deja dans services/emailService.js mais n'etait appelee nulle part.
+
 async function notifyStudentApplicationSubmitted(application) {
     try {
         const { student, offer } = await fetchApplicationParties(application);
@@ -81,8 +69,7 @@ async function notifyStudentApplicationSubmitted(application) {
     }
 }
 
-// Source unique de verite pour les statuts : config/constants.js
-// (evite le desalignement Analyse/EnAnalyse entre schema et controleur).
+
 const STATUTS = Object.values(APPLICATION_STATUS);
 
 const TRANSITIONS_AUTORISEES = {
@@ -102,10 +89,7 @@ const canChangeStatus = (ancienStatut, nouveauStatut) => {
     return TRANSITIONS_AUTORISEES[ancienStatut]?.includes(nouveauStatut);
 };
 
-// IDOR (critique) : un etudiant ne peut agir que sur SA propre candidature ;
-// le personnel interne n'est pas restreint par cette verification (les
-// controles de role specifiques a chaque action, eux, restent separes).
-// `etudiantIdField` peut etre un ObjectId brut ou un document populate.
+
 const isOwnerOrStaff = (req, etudiantIdField) => {
     if (req.user?.role !== ROLES.ETUDIANT) return true;
     const ownerId = etudiantIdField?._id ? etudiantIdField._id.toString() : etudiantIdField?.toString();
@@ -114,11 +98,7 @@ const isOwnerOrStaff = (req, etudiantIdField) => {
 
 exports.createApplication = async (req, res) => {
     try {
-        // IDOR (critique) : seul un etudiant peut postuler, et uniquement en
-        // son propre nom. On ignore volontairement tout etudiantId fourni
-        // dans le body : sans ce controle, n'importe quel utilisateur
-        // authentifie pouvait creer une candidature au nom d'un autre
-        // etudiant en fournissant son id dans la requete.
+
         if (req.user?.role !== ROLES.ETUDIANT) {
             return res.status(403).json({
                 success: false,
@@ -150,8 +130,7 @@ exports.createApplication = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : empeche d'attacher a sa candidature un document
-        // qui appartient a un autre candidat.
+
         let safeDocuments = [];
         if (documents && documents.length > 0) {
             const foundDocuments = await Document.find({ _id: { $in: documents } }).select('candidatId');
@@ -199,18 +178,14 @@ exports.getAllApplications = async (req, res) => {
 
         if (statut) filter.statut = statut;
 
-        // IDOR (critique) : un etudiant ne doit jamais voir les candidatures
-        // d'un autre etudiant, quel que soit le contenu de la query string.
+ 
         if (req.user?.role === ROLES.ETUDIANT) {
             filter.etudiantId = req.user.id;
         } else if (etudiantId) {
             filter.etudiantId = etudiantId;
         }
 
-        // BUGFIX (important - controle d'acces) : un utilisateur DEPARTEMENT
-        // voyait jusqu'ici les candidatures de TOUTES les offres, y compris
-        // celles d'autres departements. Meme classe de probleme que l'IDOR
-        // etudiant ci-dessus, cote personnel interne cette fois.
+  
         if (offreId) {
             await assertDepartmentOwnsOffer(req, offreId);
             filter.offreId = offreId;
@@ -259,7 +234,6 @@ exports.getApplicationById = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un etudiant ne peut consulter que sa propre candidature.
         if (!isOwnerOrStaff(req, application.etudiantId)) {
             return res.status(403).json({
                 success: false,
@@ -267,9 +241,7 @@ exports.getApplicationById = async (req, res) => {
             });
         }
 
-        // BUGFIX (important - controle d'acces) : un utilisateur DEPARTEMENT
-        // pouvait consulter la candidature d'une offre hors de son propre
-        // departement.
+       
         await assertDepartmentOwnsOffer(req, application.offreId?._id || application.offreId);
 
         return res.status(200).json({
@@ -299,8 +271,7 @@ exports.updateApplication = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : seul le proprietaire (etudiant) ou un
-        // administrateur peut modifier une candidature en brouillon.
+        
         if (!isOwnerOrStaff(req, application.etudiantId) && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
@@ -347,7 +318,6 @@ exports.submitApplication = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : seul le proprietaire peut soumettre sa propre candidature.
         if (!isOwnerOrStaff(req, application.etudiantId)) {
             return res.status(403).json({
                 success: false,
@@ -362,7 +332,6 @@ exports.submitApplication = async (req, res) => {
             });
         }
 
-        // RG-016 : le CV est un document obligatoire pour toute candidature.
         const documents = await Document.find({ _id: { $in: application.documents } }).select('type');
         const hasCv = documents.some((doc) => doc.type === 'CV');
         if (!hasCv) {
@@ -387,8 +356,7 @@ exports.submitApplication = async (req, res) => {
 
         await application.save();
 
-        // BUGFIX (important) : notification manquante a la soumission -
-        // voir notifyStudentApplicationSubmitted plus haut dans ce fichier.
+
         await notifyStudentApplicationSubmitted(application);
 
         return res.status(200).json({
@@ -407,10 +375,7 @@ exports.submitApplication = async (req, res) => {
 
 exports.changeApplicationStatus = async (req, res) => {
     try {
-        // Critique : la decision (analyse, entretien, acceptation, refus)
-        // releve du RH / departement, jamais de l'etudiant lui-meme. Avant ce
-        // correctif, n'importe quel etudiant authentifie pouvait appeler
-        // cette route et faire passer sa propre candidature a "Acceptee".
+   
         if (!STAFF_TREATMENT_ROLES.includes(req.user?.role)) {
             return res.status(403).json({
                 success: false,
@@ -436,10 +401,7 @@ exports.changeApplicationStatus = async (req, res) => {
             });
         }
 
-        // BUGFIX (important - controle d'acces) : un utilisateur DEPARTEMENT
-        // pouvait changer le statut d'une candidature liee a une offre d'un
-        // AUTRE departement (ex: accepter/refuser un candidat qui n'a jamais
-        // postule chez lui). RH et Admin restent sans restriction.
+
         try {
             await assertDepartmentOwnsOffer(req, application.offreId);
         } catch (scopeError) {
@@ -499,8 +461,7 @@ exports.getApplicationHistory = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un etudiant ne peut consulter que l'historique de
-        // sa propre candidature.
+
         if (!isOwnerOrStaff(req, application.etudiantId)) {
             return res.status(403).json({
                 success: false,
@@ -540,7 +501,6 @@ exports.deleteApplication = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un etudiant ne peut retirer que sa propre candidature.
         if (!isOwnerOrStaff(req, application.etudiantId) && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
@@ -576,8 +536,7 @@ exports.addDocumentToApplication = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un etudiant ne peut ajouter un document qu'a sa
-        // propre candidature.
+
         if (!isOwnerOrStaff(req, application.etudiantId)) {
             return res.status(403).json({
                 success: false,
@@ -594,9 +553,7 @@ exports.addDocumentToApplication = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : le document ajoute doit appartenir au meme
-        // candidat que la candidature, sinon un etudiant pourrait rattacher
-        // le CV/document d'un autre candidat a son propre dossier.
+
         if (document.candidatId.toString() !== application.etudiantId.toString()) {
             return res.status(403).json({
                 success: false,

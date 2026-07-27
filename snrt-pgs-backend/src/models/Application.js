@@ -10,12 +10,7 @@ const ApplicationSchema = new mongoose.Schema({
     },
     statut: {
         type: String,
-        // BUGFIX (mineur, coherence) : enum recopiee a la main auparavant
-        // ('Brouillon', 'Soumise', ...), desormais alignee sur
-        // APPLICATION_STATUS (config/constants.js) - la meme source de
-        // verite deja utilisee par applicationController.js et
-        // validators.js, pour eviter tout desalignement si la liste des
-        // statuts venait a changer.
+    
         enum: Object.values(APPLICATION_STATUS),
         default: APPLICATION_STATUS.BROUILLON
     },

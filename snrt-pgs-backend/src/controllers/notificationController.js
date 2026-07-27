@@ -6,11 +6,7 @@ const STAFF_ROLES = [ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT, ROLES.ENCADRANT];
 
 exports.createNotification = async (req, res) => {
     try {
-        // Critique : seul le personnel interne peut declencher une
-        // notification vers un utilisateur. Avant ce correctif, n'importe
-        // quel etudiant authentifie pouvait fabriquer une notification
-        // arbitraire au nom du systeme et la faire apparaitre chez
-        // n'importe quel utilisateur (usurpation / spam).
+   
         if (!STAFF_ROLES.includes(req.user?.role)) {
             return res.status(403).json({
                 success: false,
@@ -48,10 +44,7 @@ exports.getUserNotifications = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // IDOR (critique) : un utilisateur ne peut consulter que ses propres
-        // notifications (sauf administrateur). Avant ce correctif,
-        // n'importe quel utilisateur authentifie pouvait lire les
-        // notifications de n'importe qui en changeant l'id dans l'URL.
+ 
         if (req.user?.id !== userId && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
@@ -92,7 +85,6 @@ exports.getUnreadCount = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // IDOR (critique) : meme protection que getUserNotifications.
         if (req.user?.id !== userId && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
@@ -129,8 +121,7 @@ exports.markAsRead = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un utilisateur ne peut marquer comme lue qu'une
-        // notification qui lui appartient.
+      
         if (req.user?.id !== notification.userId.toString() && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
@@ -161,7 +152,6 @@ exports.markAllAsRead = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // IDOR (critique) : meme protection que getUserNotifications.
         if (req.user?.id !== userId && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
@@ -202,8 +192,7 @@ exports.deleteNotification = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un utilisateur ne peut supprimer qu'une
-        // notification qui lui appartient.
+        
         if (req.user?.id !== notification.userId.toString() && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,

@@ -53,10 +53,7 @@ const offerSchema = new mongoose.Schema(
       type: [subjectSchema],
       validate: {
         validator: (arr) => Array.isArray(arr) && arr.length >= 1,
-        // BUGFIX (mineur, tracabilite) : "au moins un sujet" est RG-010
-        // (Dossier d'Analyse Fonctionnelle, 6.3 - Regles de gestion des
-        // offres de stage), pas RG-007 (qui concerne le blocage de compte
-        // apres 3 tentatives de connexion echouees, 6.2).
+
         message: 'Une offre doit comporter au moins un sujet (RG-010).',
       },
     },
@@ -80,9 +77,7 @@ offerSchema.index({ titre: 'text', description: 'text' });
 
 offerSchema.pre('validate', function preValidate(next) {
   if (this.dateDebut && this.dateLimiteCandidature && this.dateDebut <= this.dateLimiteCandidature) {
-    // BUGFIX (mineur, tracabilite) : la coherence des dates est RG-012
-    // (6.3), pas RG-009 (qui concerne le rattachement d'une offre a un
-    // seul departement).
+ 
     return next(new Error('La date de debut de stage doit etre posterieure a la date limite de candidature (RG-012).'));
   }
   if (this.dateFin && this.dateDebut && this.dateFin <= this.dateDebut) {
@@ -94,9 +89,7 @@ offerSchema.pre('validate', function preValidate(next) {
 function blockDeleteIfPublished(next) {
   const statut = this.statut || this.getUpdate?.()?.statut;
   if (statut === OFFER_STATUS.PUBLIEE) {
-    // BUGFIX (mineur, tracabilite) : l'interdiction de suppression d'une
-    // offre validee est RG-014 (6.3), pas RG-011 (qui concerne l'obligation
-    // de validation prealable par le RH avant publication).
+ 
     return next(new Error('Une offre publiee ne peut pas etre supprimee (RG-014). Utilisez l\'archivage.'));
   }
   return next();
