@@ -16,6 +16,7 @@ const Offer = require('../src/models/Offer');
 const Skill = require('../src/models/Skill');
 const Application = require('../src/models/Application');
 const Internship = require('../src/models/Internship');
+const Evaluation = require('../src/models/Evaluation');
 const Notification = require('../src/models/Notification');
 const Favorite = require('../src/models/Favorite');
 
@@ -150,6 +151,7 @@ const seed = async () => {
         await Skill.deleteMany({});
         await Application.deleteMany({});
         await Internship.deleteMany({});
+        await Evaluation.deleteMany({});
         await Notification.deleteMany({});
         await Favorite.deleteMany({});
 
@@ -346,6 +348,14 @@ const seed = async () => {
             encadrantId: encadrant._id,
             offreId: offer._id,
             applicationId: application._id,
+            livrables: [{
+                nom: 'Rapport_de_stage.pdf',
+                type: 'Rapport',
+                chemin: '/uploads/rapports/rapport_test.pdf',
+                dateDepot: new Date(),
+                valide: false,
+                commentaire: ''
+            }],
             remarquesEncadrant: [{
                 date: new Date(),
                 message: 'Bienvenue dans l\'équipe !',
@@ -354,15 +364,61 @@ const seed = async () => {
         });
         logger.info(`✅ Stage créé`);
 
-        // ============ 11. FAVORI ============
+        // ============ 11. ÉVALUATION ============
+        logger.info('📝 Création d\'une évaluation de test...');
+        const evaluation = await Evaluation.create({
+            stageId: internship._id,
+            stagiaireId: etudiant._id,
+            encadrantId: encadrant._id,
+            dateEvaluation: new Date(),
+            note: 15,
+            commentaires: 'Excellent travail, bonne autonomie et grande capacité d\'adaptation.',
+            competencesEvaluees: [
+                { nom: 'JavaScript', niveau: 'Avancé', note: 4 },
+                { nom: 'React', niveau: 'Avancé', note: 4 },
+                { nom: 'Node.js', niveau: 'Intermédiaire', note: 3 },
+                { nom: 'MongoDB', niveau: 'Intermédiaire', note: 3 },
+                { nom: 'Anglais', niveau: 'Intermédiaire', note: 3 }
+            ],
+            criteres: {
+                autonomie: 4,
+                qualiteTravail: 5,
+                respectDelais: 4,
+                communication: 4,
+                integration: 5,
+                initiative: 4
+            },
+            pointsForts: 'Très bonne maîtrise technique, grande autonomie, excellent esprit d\'équipe',
+            pointsFaibles: 'Peu d\'expérience en production, peut améliorer la communication écrite',
+            recommandations: 'Continuer à développer les compétences en backend et DevOps',
+            statut: 'Validee',
+            dateSoumission: new Date(),
+            dateValidation: new Date()
+        });
+        logger.info(`✅ Évaluation créée (note: ${evaluation.note}/20)`);
+
+        // ============ 12. FAVORI ============
         logger.info('⭐ Création d\'un favori...');
         await Favorite.create({
             etudiantId: etudiant._id,
             offreId: offer._id,
             dateAjout: new Date(),
-            notes: 'Offre très intéressante'
+            notes: 'Offre très intéressante pour un stage en développement'
         });
         logger.info(`✅ Favori créé`);
+
+        // ============ 13. NOTIFICATION ============
+        logger.info('🔔 Création d\'une notification de test...');
+        await Notification.create({
+            type: 'InApp',
+            message: `Votre candidature pour l'offre "${offer.titre}" a été soumise avec succès.`,
+            dateEnvoi: new Date(),
+            lue: false,
+            lien: `/applications/${application._id}`,
+            userId: etudiant._id,
+            userModel: 'UtilisateurExterne'
+        });
+        logger.info(`✅ Notification créée`);
 
         // ============ RÉCAPITULATIF ============
         logger.info('\n' + '='.repeat(60));
@@ -409,6 +465,9 @@ const seed = async () => {
         logger.info(`   📄 1 offre de test`);
         logger.info(`   📝 1 candidature`);
         logger.info(`   📚 1 stage`);
+        logger.info(`   📊 1 évaluation (note: ${evaluation.note}/20)`);
+        logger.info(`   ⭐ 1 favori`);
+        logger.info(`   🔔 1 notification`);
         logger.info('='.repeat(60));
 
         process.exit(0);
