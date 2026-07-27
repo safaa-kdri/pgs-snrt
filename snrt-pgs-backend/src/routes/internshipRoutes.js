@@ -2,13 +2,13 @@
 const express = require('express');
 const router = express.Router();
 const internshipController = require('../controllers/internshipController');
-const { requireAuth, requireRole } = require('../middlewares/auth');
+const { authenticate, authorize } = require('../middlewares/auth');
 const { logRequest, logAction } = require('../middlewares/logger');
 
 // ============================================
 // Toutes les routes nécessitent une authentification
 // ============================================
-router.use(requireAuth);
+router.use(authenticate());
 router.use(logRequest);
 
 // ============================================
@@ -32,20 +32,22 @@ router.put('/:id/validate-deliverable', logAction('INTERNSHIP_VALIDATE_DELIVERAB
 // ============================================
 // Routes pour Admin + RH + Encadrant
 // ============================================
-router.get('/', requireRole(['Administrateur', 'RH', 'Encadrant']), internshipController.getAllInternships);
+router.get('/', authorize('Administrateur', 'RH', 'Encadrant'), internshipController.getAllInternships);
 router.get('/:id', internshipController.getInternshipById);
 
 // ============================================
 // Routes pour Admin + RH uniquement
 // ============================================
-router.post('/', 
-    requireRole(['Administrateur', 'RH']), 
-    logAction('INTERNSHIP_CREATE'), 
+router.post(
+    '/',
+    authorize('Administrateur', 'RH'),
+    logAction('INTERNSHIP_CREATE'),
     internshipController.createInternship
 );
 
-router.post('/:id/deliverable', 
-    logAction('INTERNSHIP_ADD_DELIVERABLE'), 
+router.post(
+    '/:id/deliverable',
+    logAction('INTERNSHIP_ADD_DELIVERABLE'),
     internshipController.addDeliverable
 );
 

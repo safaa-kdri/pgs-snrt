@@ -1,10 +1,11 @@
+// src/controllers/authController.js
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const Role = require('../models/Role');
 const userLookup = require('../utils/userLookup');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
-const { CONFIG } = require('../config/constants');
+const { CONFIG, ROLES } = require('../config/constants');
 
 const { validatePasswordPolicy } = require('../utils/validators');
 const { hashPassword, verifyPassword } = require('../utils/argon2');
@@ -27,7 +28,14 @@ const {
 
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+// ============================================
+// ADMIN ROLE POUR OTP (les autres ont 2FA)
+// ============================================
+const ADMIN_ROLE = 'Administrateur';
 
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
 async function resolveRoleName(user, userType) {
   if (userType === 'externe') return 'Etudiant';
   const role = await Role.findById(user.roleId).select('nom');
@@ -39,7 +47,6 @@ async function registerFailedAttempt(user) {
   if (user.security.failedLoginAttempts >= CONFIG.bruteForce.maxAttempts) {
     user.security.lockUntil = new Date(Date.now() + CONFIG.bruteForce.lockMinutes * 60 * 1000);
   }
-
   await user.save({ validateModifiedOnly: true });
 }
 
@@ -75,7 +82,9 @@ async function issueSession(res, user, userType, req) {
   return role;
 }
 
-
+// ============================================
+// REGISTER
+// ============================================
 const register = asyncHandler(async (req, res) => {
   const { motDePasse, email, ...rest } = req.body;
 
@@ -113,14 +122,16 @@ const register = asyncHandler(async (req, res) => {
   });
 });
 
-
+// ============================================
+// LOGIN - 2FA POUR TOUS, OTP POUR ADMIN
+// ============================================
 const login = asyncHandler(async (req, res) => {
   const { cin, motDePasse } = req.body;
   const genericError = 'Numero CIN ou mot de passe incorrect.';
 
   const found = await userLookup.findByCin(
     cin,
-    '+motDePasse +security.failedLoginAttempts +security.lockUntil +twoFactor.codeHash +twoFactor.expiresAt'
+    '+motDePasse +security.failedLoginAttempts +security.lockUntil +twoFactor.codeHash +twoFactor.expiresAt +roleId'
   );
   if (!found) {
     logger.audit('LOGIN_FAILED_UNKNOWN_CIN', { cin });
@@ -145,9 +156,17 @@ const login = asyncHandler(async (req, res) => {
     throw ApiError.unauthorized(genericError);
   }
 
+  // Réinitialiser les tentatives
   user.security.failedLoginAttempts = 0;
   user.security.lockUntil = null;
 
+  // Vérifier le rôle de l'utilisateur
+  const role = await resolveRoleName(user, userType);
+  const isAdmin = role === ADMIN_ROLE;
+
+  // ============================================
+  // TOUS LES UTILISATEURS ONT 2FA/OTP
+  // ============================================
   const { code, codeHash, expiresAt } = generateTwoFactorCode();
   user.twoFactor.codeHash = codeHash;
   user.twoFactor.expiresAt = expiresAt;
@@ -155,13 +174,13 @@ const login = asyncHandler(async (req, res) => {
 
   try {
     await sendTwoFactorCodeEmail(user.email, code);
-    logger.info(`[2FA] Email sent successfully to ${user.email}`);
+    logger.info(`[2FA/OTP] Email sent successfully to ${user.email}`);
   } catch (err) {
-    logger.error(`[2FA Email Failed] SMTP error: ${err.message}`);
+    logger.error(`[2FA/OTP Email Failed] SMTP error: ${err.message}`);
 
     if (process.env.NODE_ENV !== 'production') {
       logger.info(`==================================================`);
-      logger.info(`[DEV MODE] 2FA CODE FOR ${user.email}: ${code}`);
+      logger.info(`[DEV MODE] ${isAdmin ? 'OTP' : '2FA'} CODE FOR ${user.email}: ${code}`);
       logger.info(`==================================================`);
     } else {
       throw ApiError.internal("Impossible d'envoyer le code de verification. Veuillez reessayer.");
@@ -171,16 +190,23 @@ const login = asyncHandler(async (req, res) => {
   const preAuthToken = signPreAuthToken({ sub: user._id.toString(), userType });
   setPreAuthCookie(res, preAuthToken);
 
-  logger.audit('LOGIN_PASSWORD_OK_2FA_SENT', { userId: user._id.toString() });
+  logger.audit('LOGIN_PASSWORD_OK_CODE_SENT', { 
+    userId: user._id.toString(), 
+    isAdmin,
+    method: isAdmin ? 'OTP' : '2FA'
+  });
 
   return res.status(200).json({
     success: true,
     requiresTwoFactor: true,
-    message: 'Un code de verification a ete envoye a votre adresse email.',
+    method: isAdmin ? 'OTP' : '2FA',
+    message: `Un code de ${isAdmin ? 'OTP' : 'verification'} a ete envoye a votre adresse email.`,
   });
 });
 
-
+// ============================================
+// VERIFY 2FA/OTP
+// ============================================
 const verifyTwoFactor = asyncHandler(async (req, res) => {
   const { code } = req.body;
   const preAuthToken = req.cookies?.preAuthToken;
@@ -196,15 +222,18 @@ const verifyTwoFactor = asyncHandler(async (req, res) => {
   const user = await userLookup.findById(
     payload.sub,
     payload.userType,
-    '+twoFactor.codeHash +twoFactor.expiresAt +refreshTokens'
+    '+twoFactor.codeHash +twoFactor.expiresAt +refreshTokens +roleId'
   );
+
   if (!user) {
     clearPreAuthCookie(res);
     throw ApiError.unauthorized('Compte introuvable.');
   }
 
   if (!user.twoFactor?.codeHash || isCodeExpired(user.twoFactor.expiresAt)) {
-    throw ApiError.unauthorized('Code expire. Veuillez vous reconnecter pour en recevoir un nouveau.');
+    throw ApiError.unauthorized(
+      `Code expire (apres ${CONFIG.twoFactor.ttlMinutes} minutes). Veuillez vous reconnecter pour en recevoir un nouveau.`
+    );
   }
 
   if (hashCode(code) !== user.twoFactor.codeHash) {
@@ -223,11 +252,20 @@ const verifyTwoFactor = asyncHandler(async (req, res) => {
   return res.status(200).json({
     success: true,
     message: 'Connexion reussie.',
-    user: { id: user._id, nom: user.nom, prenom: user.prenom, email: user.email, role, userType: payload.userType },
+    user: {
+      id: user._id,
+      nom: user.nom,
+      prenom: user.prenom,
+      email: user.email,
+      role,
+      userType: payload.userType,
+    },
   });
 });
 
-
+// ============================================
+// RESEND 2FA/OTP CODE
+// ============================================
 const resendTwoFactorCode = asyncHandler(async (req, res) => {
   const preAuthToken = req.cookies?.preAuthToken;
   if (!preAuthToken) throw ApiError.unauthorized('Session expiree. Veuillez vous reconnecter.');
@@ -242,6 +280,10 @@ const resendTwoFactorCode = asyncHandler(async (req, res) => {
   );
   if (!user) throw ApiError.unauthorized('Compte introuvable.');
 
+  // Vérifier si l'utilisateur est ADMIN
+  const role = await resolveRoleName(user, payload.userType);
+  const isAdmin = role === ADMIN_ROLE;
+
   const { code, codeHash, expiresAt } = generateTwoFactorCode();
   user.twoFactor.codeHash = codeHash;
   user.twoFactor.expiresAt = expiresAt;
@@ -249,13 +291,13 @@ const resendTwoFactorCode = asyncHandler(async (req, res) => {
 
   try {
     await sendTwoFactorCodeEmail(user.email, code);
-    logger.info(`[2FA] Email resent successfully to ${user.email}`);
+    logger.info(`[2FA/OTP] Email resent successfully to ${user.email}`);
   } catch (err) {
-    logger.error(`[2FA Resend Failed] SMTP error: ${err.message}`);
+    logger.error(`[2FA/OTP Resend Failed] SMTP error: ${err.message}`);
 
     if (process.env.NODE_ENV !== 'production') {
       logger.info(`==================================================`);
-      logger.info(`[DEV MODE] 2FA CODE (RESEND) FOR ${user.email}: ${code}`);
+      logger.info(`[DEV MODE] ${isAdmin ? 'OTP' : '2FA'} CODE (RESEND) FOR ${user.email}: ${code}`);
       logger.info(`==================================================`);
     } else {
       throw ApiError.internal("Impossible d'envoyer le code de verification. Veuillez reessayer.");
@@ -265,10 +307,16 @@ const resendTwoFactorCode = asyncHandler(async (req, res) => {
   const newPreAuthToken = signPreAuthToken({ sub: user._id.toString(), userType: payload.userType });
   setPreAuthCookie(res, newPreAuthToken);
 
-  return res.status(200).json({ success: true, message: 'Un nouveau code vous a ete envoye.' });
+  return res.status(200).json({ 
+    success: true, 
+    method: isAdmin ? 'OTP' : '2FA',
+    message: 'Un nouveau code vous a ete envoye.' 
+  });
 });
 
-
+// ============================================
+// REFRESH TOKEN
+// ============================================
 const refresh = asyncHandler(async (req, res) => {
   const refreshTokenCookie = req.cookies?.refreshToken;
   if (!refreshTokenCookie) throw ApiError.unauthorized('Session absente. Veuillez vous reconnecter.');
@@ -325,7 +373,9 @@ const refresh = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Session renouvelee.' });
 });
 
-
+// ============================================
+// LOGOUT
+// ============================================
 const logout = asyncHandler(async (req, res) => {
   const refreshTokenCookie = req.cookies?.refreshToken;
 
@@ -346,7 +396,9 @@ const logout = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Deconnexion reussie.' });
 });
 
-
+// ============================================
+// FORGOT PASSWORD
+// ============================================
 const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
   const genericResponse = {
@@ -361,8 +413,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   const rawToken = generateRandomToken(32);
 
-
-
   user.passwordReset.tokenHash = hashToken(rawToken);
   user.passwordReset.expiresAt = new Date(Date.now() + CONFIG.resetPassword.ttlMinutes * 60 * 1000);
   await user.save({ validateModifiedOnly: true });
@@ -375,7 +425,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
   } catch (err) {
     logger.error(`[ForgotPassword] Echec envoi email a ${user.email}: ${err.message}`);
 
-   
     if (process.env.NODE_ENV !== 'production') {
       logger.info('==================================================');
       logger.info(`[DEV MODE] LIEN DE REINITIALISATION : ${resetUrl}`);
@@ -386,7 +435,9 @@ const forgotPassword = asyncHandler(async (req, res) => {
   return res.status(200).json(genericResponse);
 });
 
-
+// ============================================
+// RESET PASSWORD
+// ============================================
 const resetPassword = asyncHandler(async (req, res) => {
   const { token } = req.params;
   const { motDePasse } = req.body;
@@ -419,7 +470,9 @@ const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
-
+// ============================================
+// ME
+// ============================================
 const me = asyncHandler(async (req, res) => {
   const user = await userLookup.findById(req.user.id, req.user.userType);
   if (!user) throw ApiError.notFound('Utilisateur introuvable.');

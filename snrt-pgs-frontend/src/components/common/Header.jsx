@@ -1,6 +1,6 @@
 // src/components/common/Header.jsx
-import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux'; // ✅ AJOUTER
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import {
     AppBar,
     Toolbar,
@@ -10,23 +10,30 @@ import {
     Container
 } from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
-import { logout, loadCurrentUser } from '../../store/slices/authSlice'; // ✅ AJOUTER
+import { logout, loadCurrentUser } from '../../store/slices/authSlice';
 
 const Header = () => {
     const navigate = useNavigate();
-    const dispatch = useDispatch(); // ✅ AJOUTER
+    const dispatch = useDispatch();
     
-    // ✅ UTILISER REDUX AU LIEU DE localStorage
-    const { isAuthenticated, user } = useSelector((state) => state.auth);
+    const { isAuthenticated, user, status } = useSelector((state) => state.auth);
     
-    // ✅ CHARGER L'UTILISATEUR AU DÉMARRAGE
+    // ✅ CORRIGÉ : NE PAS appeler /me en boucle
     useEffect(() => {
-        dispatch(loadCurrentUser());
-    }, [dispatch]);
+        // ✅ Vérifier si l'utilisateur est déjà connecté (via localStorage)
+        const hasUser = localStorage.getItem('user');
+        
+        // ✅ Appeler /me SEULEMENT si :
+        // 1. L'utilisateur n'est PAS déjà authentifié
+        // 2. Le statut n'est PAS 'loading' (évite les boucles)
+        // 3. Il y a un utilisateur dans localStorage (signe de connexion)
+        if (!isAuthenticated && status !== 'loading' && hasUser) {
+            dispatch(loadCurrentUser());
+        }
+    }, [dispatch, isAuthenticated, status]);
 
-    // ✅ DÉCONNEXION AVEC REDUX
     const handleLogout = () => {
-        dispatch(logout()); // ✅ Redux gère tout (supprime localStorage aussi)
+        dispatch(logout());
         navigate('/');
     };
 

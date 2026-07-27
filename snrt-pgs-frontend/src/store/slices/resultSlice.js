@@ -1,116 +1,64 @@
 // src/store/slices/resultSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import api from '../../services/api';
 
 // ============================================
-// DONNÉES FICTIVES POUR LES RÉSULTATS
+// THUNKS - APPELS API RÉELS
 // ============================================
 
-const mockResults = [
-    {
-        _id: 'r1',
-        titreOffre: 'Stage Développeur Full Stack',
-        offre: { titre: 'Stage Développeur Full Stack' },
-        candidatNom: 'Dupont Jean',
-        statut: 'Retenu',
-        typeStage: 'PFE',
-        nbPostes: 2,
-        dateResultat: '2026-07-20',
-        dateLimiteCandidature: '2026-08-05',
-        commentaires: 'Le candidat a démontré d\'excellentes compétences techniques et une bonne capacité d\'adaptation.'
-    },
-    {
-        _id: 'r2',
-        titreOffre: 'Stage en Audiovisuel',
-        offre: { titre: 'Stage en Audiovisuel' },
-        candidatNom: 'Martin Sophie',
-        statut: 'Entretien',
-        typeStage: 'Initiation',
-        nbPostes: 1,
-        dateResultat: '2026-07-18',
-        dateLimiteCandidature: '2026-08-05',
-        commentaires: 'Le candidat sera reçu en entretien la semaine prochaine.'
-    },
-    {
-        _id: 'r3',
-        titreOffre: 'Stage en Communication',
-        offre: { titre: 'Stage en Communication' },
-        candidatNom: 'Bernard Thomas',
-        statut: 'Non retenu',
-        typeStage: 'Ete',
-        nbPostes: 3,
-        dateResultat: '2026-07-15',
-        dateLimiteCandidature: '2026-08-05',
-        commentaires: 'Le profil ne correspond pas aux attentes du poste.'
-    },
-    {
-        _id: 'r4',
-        titreOffre: 'Stage en Gestion de Projet',
-        offre: { titre: 'Stage en Gestion de Projet' },
-        candidatNom: 'Petit Marie',
-        statut: 'Présélection',
-        typeStage: 'PFA',
-        nbPostes: 1,
-        dateResultat: '2026-07-12',
-        dateLimiteCandidature: '2026-08-05',
-        commentaires: 'Le candidat est présélectionné pour la phase suivante.'
-    },
-    {
-        _id: 'r5',
-        titreOffre: 'Stage Data Analyst',
-        offre: { titre: 'Stage Data Analyst' },
-        candidatNom: 'Moreau Lucas',
-        statut: 'Final',
-        typeStage: 'Master',
-        nbPostes: 1,
-        dateResultat: '2026-07-10',
-        dateLimiteCandidature: '2026-08-05',
-        commentaires: 'Le candidat est en phase finale de recrutement.'
-    }
-];
-
 // ============================================
-// THUNKS
+// Récupérer la liste des résultats (API réelle)
 // ============================================
-
-// Récupère la liste des résultats (mock)
 export const fetchResults = createAsyncThunk(
     'results/fetchResults',
-    async ({ page = 1, limit = 10 } = {}, { rejectWithValue }) => {
+    async ({ page = 1, limit = 10, offreId = '' } = {}, { rejectWithValue }) => {
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            const params = { page, limit };
+            if (offreId) params.offreId = offreId;
             
-            const start = (page - 1) * limit;
-            const paginated = mockResults.slice(start, start + limit);
-            
-            return {
-                success: true,
-                results: paginated,
-                pagination: {
-                    page: page,
-                    limit: limit,
-                    total: mockResults.length,
-                    pages: Math.ceil(mockResults.length / limit)
-                }
-            };
-        } catch (err) {
-            return rejectWithValue('Erreur de chargement des résultats');
+            const response = await api.get('/results', { params });
+            return response.data;
+        } catch (error) {
+            console.error('❌ Erreur fetchResults:', error);
+            return rejectWithValue(
+                error.response?.data?.message || 'Erreur de chargement des résultats'
+            );
         }
     }
 );
 
-// Récupère un résultat par ID (mock)
+// ============================================
+// Récupérer un résultat par ID (API réelle)
+// ============================================
 export const fetchResultById = createAsyncThunk(
     'results/fetchResultById',
     async (id, { rejectWithValue }) => {
         try {
-            await new Promise(resolve => setTimeout(resolve, 300));
-            const result = mockResults.find(r => r._id === id);
-            if (result) {
-                return result;
-            }
-            return rejectWithValue('Résultat non trouvé');
-        } catch (err) {
-            return rejectWithValue('Erreur de chargement');
+            const response = await api.get(`/results/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error(`❌ Erreur fetchResultById ${id}:`, error);
+            return rejectWithValue(
+                error.response?.data?.message || 'Résultat non trouvé'
+            );
+        }
+    }
+);
+
+// ============================================
+// Rechercher des résultats (API réelle)
+// ============================================
+export const searchResults = createAsyncThunk(
+    'results/searchResults',
+    async (searchParams, { rejectWithValue }) => {
+        try {
+            const response = await api.get('/results/search', { params: searchParams });
+            return response.data;
+        } catch (error) {
+            console.error('❌ Erreur searchResults:', error);
+            return rejectWithValue(
+                error.response?.data?.message || 'Erreur de recherche'
+            );
         }
     }
 );
@@ -123,6 +71,7 @@ const initialState = {
     results: [],
     total: 0,
     page: 1,
+    limit: 10,
     pages: 1,
     loading: false,
     error: null,
@@ -132,6 +81,9 @@ const initialState = {
     searchResult: null,
     filters: {
         offreId: '',
+        statut: '',
+        dateDebut: '',
+        dateFin: '',
     },
 };
 
@@ -160,46 +112,64 @@ const resultSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            // fetchResults
+            // ===== fetchResults =====
             .addCase(fetchResults.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
             .addCase(fetchResults.fulfilled, (state, action) => {
                 state.loading = false;
-                state.results = action.payload.results || [];
-                state.total = action.payload.pagination?.total || 0;
-                state.page = action.payload.pagination?.page || 1;
-                state.pages = action.payload.pagination?.pages || 1;
+                // Adaptation selon la structure de l'API
+                const data = action.payload;
+                state.results = data.results || data.data || [];
+                state.total = data.pagination?.total || data.total || 0;
+                state.page = data.pagination?.page || data.page || 1;
+                state.pages = data.pagination?.pages || data.pages || 1;
+                state.limit = data.pagination?.limit || data.limit || 10;
             })
             .addCase(fetchResults.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
                 state.results = [];
             })
-            // fetchResultById
+            
+            // ===== fetchResultById =====
             .addCase(fetchResultById.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
             .addCase(fetchResultById.fulfilled, (state, action) => {
                 state.loading = false;
-                state.selectedResult = action.payload;
+                state.selectedResult = action.payload.result || action.payload.data || action.payload;
             })
             .addCase(fetchResultById.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
                 state.selectedResult = null;
+            })
+            
+            // ===== searchResults =====
+            .addCase(searchResults.pending, (state) => {
+                state.searchLoading = true;
+                state.searchError = null;
+            })
+            .addCase(searchResults.fulfilled, (state, action) => {
+                state.searchLoading = false;
+                state.searchResult = action.payload;
+            })
+            .addCase(searchResults.rejected, (state, action) => {
+                state.searchLoading = false;
+                state.searchError = action.payload;
             });
     },
 });
 
-export const { 
-    setPage, 
-    setResultFilter, 
-    resetSearch, 
+export const {
+    setPage,
+    setResultFilter,
+    resetSearch,
     resetResultFilters,
-    clearSelectedResult 
+    clearSelectedResult,
 } = resultSlice.actions;
 
 export default resultSlice.reducer;

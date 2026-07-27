@@ -1,9 +1,13 @@
+// src/middlewares/auth.js
 const rateLimit = require('express-rate-limit');
 const ApiError = require('../utils/ApiError');
 const { verifyAccessToken } = require('../utils/jwt');
 const userLookup = require('../utils/userLookup');
+const { ROLES } = require('../config/constants');
 
-
+// ============================================
+// AUTHENTIFICATION - Vérifie le token JWT
+// ============================================
 function authenticate() {
   return async (req, res, next) => {
     try {
@@ -18,7 +22,6 @@ function authenticate() {
 
       req.user = {
         id: user._id.toString(),
-       
         _id: user._id.toString(),
         userType: payload.userType,
         role: payload.role,
@@ -32,7 +35,9 @@ function authenticate() {
   };
 }
 
-
+// ============================================
+// AUTORISATION - Vérifie les rôles
+// ============================================
 function authorize(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
@@ -43,8 +48,9 @@ function authorize(...allowedRoles) {
   };
 }
 
-
-
+// ============================================
+// AUTHENTIFICATION OPTIONNELLE
+// ============================================
 function optionalAuthenticate() {
   return async (req, res, next) => {
     try {
@@ -72,18 +78,55 @@ function optionalAuthenticate() {
   };
 }
 
+// ============================================
+// ALIAS POUR COMPATIBILITÉ AVEC periodRoutes ET internshipRoutes
+// ============================================
+const requireAuth = authenticate;
+const requireRole = authorize;
 
+// ============================================
+// RATE LIMITERS
+// ============================================
 const rateLimitHandler = (req, res, next) => next(ApiError.tooManyRequests());
 
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler });
-const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler });
-const twoFactorLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler });
-const forgotPasswordLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler });
+const loginLimiter = rateLimit({ 
+  windowMs: 15 * 60 * 1000, 
+  limit: 10, 
+  standardHeaders: true, 
+  legacyHeaders: false, 
+  handler: rateLimitHandler 
+});
+
+const registerLimiter = rateLimit({ 
+  windowMs: 60 * 60 * 1000, 
+  limit: 10, 
+  standardHeaders: true, 
+  legacyHeaders: false, 
+  handler: rateLimitHandler 
+});
+
+const twoFactorLimiter = rateLimit({ 
+  windowMs: 10 * 60 * 1000, 
+  limit: 10, 
+  standardHeaders: true, 
+  legacyHeaders: false, 
+  handler: rateLimitHandler 
+});
+
+const forgotPasswordLimiter = rateLimit({ 
+  windowMs: 60 * 60 * 1000, 
+  limit: 5, 
+  standardHeaders: true, 
+  legacyHeaders: false, 
+  handler: rateLimitHandler 
+});
 
 module.exports = {
   authenticate,
   optionalAuthenticate,
   authorize,
+  requireAuth,
+  requireRole,
   loginLimiter,
   registerLimiter,
   twoFactorLimiter,
