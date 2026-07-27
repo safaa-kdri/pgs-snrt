@@ -1,225 +1,123 @@
-// server.js
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
-const path = require('path');
 
 const connectDB = require('./src/config/database');
+const { CONFIG, assertRequiredEnv } = require('./src/config/constants');
 const logger = require('./src/utils/logger');
-const errorHandler = require('./src/middlewares/errorHandler');
-const { logRequest, logAccessDenied } = require('./src/middlewares/logger');
 
-// ============================================
-// IMPORT DES ROUTES
-// ============================================
-
-// Routes de Badr
 const authRoutes = require('./src/routes/authRoutes');
 const offerRoutes = require('./src/routes/offerRoutes');
 const interviewRoutes = require('./src/routes/interviewRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
-
-// Routes de Mohammed
-const userRoutes = require('./src/routes/userRoutes');
-const departmentRoutes = require('./src/routes/departmentRoutes');
 const applicationRoutes = require('./src/routes/applicationRoutes');
+const departmentRoutes = require('./src/routes/departmentRoutes');
+const documentRoutes = require('./src/routes/documentRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
-// Routes de Safaa
-const periodRoutes = require('./src/routes/periodRoutes');
-const internshipRoutes = require('./src/routes/internshipRoutes');
-
-// ============================================
-// INITIALISATION
-// ============================================
+assertRequiredEnv();
 
 const app = express();
 
-// ============================================
-// CONNEXION DATABASE
-// ============================================
-connectDB();
+// Necessaire derriere un reverse proxy (Nginx) pour que req.ip / rate-limit
+// et les cookies "secure" fonctionnent correctement.
+app.set('trust proxy', 1);
 
-// ============================================
-// MIDDLEWARES
-// ============================================
-
-// Security Headers
+// --- Securite HTTP de base ---
 app.use(helmet());
+app.use(cors({ origin: CONFIG.clientUrl, credentials: true })); // credentials: indispensable pour les cookies HttpOnly
 
-// CORS
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-    optionsSuccessStatus: 200
-}));
+// --- Parsers ---
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser());
 
-// Rate Limiting (protection contre les attaques)
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requêtes par IP
-    message: {
-        success: false,
-        message: 'Trop de requêtes, veuillez réessayer dans 15 minutes.'
-    }
-});
-app.use('/api', limiter);
-
-// Body Parser
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Data Sanitization (protection XSS et injections)
+// --- Protection contre les injections NoSQL (OWASP) ---
 app.use(mongoSanitize());
 
-// Logging des requêtes
-app.use(logRequest);
-app.use(logAccessDenied);
+// --- Fichiers uploades (documents de candidature) ---
+// NB : servir ces fichiers necessite que l'utilisateur soit authentifie et
+// autorise a y acceder (IDOR) ; a durcir avant mise en production (cf.
+// documentController.getDocumentById pour le controle d'acces cote donnees).
+app.use('/uploads/documents', express.static(require('path').join(__dirname, 'uploads/documents')));
 
-// Logging HTTP avec morgan
-app.use(morgan('combined', {
-    stream: { write: (message) => logger.info(message.trim()) }
-}));
+// --- Logs HTTP (dev) ---
+if (CONFIG.nodeEnv !== 'production') {
+  app.use(morgan('dev', { stream: { write: (msg) => logger.debug(msg.trim()) } }));
+}
 
-// ============================================
-// STATIC FILES
-// ============================================
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// --- Healthcheck ---
+app.get('/api/v1/health', (req, res) => res.status(200).json({ success: true, status: 'up' }));
 
-// ============================================
-// ROUTES API
-// ============================================
-
-// ===== Routes d'authentification (Badr) =====
+// --- Routes (perimetre Badr : auth, offres, entretiens, dashboard/stats) ---
 app.use('/api/v1/auth', authRoutes);
-
-// ===== Routes utilisateurs (Mohammed) =====
-app.use('/api/v1/users', userRoutes);
-
-// ===== Routes départements (Mohammed) =====
-app.use('/api/v1/departments', departmentRoutes);
-
-// ===== Routes périodes (Safaa) =====
-app.use('/api/v1/periods', periodRoutes);
-
-// ===== Routes offres de stage (Badr) =====
 app.use('/api/v1/offers', offerRoutes);
-
-// ===== Routes candidatures (Mohammed) =====
-app.use('/api/v1/applications', applicationRoutes);
-
-// ===== Routes entretiens (Badr) =====
 app.use('/api/v1/interviews', interviewRoutes);
-
-// ===== Routes stages (Safaa) =====
-app.use('/api/v1/internships', internshipRoutes);
-
-// ===== Routes notifications (Mohammed) =====
-app.use('/api/v1/notifications', notificationRoutes);
-
-// ===== Routes tableaux de bord (Badr) =====
 app.use('/api/v1/dashboard', dashboardRoutes);
 
-// ============================================
-// HEALTH CHECK
-// ============================================
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        success: true,
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development',
-        uptime: process.uptime(),
-        message: '🚀 SNRT PGS API is running'
-    });
-});
+// --- Routes (perimetre Mohammed : candidatures, departements, documents,
+// notifications, utilisateurs) ---
+app.use('/api/v1/applications', applicationRoutes);
+app.use('/api/v1/departments', departmentRoutes);
+app.use('/api/v1/documents', documentRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/users', userRoutes);
 
-// ============================================
-// 404 - Route non trouvée
-// ============================================
+// D'autres routers (periodRoutes, internshipRoutes...) seront montes ici au
+// fur et a mesure de leur integration par le reste de l'equipe.
+
+// --- 404 ---
 app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: `Route ${req.originalUrl} not found`,
-        method: req.method
-    });
+  res.status(404).json({ success: false, message: `Route introuvable : ${req.method} ${req.originalUrl}` });
 });
 
-// ============================================
-// GESTION DES ERREURS (dernier middleware)
-// ============================================
-app.use(errorHandler);
+// --- Gestion globale des erreurs (doit rester le dernier middleware) ---
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  const isOperational = err.isOperational || false;
 
-// ============================================
-// DÉMARRAGE DU SERVEUR
-// ============================================
-const PORT = process.env.PORT || 5000;
+  if (!isOperational) logger.error(`[Unhandled] ${err.message}\n${err.stack}`);
 
-const server = app.listen(PORT, () => {
-    logger.info('='.repeat(60));
-    logger.info('🚀 SNRT PGS API - SERVEUR DÉMARRÉ');
-    logger.info('='.repeat(60));
-    logger.info(`📡 Port: ${PORT}`);
-    logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    logger.info(`📊 Health check: http://localhost:${PORT}/health`);
-    logger.info(`📚 Database: ${process.env.MONGO_URI || 'mongodb://localhost:27017/snrt_pgs'}`);
-    logger.info('='.repeat(60));
-    logger.info('📋 ROUTES DISPONIBLES:');
-    logger.info(`   🔐 /api/v1/auth         → Authentification (Badr)`);
-    logger.info(`   👤 /api/v1/users        → Utilisateurs (Mohammed)`);
-    logger.info(`   🏢 /api/v1/departments  → Départements (Mohammed)`);
-    logger.info(`   📅 /api/v1/periods      → Périodes (Safaa)`);
-    logger.info(`   📋 /api/v1/offers       → Offres (Badr)`);
-    logger.info(`   📄 /api/v1/applications → Candidatures (Mohammed)`);
-    logger.info(`   🗣️ /api/v1/interviews   → Entretiens (Badr)`);
-    logger.info(`   📚 /api/v1/internships  → Stages (Safaa)`);
-    logger.info(`   🔔 /api/v1/notifications→ Notifications (Mohammed)`);
-    logger.info(`   📊 /api/v1/dashboard    → Tableaux de bord (Badr)`);
-    logger.info('='.repeat(60));
-    logger.info(`✅ Serveur prêt à recevoir des requêtes sur http://localhost:${PORT}`);
+  const response = { success: false, message: isOperational ? err.message : 'Erreur interne du serveur.' };
+  if (err.details) response.details = err.details;
+  if (CONFIG.nodeEnv === 'development' && !isOperational) response.stack = err.stack;
+
+  res.status(statusCode).json(response);
 });
 
-// ============================================
-// GESTION DES ERREURS NON CAPTURÉES
-// ============================================
+// -----------------------------------------------------------------------------
+// Demarrage
+// -----------------------------------------------------------------------------
+async function start() {
+  await connectDB();
 
-// Rejet de promesse non géré
-process.on('unhandledRejection', (err) => {
-    logger.error('💥 UNHANDLED REJECTION!');
-    logger.error(`Erreur: ${err.message}`);
-    logger.error(`Stack: ${err.stack}`);
-    // Le serveur continue de tourner, mais on log l'erreur
-});
+  const server = app.listen(CONFIG.port, () => {
+    logger.info(`[Server] PGS API demarree sur le port ${CONFIG.port} (${CONFIG.nodeEnv})`);
+  });
 
-// Exception non capturée
-process.on('uncaughtException', (err) => {
-    logger.error('💥 UNCAUGHT EXCEPTION!');
-    logger.error(`Erreur: ${err.message}`);
-    logger.error(`Stack: ${err.stack}`);
-    // On arrête proprement le serveur pour éviter un état instable
-    logger.error('🛑 Arrêt du serveur...');
-    process.exit(1);
-});
-
-// ============================================
-// ARRÊT PROPRE
-// ============================================
-const shutdown = () => {
-    logger.info('🛑 Arrêt du serveur...');
+  const shutdown = (signal) => {
+    logger.info(`[Server] Signal ${signal} recu, arret en cours...`);
     server.close(() => {
-        logger.info('✅ Serveur arrêté avec succès');
-        process.exit(0);
+      logger.info('[Server] Arret propre termine.');
+      process.exit(0);
     });
-};
+  };
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('unhandledRejection', (err) => {
+    logger.error(`[UnhandledRejection] ${err.message}`);
+    server.close(() => process.exit(1));
+  });
+}
 
-// ============================================
-// EXPORT POUR LES TESTS
-// ============================================
+if (require.main === module) {
+  start();
+}
+
 module.exports = app;

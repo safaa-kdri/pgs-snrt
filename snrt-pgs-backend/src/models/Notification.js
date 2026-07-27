@@ -1,11 +1,17 @@
 // src/models/Notification.js
 const mongoose = require('mongoose');
+const BaseSchema = require('./BaseModel');
 
 const NotificationSchema = new mongoose.Schema({
     type: {
         type: String,
         enum: ['Email', 'InApp'],
         required: true
+    },
+    titre: {
+    type: String,
+    required: true,
+    trim: true
     },
     message: {
         type: String,
@@ -33,7 +39,7 @@ const NotificationSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
-
+NotificationSchema.add(BaseSchema);
 NotificationSchema.index({ userId: 1 });
 NotificationSchema.index({ lue: 1 });
 NotificationSchema.index({ dateEnvoi: -1 });

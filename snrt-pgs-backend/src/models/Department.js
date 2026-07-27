@@ -17,6 +17,10 @@ const DepartmentSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'UtilisateurInterne'
     },
+    membres: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UtilisateurInterne'
+   }],
     nbStagiaires: {
         type: Number,
         default: 0
@@ -31,7 +35,7 @@ const DepartmentSchema = new mongoose.Schema({
 
 DepartmentSchema.add(BaseSchema);
 
-DepartmentSchema.index({ nom: 1 });
+
 DepartmentSchema.index({ actif: 1 });
 
 module.exports = mongoose.model('Department', DepartmentSchema);

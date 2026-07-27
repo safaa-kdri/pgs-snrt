@@ -31,16 +31,10 @@ const ApplicationSchema = new mongoose.Schema({
     },
     
     // Embedded
-    documents: [{
-        nom: { type: String, required: true },
-        type: {
-            type: String,
-            enum: ['CV', 'Lettre Motivation', 'Releve Notes', 'Attestation', 'Autre']
-        },
-        chemin: { type: String, required: true },
-        dateUpload: { type: Date, default: Date.now },
-        taille: Number
-    }],
+documents: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Document'
+}],
     
     entretien: {
         date: Date,
@@ -61,15 +55,18 @@ const ApplicationSchema = new mongoose.Schema({
     },
     
     historique: [{
-        date: { type: Date, default: Date.now },
-        ancienStatut: String,
-        nouveauStatut: String,
-        commentaire: String,
-        auteurId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'UtilisateurInterne'
-        }
-    }]
+    date: { type: Date, default: Date.now },
+    ancienStatut: String,
+    nouveauStatut: {
+        type: String,
+        enum: ['Brouillon', 'Soumise', 'EnAnalyse', 'Entretien', 'Acceptee', 'Refusee']
+    },
+    commentaire: String,
+    auteurId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'UtilisateurInterne'
+    }
+}]
 }, {
     timestamps: true
 });

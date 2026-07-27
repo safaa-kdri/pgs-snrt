@@ -1,0 +1,173 @@
+const nodemailer = require('nodemailer');
+const { CONFIG } = require('../config/constants');
+const logger = require('../utils/logger');
+
+
+let transporterPromise = null;
+
+function buildTransporter() {
+  if (CONFIG.smtp.host) {
+    return Promise.resolve(
+      nodemailer.createTransport({
+        host: CONFIG.smtp.host,
+        port: CONFIG.smtp.port,
+        secure: CONFIG.smtp.secure,
+        auth: CONFIG.smtp.user ? { user: CONFIG.smtp.user, pass: CONFIG.smtp.password } : undefined,
+      })
+    );
+  }
+
+  logger.warn(
+    "[Email] Aucun SMTP_HOST defini : utilisation d'un compte de test Ethereal (dev uniquement, aucun email reellement envoye)."
+  );
+
+  return nodemailer.createTestAccount().then((testAccount) =>
+    nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: { user: testAccount.user, pass: testAccount.pass },
+    })
+  );
+}
+
+function getTransporter() {
+  if (!transporterPromise) transporterPromise = buildTransporter();
+  return transporterPromise;
+}
+
+async function sendMail({ to, subject, html, text }) {
+  try {
+    const transporter = await getTransporter();
+    const info = await transporter.sendMail({ from: CONFIG.smtp.from, to, subject, text, html });
+
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    if (previewUrl) {
+      logger.info(`[Email] (Ethereal) Previsualisation de l'email envoye a ${to} : ${previewUrl}`);
+    }
+  } catch (err) {
+    logger.error(`[Email] Echec d'envoi vers ${to}: ${err.message}`);
+    throw err;
+  }
+}
+
+function baseTemplate(title, bodyHtml) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; color: #1f2933;">
+      <h2 style="color: #0b3d91;">${title}</h2>
+      ${bodyHtml}
+      <hr style="margin-top: 24px; border: none; border-top: 1px solid #e5e7eb;" />
+      <p style="font-size: 12px; color: #6b7280;">
+        Societe Nationale de Radiodiffusion et de Television - Plateforme de Gestion des Stages.
+        Ceci est un message automatique, merci de ne pas y repondre.
+      </p>
+    </div>
+  `;
+}
+
+async function sendTwoFactorCodeEmail(to, code) {
+  const html = baseTemplate(
+    'Code de verification',
+    `<p>Votre code de connexion a la Plateforme de Gestion des Stages est :</p>
+     <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px;">${code}</p>
+     <p>Ce code est valable ${CONFIG.twoFactor.ttlMinutes} minutes. Si vous n'etes pas a l'origine de cette demande, ignorez cet email.</p>`
+  );
+  await sendMail({ to, subject: 'Votre code de verification PGS', html, text: `Votre code de verification est : ${code}` });
+}
+
+async function sendPasswordResetEmail(to, resetUrl) {
+  const html = baseTemplate(
+    'Reinitialisation de votre mot de passe',
+    `<p>Vous avez demande la reinitialisation de votre mot de passe.</p>
+     <p><a href="${resetUrl}" style="background:#0b3d91;color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none;">Reinitialiser mon mot de passe</a></p>
+     <p>Ce lien expire dans ${CONFIG.resetPassword.ttlMinutes} minutes. Si vous n'etes pas a l'origine de cette demande, ignorez cet email.</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Reinitialisation de votre mot de passe - PGS',
+    html,
+    text: `Reinitialisez votre mot de passe via ce lien (valable ${CONFIG.resetPassword.ttlMinutes} min) : ${resetUrl}`,
+  });
+}
+
+async function sendWelcomeEmail(to, prenom) {
+  const html = baseTemplate(
+    'Bienvenue sur la Plateforme de Gestion des Stages',
+    `<p>Bonjour ${prenom},</p>
+     <p>Votre compte candidat a bien ete cree. Vous pouvez desormais consulter les offres de stage et postuler en ligne.</p>`
+  );
+  await sendMail({ to, subject: 'Bienvenue sur la Plateforme de Gestion des Stages', html, text: `Bonjour ${prenom}, votre compte a bien ete cree.` });
+}
+
+// Signature conservee (to, {date, heure, type, lieu, lienVisio}) : c'est
+// celle appelee par interviewController.notifyStudentInterviewScheduled.
+async function sendInterviewScheduledEmail(to, { date, heure, type, lieu, lienVisio }) {
+  const lieuLigne = type === 'Visio' ? `Lien : ${lienVisio}` : `Lieu : ${lieu || 'a confirmer'}`;
+  const html = baseTemplate(
+    'Entretien planifie',
+    `<p>Un entretien a ete planifie dans le cadre de votre candidature :</p>
+     <p><strong>Date :</strong> ${new Date(date).toLocaleDateString('fr-FR')} a ${heure}<br/>
+     <strong>Type :</strong> ${type}<br/>${lieuLigne}</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Entretien planifie - PGS',
+    html,
+    text: `Un entretien a ete planifie le ${new Date(date).toLocaleDateString('fr-FR')} a ${heure} (${type}).`,
+  });
+}
+
+
+async function sendApplicationSubmittedEmail({ to, studentName, offerTitle }) {
+  const html = baseTemplate(
+    'Candidature soumise avec succès',
+    `<p>Bonjour ${studentName},</p>
+     <p>Votre candidature pour l'offre <strong>${offerTitle}</strong> a été soumise avec succès.</p>
+     <p>Vous pouvez suivre son avancement depuis votre espace candidat.</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Candidature soumise avec succès',
+    html,
+    text: `Bonjour ${studentName}, votre candidature pour l'offre ${offerTitle} a été soumise avec succès.`,
+  });
+}
+
+async function sendApplicationStatusChangedEmail({ to, studentName, offerTitle, status }) {
+  const html = baseTemplate(
+    'Mise à jour de votre candidature',
+    `<p>Bonjour ${studentName},</p>
+     <p>Le statut de votre candidature pour <strong>${offerTitle}</strong> est maintenant : <strong>${status}</strong>.</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Mise à jour de votre candidature',
+    html,
+    text: `Bonjour ${studentName}, le statut de votre candidature pour ${offerTitle} est maintenant : ${status}.`,
+  });
+}
+
+async function sendDocumentRejectedEmail({ to, studentName, documentName, reason }) {
+  const html = baseTemplate(
+    'Document refusé',
+    `<p>Bonjour ${studentName},</p>
+     <p>Votre document <strong>${documentName}</strong> a été refusé.</p>
+     <p>Motif : ${reason || 'Non précisé'}</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Document refusé',
+    html,
+    text: `Bonjour ${studentName}, votre document ${documentName} a été refusé. Motif : ${reason || 'Non précisé'}.`,
+  });
+}
+
+module.exports = {
+  sendTwoFactorCodeEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+  sendInterviewScheduledEmail,
+  sendApplicationSubmittedEmail,
+  sendApplicationStatusChangedEmail,
+  sendDocumentRejectedEmail,
+};
