@@ -36,7 +36,13 @@ app.set('trust proxy', 1);
 
 // --- Securite HTTP de base ---
 app.use(helmet());
-app.use(cors({ origin: CONFIG.clientUrl, credentials: true })); // credentials: indispensable pour les cookies HttpOnly
+// En dev, autoriser dynamiquement toutes les origines (pratique locale).
+// En production, conserver l'origine stricte depuis CONFIG.clientUrl.
+if (CONFIG.nodeEnv !== 'production') {
+  app.use(cors({ origin: true, credentials: true }));
+} else {
+  app.use(cors({ origin: CONFIG.clientUrl, credentials: true })); // credentials: indispensable pour les cookies HttpOnly
+}
 
 // --- Parsers ---
 app.use(express.json({ limit: '10kb' }));

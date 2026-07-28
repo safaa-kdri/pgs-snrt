@@ -14,10 +14,11 @@ import {
     InputAdornment
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { authService } from '../../services/auth';
+import { useDispatch } from 'react-redux';
+import { verify2FA } from '../../store/slices/authSlice';
 
 // ============================================
-// STYLES PRO - DESIGN SNRT
+// STYLES (inchangés)
 // ============================================
 
 const PageContainer = styled(Container)({
@@ -60,20 +61,10 @@ const StyledTextField = styled(TextField)({
         borderRadius: '12px',
         backgroundColor: '#ffffff',
         height: '64px',
-        '& fieldset': {
-            borderColor: '#dfe5ea',
-            borderWidth: '1px',
-        },
-        '&:hover fieldset': {
-            borderColor: '#dfe5ea',
-        },
-        '&.Mui-focused fieldset': {
-            borderColor: '#148aa0',
-            borderWidth: '2px',
-        },
-        '&.Mui-error fieldset': {
-            borderColor: '#d32f2f',
-        },
+        '& fieldset': { borderColor: '#dfe5ea', borderWidth: '1px' },
+        '&:hover fieldset': { borderColor: '#dfe5ea' },
+        '&.Mui-focused fieldset': { borderColor: '#148aa0', borderWidth: '2px' },
+        '&.Mui-error fieldset': { borderColor: '#d32f2f' },
     },
     '& .MuiInputBase-input': {
         padding: '0 20px',
@@ -95,12 +86,8 @@ const StyledTextField = styled(TextField)({
         fontFamily: 'Inter, sans-serif',
         fontSize: '14px',
         color: '#6d7884',
-        '&.Mui-focused': {
-            color: '#148aa0',
-        },
-        '&.Mui-error': {
-            color: '#d32f2f',
-        },
+        '&.Mui-focused': { color: '#148aa0' },
+        '&.Mui-error': { color: '#d32f2f' },
     },
 });
 
@@ -131,14 +118,8 @@ const VerifyButton = styled(Button)({
     textTransform: 'none',
     fontFamily: 'Inter, sans-serif',
     boxShadow: 'none',
-    '&:hover': {
-        backgroundColor: '#0b7890',
-        boxShadow: 'none',
-    },
-    '&:disabled': {
-        backgroundColor: '#b8d0d8',
-        color: '#ffffff',
-    },
+    '&:hover': { backgroundColor: '#0b7890', boxShadow: 'none' },
+    '&:disabled': { backgroundColor: '#b8d0d8', color: '#ffffff' },
 });
 
 const ActionButton = styled(Button)({
@@ -147,12 +128,10 @@ const ActionButton = styled(Button)({
     fontWeight: 500,
     textTransform: 'none',
     padding: '8px 4px',
-    '&:hover': {
-        backgroundColor: 'transparent',
-    },
+    '&:hover': { backgroundColor: 'transparent' },
 });
 
-const SuccessButton = styled(Button)({
+const SuccessButtonOutlined = styled(Button)({
     borderRadius: '30px',
     padding: '10px 32px',
     fontFamily: 'Inter, sans-serif',
@@ -160,25 +139,24 @@ const SuccessButton = styled(Button)({
     fontSize: '15px',
     textTransform: 'none',
     boxShadow: 'none',
-});
-
-const SuccessButtonOutlined = styled(SuccessButton)({
     borderColor: '#148aa0',
     color: '#148aa0',
     backgroundColor: 'transparent',
     border: '1px solid #148aa0',
-    '&:hover': {
-        backgroundColor: 'rgba(20, 138, 160, 0.05)',
-        borderColor: '#148aa0',
-    },
+    '&:hover': { backgroundColor: 'rgba(20, 138, 160, 0.05)', borderColor: '#148aa0' },
 });
 
-const SuccessButtonContained = styled(SuccessButton)({
+const SuccessButtonContained = styled(Button)({
+    borderRadius: '30px',
+    padding: '10px 32px',
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 500,
+    fontSize: '15px',
+    textTransform: 'none',
+    boxShadow: 'none',
     backgroundColor: '#148aa0',
     color: '#ffffff',
-    '&:hover': {
-        backgroundColor: '#0b7890',
-    },
+    '&:hover': { backgroundColor: '#0b7890' },
 });
 
 const StyledAlert = styled(Alert)({
@@ -195,6 +173,7 @@ const StyledAlert = styled(Alert)({
 
 const Verify2FA = () => {
     const navigate = useNavigate();
+    const dispatch = useDispatch();
 
     const [code, setCode] = useState('');
     const [error, setError] = useState('');
@@ -203,13 +182,48 @@ const Verify2FA = () => {
     const [success, setSuccess] = useState(false);
     const [userData, setUserData] = useState(null);
 
+    // ✅ VÉRIFIER SI DÉJÀ CONNECTÉ
     useEffect(() => {
+        // ✅ Si déjà connecté avec accessToken, rediriger vers dashboard
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        
+        if (token && user) {
+            try {
+                const userData = JSON.parse(user);
+                const role = userData?.role || userData?.userType;
+                
+                switch (role) {
+                    case 'Administrateur':
+                        navigate('/admin', { replace: true });
+                        break;
+                    case 'RH':
+                        navigate('/rh', { replace: true });
+                        break;
+                    case 'Departement':
+                        navigate('/department', { replace: true });
+                        break;
+                    case 'Encadrant':
+                        navigate('/supervisor', { replace: true });
+                        break;
+                    default:
+                        navigate('/dashboard', { replace: true });
+                        break;
+                }
+                return;
+            } catch (e) {
+                console.error('Erreur parsing user:', e);
+            }
+        }
+
+        // ✅ Vérifier que le preAuthToken existe (ou qu'il y a un email en cache)
         const storedEmail = localStorage.getItem('2faEmail');
         if (storedEmail) {
             setEmail(storedEmail);
-            return;
+        } else {
+            // Si pas d'email en cache, rediriger vers login
+            navigate('/login', { replace: true });
         }
-        navigate('/login', { replace: true });
     }, [navigate]);
 
     const handleSubmit = async (e) => {
@@ -218,55 +232,58 @@ const Verify2FA = () => {
         setLoading(true);
 
         try {
-            const response = await authService.verify2FA({
-                code: code,
-            });
-
-            console.log('🔵 Réponse 2FA :', response);
-
-            if (response.success || response.user) {
-                localStorage.removeItem('2faEmail');
-
-                if (response.token) {
-                    localStorage.setItem('token', response.token);
-                }
-
-                let userData = response.user;
-                if (userData) {
-                    localStorage.setItem('user', JSON.stringify(userData));
-                    authService.setCurrentUser(userData);
-                } else {
-                    userData = authService.getCurrentUser();
-                }
-
-                if (!userData) {
-                    try {
-                        const loadedUser = await authService.me();
-                        userData = loadedUser || {};
-                        if (loadedUser) {
-                            authService.setCurrentUser(loadedUser);
-                            localStorage.setItem('user', JSON.stringify(loadedUser));
-                        }
-                    } catch (err) {
-                        console.warn('⚠️ Impossible de charger l\'utilisateur');
-                    }
-                }
-
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    setError('Erreur de session. Veuillez vous reconnecter.');
-                    setLoading(false);
-                    return;
-                }
-
-                setSuccess(true);
-                setUserData(userData);
+            // ✅ Vérifier d'abord si accessToken existe déjà
+            const token = localStorage.getItem('token');
+            if (token) {
+                // Si token existe, l'utilisateur est déjà connecté
+                navigate('/dashboard', { replace: true });
                 return;
             }
 
-            setError('Code invalide ou expiré. Veuillez réessayer.');
+            const resultAction = await dispatch(verify2FA({ code }));
+
+            if (verify2FA.rejected.match(resultAction)) {
+                throw new Error(resultAction.payload || 'Code invalide ou expiré');
+            }
+
+            localStorage.removeItem('2faEmail');
+            localStorage.removeItem('2faUserId');
+
+            const userData = resultAction.payload?.user;
+            if (userData) {
+                localStorage.setItem('user', JSON.stringify(userData));
+            }
+
+            // ✅ Rediriger vers dashboard
+            const role = userData?.role || userData?.userType;
+            switch (role) {
+                case 'Administrateur':
+                    navigate('/admin', { replace: true });
+                    break;
+                case 'RH':
+                    navigate('/rh', { replace: true });
+                    break;
+                case 'Departement':
+                    navigate('/department', { replace: true });
+                    break;
+                case 'Encadrant':
+                    navigate('/supervisor', { replace: true });
+                    break;
+                default:
+                    navigate('/dashboard', { replace: true });
+                    break;
+            }
         } catch (err) {
-            setError(err?.response?.data?.message || 'Erreur de vérification');
+            const errorMsg = err?.response?.data?.message || err?.message || 'Erreur de vérification';
+            
+            // ✅ Si l'erreur est "preAuthToken manquant", rediriger vers login
+            if (errorMsg.includes('Session expiree') || errorMsg.includes('preAuthToken')) {
+                localStorage.removeItem('2faEmail');
+                navigate('/login', { replace: true });
+                return;
+            }
+            
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -277,25 +294,26 @@ const Verify2FA = () => {
         setLoading(true);
 
         try {
-            await authService.resendTwoFactorCode();
+            await api.post('/auth/resend-2fa');
             setError('✅ Nouveau code envoyé par email');
         } catch (err) {
-            setError(err?.response?.data?.message || 'Erreur lors du renvoi');
+            const errorMsg = err?.response?.data?.message || 'Erreur lors du renvoi';
+            
+            // ✅ Si l'erreur est "preAuthToken manquant", rediriger vers login
+            if (errorMsg.includes('Session expiree') || errorMsg.includes('preAuthToken')) {
+                localStorage.removeItem('2faEmail');
+                navigate('/login', { replace: true });
+                return;
+            }
+            
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
     };
 
-    const goToDashboard = () => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            navigate('/login', { replace: true });
-            return;
-        }
-        navigate('/dashboard', { replace: true });
-    };
-
     const goToHome = () => {
+        localStorage.removeItem('2faEmail');
         navigate('/', { replace: true });
     };
 
@@ -350,7 +368,7 @@ const Verify2FA = () => {
                                     Accueil
                                 </SuccessButtonOutlined>
 
-                                <SuccessButtonContained onClick={goToDashboard}>
+                                <SuccessButtonContained onClick={() => navigate('/dashboard')}>
                                     Dashboard
                                     <i className="fa-solid fa-arrow-right" style={{ marginLeft: '8px' }}></i>
                                 </SuccessButtonContained>

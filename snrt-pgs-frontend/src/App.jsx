@@ -55,6 +55,7 @@ import CreateOffer from './components/department/CreateOffer';
 import MyOffers from './components/department/MyOffers';
 import OfferDetailDept from './components/department/OfferDetail';
 import CandidateDetail from './components/department/CandidateDetail';
+import ApplyPage from './components/public/ApplyPage';
 
 // ===== RH PAGES =====
 import ApplicationsList from './components/rh/ApplicationsList';
@@ -99,6 +100,55 @@ function App() {
     const location = useLocation();
     const { isAuthenticated, status } = useSelector((state) => state.auth);
     const [authTrigger, setAuthTrigger] = useState(0);
+
+    // Debug: vérifier que les imports de pages sont des fonctions/composants
+    useEffect(() => {
+        try {
+            console.log('Component types:', {
+                Home: typeof Home,
+                OffersList: typeof OffersList,
+                OfferDetail: typeof OfferDetail,
+                FAQ: typeof FAQ,
+                Contact: typeof Contact,
+                Terms: typeof Terms,
+                ResultDetail: typeof ResultDetail,
+                Login: typeof Login,
+                Register: typeof Register,
+                ForgotPassword: typeof ForgotPassword,
+                Verify2FA: typeof Verify2FA,
+                StudentDashboard: typeof StudentDashboard,
+                AdminDashboard: typeof AdminDashboard,
+                SupervisorDashboard: typeof SupervisorDashboard,
+                RhDashboard: typeof RhDashboard,
+                DepartmentDashboard: typeof DepartmentDashboard,
+                UsersList: typeof UsersList,
+                DepartmentsList: typeof DepartmentsList,
+                PeriodsList: typeof PeriodsList,
+                Settings: typeof Settings,
+                Logs: typeof Logs,
+                InternsList: typeof InternsList,
+                InternDetail: typeof InternDetail,
+                Evaluation: typeof Evaluation,
+                CloseInternship: typeof CloseInternship,
+                Profile: typeof Profile,
+                Applications: typeof Applications,
+                Favorites: typeof Favorites,
+                Notifications: typeof Notifications,
+                Documents: typeof Documents,
+                CreateOffer: typeof CreateOffer,
+                MyOffers: typeof MyOffers,
+                OfferDetailDept: typeof OfferDetailDept,
+                CandidateDetail: typeof CandidateDetail,
+                ApplicationsList: typeof ApplicationsList,
+                ApplicationDetail: typeof ApplicationDetail,
+                ValidateOffers: typeof ValidateOffers,
+                Interviews: typeof Interviews,
+                Layout: typeof Layout,
+            });
+        } catch (e) {
+            console.error('Error logging component types', e);
+        }
+    }, []);
 
     // ✅ Nettoyage automatique si 2faEmail et token coexistent
     useEffect(() => {
@@ -155,6 +205,7 @@ function App() {
                     <Route path="/faq" element={<FAQ />} />
                     <Route path="/contact" element={<Contact />} />
                     <Route path="/terms" element={<Terms />} />
+                    <Route path="/apply/:offerId" element={<ApplyPage />} />
 
                     {/* ===== ROUTES AUTHENTIFICATION ===== */}
                     <Route path="/login" element={<Login />} />
@@ -163,7 +214,7 @@ function App() {
                     <Route path="/verify-2fa" element={<Verify2FA />} />
 
                     {/* ===== ROUTES PROTÉGÉES ===== */}
-                    <Route path="/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
+                    <Route path="/dashboard" element={<Navigate to="/" replace />} />
                     <Route path="/dashboard/applications" element={<PrivateRoute><Applications /></PrivateRoute>} />
                     <Route path="/dashboard/favorites" element={<PrivateRoute><Favorites /></PrivateRoute>} />
                     <Route path="/dashboard/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
