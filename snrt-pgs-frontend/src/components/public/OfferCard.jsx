@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Button, Badge } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { useAuth } from '../../hooks/useAuth';
 
 const CardWrapper = styled(Box)({
     backgroundColor: '#fbf9f9',
@@ -51,54 +52,40 @@ const BadgeStyled = styled(Badge)({
     marginTop: '4px',
 });
 
-const PostulerButton = styled(Button)(({ submitted }) => ({
+const PostulerButton = styled(Button)({
     borderRadius: '30px',
     padding: '6px 10px',
     minWidth: '120px',
     height: '32px',
-    backgroundColor: submitted ? '#2E7D32' : '#FFFFFF',
-    color: submitted ? '#FFFFFF' : '#0F8DB5',
-    border: submitted ? 'none' : '1px solid #0F8DB5',
     fontFamily: 'Inter, sans-serif',
     fontWeight: 500,
     fontSize: '14px',
     textTransform: 'none',
     boxShadow: 'none !important',
-    // ✅ Désactive TOUS les effets avec !important
     '&:hover, &:active, &:focus, &.Mui-focusVisible, &.MuiButton-root:hover': {
-        backgroundColor: submitted ? '#2E7D32 !important' : '#FFFFFF !important',
-        border: submitted ? 'none !important' : '1px solid #0F8DB5 !important',
         boxShadow: 'none !important',
     },
-    '&:disabled': {
-        backgroundColor: '#2E7D32 !important',
-        color: '#FFFFFF !important',
-        border: 'none !important',
-        opacity: 1,
-    },
-}));
+});
 
 const OfferCard = ({ offer }) => {
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuth();
     const [submitted, setSubmitted] = useState(false);
 
     const handleClick = () => {
         navigate(`/offres/${offer._id || offer.id}`);
     };
 
-    const handlePostuler = async (e) => {
+    const handlePostuler = (e) => {
         e.stopPropagation();
-        e.preventDefault(); // ✅ Empêche tout comportement par défaut
-        const token = localStorage.getItem('token');
-        if (!token) {
-            navigate('/');
-            return;
-        }
-        try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            setSubmitted(true);
-        } catch (error) {
-            console.error('Erreur lors de la candidature:', error);
+        e.preventDefault();
+
+        // ✅ Si connecté → rediriger vers la page de candidature
+        if (isAuthenticated) {
+            navigate(`/apply/${offer._id || offer.id}`);
+        } else {
+            // ✅ Si non connecté → rediriger vers la page de connexion
+            navigate('/login', { state: { from: `/apply/${offer._id || offer.id}` } });
         }
     };
 
@@ -141,14 +128,21 @@ const OfferCard = ({ offer }) => {
                         <br />
                         Délai dépôt : {formatDate(offer.dateLimiteCandidature || offer.dateFin)}
                     </InfoText>
-                    <PostulerButton 
-                        onClick={handlePostuler} 
-                        submitted={submitted}
+                    <PostulerButton
+                        onClick={handlePostuler}
                         disabled={submitted}
                         disableRipple={true}
                         disableFocusRipple={true}
                         disableElevation={true}
-                        sx={{ mt: 1 }}
+                        sx={{ 
+                            mt: 1, 
+                            backgroundColor: submitted ? '#2E7D32' : '#FFFFFF',
+                            color: submitted ? '#FFFFFF' : '#0F8DB5',
+                            border: submitted ? 'none' : '1px solid #0F8DB5',
+                            '&:hover': {
+                                backgroundColor: submitted ? '#2E7D32' : '#f0f7fa',
+                            }
+                        }}
                     >
                         {getButtonText()}
                     </PostulerButton>

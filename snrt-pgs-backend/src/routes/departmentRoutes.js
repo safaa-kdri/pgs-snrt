@@ -13,29 +13,32 @@ const {
   departmentMemberSchema,
 } = require('../utils/validators');
 
-router.use(authenticate());
-
-// Gestion des departements reservee a l'Administrateur (cahier des charges, 7.2).
-router.post('/', authorize(ROLES.ADMIN), validate(createDepartmentSchema), departmentController.createDepartment);
+// Routes publiques (consultation)
 router.get('/', departmentController.getAllDepartments);
 router.get('/:id', departmentController.getDepartmentById);
-router.put('/:id', authorize(ROLES.ADMIN), validate(updateDepartmentSchema), departmentController.updateDepartment);
-router.delete('/:id', authorize(ROLES.ADMIN), departmentController.deleteDepartment);
+
+// Routes mutantes protégées (nécessitent authentification + autorisation)
+router.post('/', authenticate(), authorize(ROLES.ADMIN), validate(createDepartmentSchema), departmentController.createDepartment);
+router.put('/:id', authenticate(), authorize(ROLES.ADMIN), validate(updateDepartmentSchema), departmentController.updateDepartment);
+router.delete('/:id', authenticate(), authorize(ROLES.ADMIN), departmentController.deleteDepartment);
 
 router.patch(
   '/:id/responsable',
+  authenticate(),
   authorize(ROLES.ADMIN),
   validate(assignResponsableSchema),
   departmentController.assignResponsable
 );
 router.patch(
   '/:id/members/add',
+  authenticate(),
   authorize(ROLES.ADMIN),
   validate(departmentMemberSchema),
   departmentController.addMember
 );
 router.patch(
   '/:id/members/remove',
+  authenticate(),
   authorize(ROLES.ADMIN),
   validate(departmentMemberSchema),
   departmentController.removeMember

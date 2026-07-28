@@ -9,7 +9,7 @@ import {
     Box,
     Container
 } from '@mui/material';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { logout, loadCurrentUser } from '../../store/slices/authSlice';
 
 const Header = () => {
@@ -17,13 +17,20 @@ const Header = () => {
     const dispatch = useDispatch();
     const location = useLocation();
     
-    const { isAuthenticated, user } = useSelector((state) => state.auth);
+    const { isAuthenticated, user, status } = useSelector((state) => state.auth);
     
     useEffect(() => {
-        if (location.pathname !== '/login-interne') {
+        // ✅ Vérifier si l'utilisateur est déjà connecté (via localStorage)
+        const hasUser = localStorage.getItem('user');
+        
+        // ✅ Appeler /me SEULEMENT si :
+        // 1. L'utilisateur n'est PAS déjà authentifié
+        // 2. Le statut n'est PAS 'loading' (évite les boucles)
+        // 3. Il y a un utilisateur dans localStorage (signe de connexion)
+        if (!isAuthenticated && status !== 'loading' && hasUser) {
             dispatch(loadCurrentUser());
         }
-    }, [dispatch, location.pathname]);
+    }, [dispatch, isAuthenticated, status]);
 
     const handleLogout = () => {
         dispatch(logout());
@@ -167,13 +174,55 @@ const Header = () => {
                         </Box>
                     </Box>
 
+                    {/* ===== PARTIE DROITE ===== */}
                     {isAuthenticated ? (
-                        <Button onClick={handleLogout} variant="contained" sx={{ backgroundColor: 'white', color: '#43455a', borderRadius: '50px', px: 3, py: 0.8, fontFamily: '"Inria Sans", sans-serif', fontSize: '15px', fontWeight: 400, textTransform: 'none', letterSpacing: '0.5px', minWidth: '120px', flexShrink: 0, '&:hover': { backgroundColor: '#f8f6f5' }, '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' } }}>
-                            <i className="fa-solid fa-sign-out-alt"></i> Déconnexion
+                        <Button
+                            onClick={handleLogout}
+                            variant="contained"
+                            sx={{
+                                backgroundColor: 'white',
+                                color: '#43455a',
+                                borderRadius: '50px',
+                                px: 3,
+                                py: 0.8,
+                                fontFamily: '"Inria Sans", sans-serif',
+                                fontSize: '15px',
+                                fontWeight: 400,
+                                textTransform: 'none',
+                                letterSpacing: '0.5px',
+                                minWidth: '120px',
+                                flexShrink: 0,
+                                '&:hover': { backgroundColor: '#f8f6f5' },
+                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
+                            }}
+                        >
+                            <i className="fa-solid fa-sign-out-alt"></i>
+                            Déconnexion
                         </Button>
                     ) : (
-                        <Button component={Link} to="/register" variant="contained" sx={{ backgroundColor: 'white', color: '#43455a', borderRadius: '50px', px: 3, py: 0.8, fontFamily: '"Inria Sans", sans-serif', fontSize: '15px', fontWeight: 400, textTransform: 'none', letterSpacing: '0.5px', minWidth: '120px', flexShrink: 0, '&:hover': { backgroundColor: '#f8f6f5' }, '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' } }}>
-                            <i className="fa-solid fa-user-plus"></i> S'inscrire
+                        <Button
+                            component={Link}
+                            to="/register"
+                            variant="contained"
+                            sx={{
+                                backgroundColor: 'white',
+                                color: '#43455a',
+                                borderRadius: '50px',
+                                px: 3,
+                                py: 0.8,
+                                fontFamily: '"Inria Sans", sans-serif',
+                                fontSize: '15px',
+                                fontWeight: 400,
+                                textTransform: 'none',
+                                letterSpacing: '0.5px',
+                                minWidth: '120px',
+                                flexShrink: 0,
+                                '&:hover': { backgroundColor: '#f8f6f5' },
+                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
+                            }}
+                        >
+                            <i className="fa-solid fa-user-plus"></i>
+                            S'inscrire
                         </Button>
                     )}
                 </Toolbar>
