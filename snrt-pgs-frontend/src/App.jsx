@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
-import LoginInterne from './components/auth/LoginInterne';
 
 import Layout from './components/common/Layout';
 import ScrollToTop from './components/common/ScrollToTop';
@@ -22,6 +21,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ForgotPassword from './components/auth/ForgotPassword';
 import Verify2FA from './components/auth/Verify2FA';
+import LoginInterne from './components/auth/LoginInterne';
 import { loadCurrentUser } from './store/slices/authSlice';
 
 // ===== DASHBOARDS =====
@@ -71,7 +71,6 @@ const PrivateRoute = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Attendre que le statut soit déterminé
         if (status === 'succeeded' || status === 'idle') {
             setLoading(false);
         }
@@ -123,20 +122,17 @@ function App() {
 
     // ✅ CHARGER L'UTILISATEUR UNIQUEMENT SUR LES PAGES PROTÉGÉES
     useEffect(() => {
-        // ✅ Pages publiques : ne pas appeler /me
-        const publicPaths = ['/', '/login', '/register', '/forgot-password', '/verify-2fa', '/offres', '/faq', '/contact', '/terms'];
+        const publicPaths = ['/', '/login', '/register', '/forgot-password', '/verify-2fa', '/offres', '/faq', '/contact', '/terms', '/login-interne'];
         const isPublicPage = publicPaths.some(path => {
             if (path === '/' && location.pathname === '/') return true;
             if (path.includes('/offres') && location.pathname.startsWith('/offres')) return true;
             return location.pathname === path;
         });
         
-        // ✅ Si page publique, ne pas appeler /me
         if (isPublicPage) {
             return;
         }
 
-        // ✅ UNIQUEMENT sur les pages protégées
         const user = localStorage.getItem('user');
         if (user && !isAuthenticated && status === 'idle') {
             dispatch(loadCurrentUser());
@@ -160,13 +156,12 @@ function App() {
                     {/* ===== ROUTES AUTHENTIFICATION ===== */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/login-interne" element={<LoginInterne />} />
-
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/verify-2fa" element={<Verify2FA />} />
 
                     {/* ===== ROUTES PROTÉGÉES ===== */}
-                    <Route path="/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
+                    <Route path="/dashboard" element={<Navigate to="/" replace />} />
                     <Route path="/dashboard/applications" element={<PrivateRoute><Applications /></PrivateRoute>} />
                     <Route path="/dashboard/favorites" element={<PrivateRoute><Favorites /></PrivateRoute>} />
                     <Route path="/dashboard/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
