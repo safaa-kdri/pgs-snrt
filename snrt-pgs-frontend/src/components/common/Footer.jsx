@@ -1,9 +1,16 @@
 // src/components/common/Footer.jsx
 import React from 'react';
 import { Box, Typography, Container, Link } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 
 const Footer = () => {
+    const location = useLocation();
+
+    // ✅ NE PAS AFFICHER LE FOOTER SUR LA PAGE LOGIN INTERNE
+    if (location.pathname === '/login-interne') {
+        return null;
+    }
+
     return (
         <Box
             component="footer"
@@ -16,7 +23,6 @@ const Footer = () => {
             }}
         >
             <Container maxWidth="xl">
-                {/* Logo + E-stages */}
                 <Box sx={{ mb: 4 }}>
                     <img
                         src="/logo_snrt_final.png"
@@ -37,7 +43,6 @@ const Footer = () => {
                     </Typography>
                 </Box>
 
-                {/* Liens */}
                 <Box
                     sx={{
                         display: 'flex',
@@ -92,7 +97,6 @@ const Footer = () => {
                     </Link>
                 </Box>
 
-                {/* Copyright avec lien vers Termes */}
                 <Typography
                     variant="body2"
                     sx={{
