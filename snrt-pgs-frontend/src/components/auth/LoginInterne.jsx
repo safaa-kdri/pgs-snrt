@@ -38,7 +38,6 @@ const LoginCard = styled(Paper)({
     width: '100%',
 });
 
-// ✅ CERCLE BLANC AVEC LOGO SNRT
 const CardIcon = styled(Box)({
     width: '56px',
     height: '56px',
@@ -278,7 +277,7 @@ const LoginInterne = () => {
                     navigate('/supervisor', { replace: true });
                     break;
                 default:
-                    navigate('/dashboard', { replace: true });
+                    navigate('/admin', { replace: true });
                     break;
             }
         }
@@ -325,7 +324,8 @@ const LoginInterne = () => {
 
             if (result.requiresTwoFactor || result.needs2FA) {
                 localStorage.setItem('2faEmail', cin);
-                navigate('/verify-2fa', { replace: true });
+                // ✅ REDIRECTION VERS Verify2FAInterne (interne)
+                navigate('/verify-2fa-interne', { replace: true });
                 return;
             }
         } catch (err) {
@@ -342,12 +342,8 @@ const LoginInterne = () => {
     return (
         <PageContainer>
             <LoginCard>
-                {/* ✅ CERCLE BLANC + LOGO SNRT EN COULEURS */}
                 <CardIcon>
-                    <img 
-                        src="/logo_snrt_final.png" 
-                        alt="SNRT" 
-                    />
+                    <img src="/logo_snrt_final.png" alt="SNRT" />
                 </CardIcon>
 
                 <Title>Espace Personnel</Title>

@@ -1,32 +1,58 @@
 // src/components/common/Header.jsx
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
     AppBar,
     Toolbar,
     Typography,
     Button,
     Box,
-    Container
+    Container,
+    IconButton,
 } from '@mui/material';
-import { Link, useNavigate } from 'react-router-dom';
+import { styled } from '@mui/material/styles';
+import { Menu as MenuIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { logout, loadCurrentUser } from '../../store/slices/authSlice';
 
-const Header = () => {
+// ============================================
+// STYLES
+// ============================================
+
+const BackButton = styled(Button)({
+    color: 'white',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: '50px',
+    padding: '6px 16px',
+    textTransform: 'none',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '14px',
+    '&:hover': {
+        backgroundColor: 'rgba(255,255,255,0.25)',
+    },
+    '& svg': {
+        marginRight: '8px',
+    },
+});
+
+const MenuButton = styled(IconButton)({
+    color: 'white',
+    '&:hover': {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+});
+
+const Header = ({ toggleDrawer }) => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const location = useLocation();
     
     const { isAuthenticated, user, status } = useSelector((state) => state.auth);
     
+    // ✅ Vérifier si l'utilisateur est déjà connecté
     useEffect(() => {
-        // ✅ Vérifier si l'utilisateur est déjà connecté (via localStorage)
         const hasUser = localStorage.getItem('user');
         
-        // ✅ Appeler /me SEULEMENT si :
-        // 1. L'utilisateur n'est PAS déjà authentifié
-        // 2. Le statut n'est PAS 'loading' (évite les boucles)
-        // 3. Il y a un utilisateur dans localStorage (signe de connexion)
         if (!isAuthenticated && status !== 'loading' && hasUser) {
             dispatch(loadCurrentUser());
         }
@@ -99,7 +125,7 @@ const Header = () => {
         );
     }
 
-    // ✅ HEADER NORMAL
+    // ✅ HEADER NORMAL (pages publiques) - SUPPRESSION DU HEADER ADMIN
     return (
         <AppBar
             position="sticky"
@@ -129,6 +155,7 @@ const Header = () => {
                         gap: 20,
                         flexShrink: 0
                     }}>
+                        {/* ===== Logo ===== */}
                         <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -161,6 +188,7 @@ const Header = () => {
                             </Typography>
                         </Box>
 
+                        {/* ===== Liens navigation ===== */}
                         <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -176,29 +204,7 @@ const Header = () => {
 
                     {/* ===== PARTIE DROITE ===== */}
                     {isAuthenticated ? (
-                        <Button
-                            onClick={handleLogout}
-                            variant="contained"
-                            sx={{
-                                backgroundColor: 'white',
-                                color: '#43455a',
-                                borderRadius: '50px',
-                                px: 3,
-                                py: 0.8,
-                                fontFamily: '"Inria Sans", sans-serif',
-                                fontSize: '15px',
-                                fontWeight: 400,
-                                textTransform: 'none',
-                                letterSpacing: '0.5px',
-                                minWidth: '120px',
-                                flexShrink: 0,
-                                '&:hover': { backgroundColor: '#f8f6f5' },
-                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
-                            }}
-                        >
-                            <i className="fa-solid fa-sign-out-alt"></i>
-                            Déconnexion
-                        </Button>
+                        <Box sx={{ width: '120px' }} />
                     ) : (
                         <Button
                             component={Link}

@@ -27,6 +27,7 @@ import {
     Grid,
     Switch,
     FormControlLabel,
+    MenuItem,
 } from '@mui/material';
 import {
     Search,
@@ -38,14 +39,15 @@ import {
     FilterList,
     CheckCircle,
     Block,
-    CalendarToday,
+    Visibility,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import api from '../../services/api';
 
 // ============================================
-// STYLES (même thème que les pages publiques)
+// STYLES
 // ============================================
 
 const PageHeader = styled(Box)({
@@ -91,6 +93,7 @@ const PeriodsList = () => {
     const [filteredPeriods, setFilteredPeriods] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [error, setError] = useState('');
 
     // Dialog states
     const [openDialog, setOpenDialog] = useState(false);
@@ -113,59 +116,40 @@ const PeriodsList = () => {
         filterPeriods();
     }, [periods, searchTerm, statusFilter]);
 
+    // ✅ CHARGER DEPUIS L'API
     const fetchPeriods = async () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
+            const response = await api.get('/periods');
+            
+            let data = [];
+            if (response.data?.data) {
+                data = response.data.data;
+            } else if (Array.isArray(response.data)) {
+                data = response.data;
+            } else if (response.data?.periods) {
+                data = response.data.periods;
+            }
 
-            const mockPeriods = [
-                {
-                    id: '1',
-                    nom: 'Été 2026',
-                    dateDebut: '2026-06-01',
-                    dateFin: '2026-08-31',
-                    dateOuvertureCandidatures: '2026-03-01',
-                    dateFermetureCandidatures: '2026-05-15',
-                    actif: true,
-                    status: 'active',
-                },
-                {
-                    id: '2',
-                    nom: 'Hiver 2027',
-                    dateDebut: '2027-01-01',
-                    dateFin: '2027-03-31',
-                    dateOuvertureCandidatures: '2026-10-01',
-                    dateFermetureCandidatures: '2026-11-15',
-                    actif: true,
-                    status: 'upcoming',
-                },
-                {
-                    id: '3',
-                    nom: 'Printemps 2026',
-                    dateDebut: '2026-03-01',
-                    dateFin: '2026-05-31',
-                    dateOuvertureCandidatures: '2025-12-01',
-                    dateFermetureCandidatures: '2026-02-15',
-                    actif: false,
-                    status: 'past',
-                },
-                {
-                    id: '4',
-                    nom: 'Automne 2026',
-                    dateDebut: '2026-09-01',
-                    dateFin: '2026-11-30',
-                    dateOuvertureCandidatures: '2026-06-01',
-                    dateFermetureCandidatures: '2026-08-15',
-                    actif: false,
-                    status: 'inactive',
-                },
-            ];
-
-            setPeriods(mockPeriods);
-            setFilteredPeriods(mockPeriods);
-
+            const formattedData = data.map(period => ({
+                id: period._id || period.id,
+                nom: period.nom || 'Sans nom',
+                dateDebut: period.dateDebut || '',
+                dateFin: period.dateFin || '',
+                dateOuvertureCandidatures: period.dateOuvertureCandidatures || '',
+                dateFermetureCandidatures: period.dateFermetureCandidatures || '',
+                actif: period.actif !== undefined ? period.actif : true,
+                status: period.status || getStatusFromDates(period),
+            }));
+            
+            setPeriods(formattedData);
+            setFilteredPeriods(formattedData);
         } catch (error) {
-            console.error('Erreur chargement périodes:', error);
+            console.error('Erreur chargement periodes:', error);
+            setError('Erreur lors du chargement des periodes');
+            setPeriods([]);
+            setFilteredPeriods([]);
         } finally {
             setLoading(false);
         }
@@ -177,8 +161,7 @@ const PeriodsList = () => {
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(
-                (p) =>
-                    p.nom.toLowerCase().includes(term)
+                (p) => p.nom.toLowerCase().includes(term)
             );
         }
 
@@ -191,7 +174,11 @@ const PeriodsList = () => {
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
-        return format(new Date(dateStr), 'dd MMM yyyy', { locale: fr });
+        try {
+            return format(new Date(dateStr), 'dd MMM yyyy', { locale: fr });
+        } catch {
+            return dateStr;
+        }
     };
 
     const getStatusFromDates = (period) => {
@@ -236,28 +223,60 @@ const PeriodsList = () => {
         setSelectedPeriod(null);
     };
 
-    const handleSavePeriod = () => {
-        // TODO: Appel API POST /periods ou PUT /periods/:id
-        console.log('💾 Sauvegarde période:', formData);
-        handleCloseDialog();
+    // ✅ SAUVEGARDER VERS L'API
+    const handleSavePeriod = async () => {
+        try {
+            const payload = {
+                nom: formData.nom,
+                dateDebut: formData.dateDebut,
+                dateFin: formData.dateFin,
+                dateOuvertureCandidatures: formData.dateOuvertureCandidatures,
+                dateFermetureCandidatures: formData.dateFermetureCandidatures,
+                actif: formData.actif,
+            };
+
+            if (dialogMode === 'add') {
+                await api.post('/periods', payload);
+            } else if (dialogMode === 'edit') {
+                await api.put(`/periods/${selectedPeriod.id}`, payload);
+            }
+            handleCloseDialog();
+            fetchPeriods();
+        } catch (error) {
+            console.error('Erreur sauvegarde:', error);
+            setError('Erreur lors de la sauvegarde de la periode');
+        }
     };
 
-    const handleDeletePeriod = () => {
-        // TODO: Appel API DELETE /periods/:id
-        console.log('🗑️ Suppression période:', selectedPeriod?.id);
-        setPeriods(periods.filter((p) => p.id !== selectedPeriod?.id));
-        handleCloseDialog();
+    // ✅ SUPPRIMER VERS L'API
+    const handleDeletePeriod = async () => {
+        try {
+            await api.delete(`/periods/${selectedPeriod.id}`);
+            handleCloseDialog();
+            fetchPeriods();
+        } catch (error) {
+            console.error('Erreur suppression:', error);
+            setError('Erreur lors de la suppression de la periode');
+        }
     };
 
-    const handleToggleStatus = (period) => {
+    // ✅ CHANGER STATUT VERS L'API
+    const handleToggleStatus = async (period) => {
         const newStatus = period.actif ? false : true;
-        // TODO: Appel API PUT /periods/:id/status
-        console.log('🔄 Changement statut:', period.id, '→', newStatus);
-        setPeriods(
-            periods.map((p) =>
-                p.id === period.id ? { ...p, actif: newStatus, status: getStatusFromDates({ ...p, actif: newStatus }) } : p
-            )
-        );
+        try {
+            await api.put(`/periods/${period.id}`, { actif: newStatus });
+            fetchPeriods();
+        } catch (error) {
+            console.error('Erreur changement statut:', error);
+            setError('Erreur lors du changement de statut');
+        }
+    };
+
+    const getStatusLabel = (period) => {
+        if (period.status === 'active') return 'Actif';
+        if (period.status === 'upcoming') return 'A venir';
+        if (period.status === 'past') return 'Passe';
+        return 'Inactif';
     };
 
     return (
@@ -266,10 +285,10 @@ const PeriodsList = () => {
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        📅 Gestion des périodes de stage
+                        Gestion des periodes de stage
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {filteredPeriods.length} période(s) trouvée(s)
+                        {filteredPeriods.length} periode(s) trouvee(s)
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
@@ -280,7 +299,7 @@ const PeriodsList = () => {
                         disabled={loading}
                         sx={{ borderRadius: '12px', textTransform: 'none' }}
                     >
-                        Rafraîchir
+                        Rafraichir
                     </Button>
                     <Button
                         variant="contained"
@@ -293,10 +312,16 @@ const PeriodsList = () => {
                         }}
                         onClick={() => handleOpenDialog(null, 'add')}
                     >
-                        Ajouter une période
+                        Ajouter une periode
                     </Button>
                 </Box>
             </PageHeader>
+
+            {error && (
+                <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>
+                    {error}
+                </Alert>
+            )}
 
             {/* ===== FILTRES ===== */}
             <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
@@ -337,8 +362,8 @@ const PeriodsList = () => {
                         >
                             <MenuItem value="all">Tous les statuts</MenuItem>
                             <MenuItem value="active">Actif</MenuItem>
-                            <MenuItem value="upcoming">À venir</MenuItem>
-                            <MenuItem value="past">Passé</MenuItem>
+                            <MenuItem value="upcoming">A venir</MenuItem>
+                            <MenuItem value="past">Passe</MenuItem>
                             <MenuItem value="inactive">Inactif</MenuItem>
                         </TextField>
                     </Grid>
@@ -359,7 +384,7 @@ const PeriodsList = () => {
                                 backgroundColor: '#fff',
                             }}
                         >
-                            Réinitialiser
+                            Reinitialiser
                         </Button>
                     </Grid>
                 </Grid>
@@ -373,8 +398,8 @@ const PeriodsList = () => {
                 <Table>
                     <TableHead>
                         <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
-                            <StyledTableCell>Période</StyledTableCell>
-                            <StyledTableCell>Début</StyledTableCell>
+                            <StyledTableCell>Periode</StyledTableCell>
+                            <StyledTableCell>Debut</StyledTableCell>
                             <StyledTableCell>Fin</StyledTableCell>
                             <StyledTableCell>Ouverture candidatures</StyledTableCell>
                             <StyledTableCell>Fermeture candidatures</StyledTableCell>
@@ -393,7 +418,7 @@ const PeriodsList = () => {
                             <TableRow>
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucune période trouvée
+                                        Aucune periode trouvee
                                     </Typography>
                                 </TableCell>
                             </TableRow>
@@ -430,11 +455,7 @@ const PeriodsList = () => {
                                     </TableCell>
                                     <TableCell>
                                         <StatusChip
-                                            label={
-                                                period.status === 'active' ? 'Actif' :
-                                                period.status === 'upcoming' ? 'À venir' :
-                                                period.status === 'past' ? 'Passé' : 'Inactif'
-                                            }
+                                            label={getStatusLabel(period)}
                                             status={period.status}
                                             size="small"
                                         />
@@ -445,7 +466,7 @@ const PeriodsList = () => {
                                                 size="small"
                                                 onClick={() => handleOpenDialog(period, 'view')}
                                             >
-                                                👁️
+                                                <Visibility sx={{ fontSize: 18, color: '#148aa0' }} />
                                             </IconButton>
                                         </Tooltip>
                                         <Tooltip title="Modifier">
@@ -456,7 +477,7 @@ const PeriodsList = () => {
                                                 <Edit sx={{ fontSize: 18, color: '#4f46e5' }} />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title={period.actif ? 'Désactiver' : 'Activer'}>
+                                        <Tooltip title={period.actif ? 'Desactiver' : 'Activer'}>
                                             <IconButton
                                                 size="small"
                                                 onClick={() => handleToggleStatus(period)}
@@ -495,17 +516,17 @@ const PeriodsList = () => {
                 }}
             >
                 <DialogTitle>
-                    {dialogMode === 'view' && '📅 Détails de la période'}
-                    {dialogMode === 'add' && '➕ Ajouter une période'}
-                    {dialogMode === 'edit' && '✏️ Modifier la période'}
-                    {dialogMode === 'delete' && '🗑️ Supprimer la période'}
+                    {dialogMode === 'view' && 'Details de la periode'}
+                    {dialogMode === 'add' && 'Ajouter une periode'}
+                    {dialogMode === 'edit' && 'Modifier la periode'}
+                    {dialogMode === 'delete' && 'Supprimer la periode'}
                 </DialogTitle>
                 <DialogContent>
                     {dialogMode === 'delete' ? (
                         <Typography>
-                            Êtes-vous sûr de vouloir supprimer la période{' '}
+                            Etes-vous sur de vouloir supprimer la periode{' '}
                             <strong>{selectedPeriod?.nom}</strong> ?
-                            Cette action est irréversible.
+                            Cette action est irreversible.
                         </Typography>
                     ) : dialogMode === 'view' ? (
                         selectedPeriod && (
@@ -521,7 +542,7 @@ const PeriodsList = () => {
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography variant="caption" color="text.secondary">
-                                            Date de début
+                                            Date de debut
                                         </Typography>
                                         <Typography variant="body2" fontWeight={500}>
                                             {formatDate(selectedPeriod.dateDebut)}
@@ -556,11 +577,7 @@ const PeriodsList = () => {
                                             Statut
                                         </Typography>
                                         <StatusChip
-                                            label={
-                                                selectedPeriod.status === 'active' ? 'Actif' :
-                                                selectedPeriod.status === 'upcoming' ? 'À venir' :
-                                                selectedPeriod.status === 'past' ? 'Passé' : 'Inactif'
-                                            }
+                                            label={getStatusLabel(selectedPeriod)}
                                             status={selectedPeriod.status}
                                             size="small"
                                             sx={{ mt: 0.5 }}
@@ -570,10 +587,9 @@ const PeriodsList = () => {
                             </Box>
                         )
                     ) : (
-                        // Formulaire add/edit
                         <Box sx={{ mt: 2 }}>
                             <TextField
-                                label="Nom de la période"
+                                label="Nom de la periode"
                                 value={formData.nom}
                                 onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
                                 fullWidth
@@ -585,7 +601,7 @@ const PeriodsList = () => {
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
                                     <TextField
-                                        label="Date de début"
+                                        label="Date de debut"
                                         type="date"
                                         value={formData.dateDebut}
                                         onChange={(e) => setFormData({ ...formData, dateDebut: e.target.value })}

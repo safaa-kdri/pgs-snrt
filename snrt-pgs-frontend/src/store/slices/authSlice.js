@@ -176,6 +176,12 @@ const authSlice = createSlice({
                 localStorage.removeItem('2faEmail');
                 localStorage.removeItem('2faUserId');
                 
+                // ✅ AJOUT : STOCKER LE TOKEN
+                if (action.payload.token) {
+                    localStorage.setItem('token', action.payload.token);
+                    console.log('✅ [authSlice] Token stocké dans localStorage');
+                }
+                
                 // ✅ Sauvegarder l'utilisateur en localStorage (pour le flag)
                 if (action.payload.user) {
                     localStorage.setItem('user', JSON.stringify(action.payload.user));
@@ -187,7 +193,7 @@ const authSlice = createSlice({
                 state.isAuthenticated = false;
             })
             
-            // ===== LOAD CURRENT USER =====
+            // ===== LOAD CURRENT USER - FIX 🔥 =====
             .addCase(loadCurrentUser.pending, (state) => {
                 state.status = 'loading';
                 state.error = null;
@@ -195,20 +201,56 @@ const authSlice = createSlice({
             .addCase(loadCurrentUser.fulfilled, (state, action) => {
                 state.status = 'succeeded';
                 
+                // ✅ Récupérer l'utilisateur du localStorage (qui a le bon rôle)
+                const storedUser = localStorage.getItem('user');
+                let localUser = null;
+                if (storedUser) {
+                    try {
+                        localUser = JSON.parse(storedUser);
+                        console.log('🔍 [loadCurrentUser] Utilisateur localStorage:', localUser);
+                    } catch (e) {
+                        console.error('❌ [loadCurrentUser] Erreur parsing localStorage:', e);
+                    }
+                }
+                
+                // ✅ Si l'API renvoie un utilisateur
                 if (action.payload && action.payload.user) {
-                    // ✅ Utilisateur connecté
+                    const apiUser = action.payload.user;
+                    
+                    // ✅ Fusionner : garder le rôle du localStorage si l'API ne le renvoie pas
+                    const finalRole = apiUser.role || localUser?.role || apiUser.userType || localUser?.userType;
+                    const finalUserType = apiUser.userType || localUser?.userType || apiUser.role || localUser?.role;
+                    
+                    state.user = {
+                        ...apiUser,
+                        role: finalRole,
+                        userType: finalUserType,
+                    };
                     state.isAuthenticated = true;
-                    state.user = action.payload.user;
-                } else {
-                    // ✅ Utilisateur non connecté (normal, pas d'erreur)
+                    
+                    console.log('🔍 [loadCurrentUser] Utilisateur final (API + localStorage):', {
+                        role: state.user.role,
+                        userType: state.user.userType,
+                    });
+                } 
+                // ✅ Si l'API ne renvoie rien mais localStorage existe
+                else if (localUser) {
+                    state.user = localUser;
+                    state.isAuthenticated = true;
+                    console.log('🔍 [loadCurrentUser] Utilisateur depuis localStorage uniquement:', localUser);
+                } 
+                // ✅ Aucun utilisateur trouvé
+                else {
                     state.isAuthenticated = false;
                     state.user = null;
+                    console.log('🔍 [loadCurrentUser] Aucun utilisateur trouvé');
                 }
             })
             .addCase(loadCurrentUser.rejected, (state) => {
                 state.status = 'idle';
                 // ✅ NE PAS modifier isAuthenticated ici
                 // L'utilisateur peut être connecté via le cookie
+                console.log('🔴 [loadCurrentUser] Rejeté - statut idle');
             })
             
             // ===== FORGOT PASSWORD =====
