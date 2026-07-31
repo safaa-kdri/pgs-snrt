@@ -84,6 +84,10 @@ const OffersList = () => {
     const { offers, loading, error, total, page, pages, filters, types, departments } = useSelector(
         (state) => state.offers
     );
+    const { isAuthenticated: authIsAuthenticated } = useSelector((state) => state.auth);
+
+    const normalizedDepartments = Array.isArray(departments) ? departments : [];
+    const normalizedTypes = Array.isArray(types) ? types : [];
 
     // État local pour les filtres (formulaire)
     const [localFilters, setLocalFilters] = useState({
@@ -94,8 +98,7 @@ const OffersList = () => {
     });
 
     // Vérifier si l'utilisateur est connecté
-    const token = localStorage.getItem('token');
-    const isAuthenticated = !!token;
+    const isAuthenticated = authIsAuthenticated || !!localStorage.getItem('user') || !!localStorage.getItem('token');
 
     // Charger les offres au montage ET quand les filtres changent
     useEffect(() => {
@@ -133,7 +136,7 @@ const OffersList = () => {
     const activeFilters = [];
     if (filters.typeStage) activeFilters.push({ key: 'typeStage', label: `Type: ${filters.typeStage}` });
     if (filters.departementId) {
-        const dept = departments.find(d => d._id === filters.departementId);
+        const dept = normalizedDepartments.find(d => d._id === filters.departementId || d.id === filters.departementId);
         if (dept) activeFilters.push({ key: 'departementId', label: `Département: ${dept.nom}` });
     }
     if (filters.search) activeFilters.push({ key: 'search', label: `🔍 ${filters.search}` });
@@ -193,7 +196,7 @@ const OffersList = () => {
                             sx={{ flex: 1, minWidth: '150px' }}
                         >
                             <MenuItem value="">Type de stage</MenuItem>
-                            {types.map((type) => (
+                            {normalizedTypes.map((type) => (
                                 <MenuItem key={type} value={type}>{type}</MenuItem>
                             ))}
                         </TextField>
@@ -208,7 +211,7 @@ const OffersList = () => {
                             sx={{ flex: 1, minWidth: '150px' }}
                         >
                             <MenuItem value="">Département</MenuItem>
-                            {departments.map((dept) => (
+                            {normalizedDepartments.map((dept) => (
                                 <MenuItem key={dept._id || dept.id} value={dept._id || dept.id}>
                                     {dept.nom}
                                 </MenuItem>

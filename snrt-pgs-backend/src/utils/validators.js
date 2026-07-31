@@ -20,24 +20,35 @@ function validatePasswordPolicy(password, userType) {
   const minLength = PASSWORD_MIN_LENGTH[userType];
   const errors = [];
 
+  const userTypeLabel = userType === 'externe' ? 'étudiant' : 'interne (admin, RH, département, encadrant)';
+
   if (typeof password !== 'string' || password.length < minLength) {
-    errors.push(`Le mot de passe doit contenir au moins ${minLength} caracteres.`);
+    errors.push(`Le mot de passe doit contenir au moins ${minLength} caractères (${userTypeLabel}).`);
   }
-  if (!UPPERCASE_RE.test(password || '')) errors.push('Le mot de passe doit contenir au moins une lettre majuscule.');
-  if (!LOWERCASE_RE.test(password || '')) errors.push('Le mot de passe doit contenir au moins une lettre minuscule.');
-  if (!DIGIT_RE.test(password || '')) errors.push('Le mot de passe doit contenir au moins un chiffre.');
-  if (!SPECIAL_RE.test(password || '')) errors.push('Le mot de passe doit contenir au moins un caractere special.');
+  if (!UPPERCASE_RE.test(password || '')) {
+    errors.push('Le mot de passe doit contenir au moins une lettre majuscule (A-Z).');
+  }
+  if (!LOWERCASE_RE.test(password || '')) {
+    errors.push('Le mot de passe doit contenir au moins une lettre minuscule (a-z).');
+  }
+  if (!DIGIT_RE.test(password || '')) {
+    errors.push('Le mot de passe doit contenir au moins un chiffre (0-9).');
+  }
+  if (!SPECIAL_RE.test(password || '')) {
+    errors.push('Le mot de passe doit contenir au moins un caractère spécial (!@#$%^&* etc.).');
+  }
 
   if (errors.length > 0) {
-    throw ApiError.badRequest('Le mot de passe ne respecte pas la politique de securite.', errors);
+    throw ApiError.badRequest(errors.join(' '), errors);
   }
 }
-
 
 const registerSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(60).required(),
   prenom: Joi.string().trim().min(2).max(60).required(),
   email: Joi.string().trim().email().required(),
+  // ✅ AJOUTER EMAIL CONFIRMATION
+  emailConfirmation: Joi.string().trim().email().required(),
   motDePasse: Joi.string().min(16).max(128).required(),
   telephone: Joi.string()
     .trim()
@@ -54,7 +65,18 @@ const registerSchema = Joi.object({
   filiere: Joi.string().trim().max(150).allow('', null),
   niveau: Joi.string().trim().max(50).allow('', null),
   annee: Joi.string().trim().max(20).allow('', null),
-});
+  // ✅ AJOUTER ACCEPTATION DES CONDITIONS
+  acceptTerms: Joi.boolean().valid(true).required().messages({
+    'any.only': 'Vous devez accepter les conditions d\'utilisation.',
+    'any.required': 'Vous devez accepter les conditions d\'utilisation.',
+  }),
+}).custom((value, helpers) => {
+  // ✅ Vérifier que les emails correspondent
+  if (value.email !== value.emailConfirmation) {
+    return helpers.message('Les adresses email ne correspondent pas.');
+  }
+  return value;
+}, 'Email confirmation');
 
 const loginSchema = Joi.object({
   cin: Joi.string().trim().uppercase().pattern(CIN_RE).required().messages({ 'string.pattern.base': CIN_MESSAGE }),
@@ -74,6 +96,21 @@ const forgotPasswordSchema = Joi.object({
 
 const resetPasswordSchema = Joi.object({
   motDePasse: Joi.string().min(16).max(128).required(),
+});
+
+// ============================================
+// CHANGER MOT DE PASSE
+// ✅ PAS DE min(8) - La validation est faite par validatePasswordPolicy
+// ============================================
+const changePasswordSchema = Joi.object({
+  ancienMotDePasse: Joi.string().required().messages({
+    'string.empty': 'Le mot de passe actuel est requis',
+    'any.required': 'Le mot de passe actuel est requis',
+  }),
+  nouveauMotDePasse: Joi.string().required().messages({
+    'string.empty': 'Le nouveau mot de passe est requis',
+    'any.required': 'Le nouveau mot de passe est requis',
+  }),
 });
 
 
@@ -163,8 +200,10 @@ const updateInterviewSchema = Joi.object({
 }).min(1);
 
 
+// When creating an application, the server uses the authenticated user's id
+// as `etudiantId`. Do not require `etudiantId` in the request body to avoid
+// spurious validation errors when the frontend omits it.
 const createApplicationSchema = Joi.object({
-  etudiantId: Joi.string().hex().length(24).required(),
   offreId: Joi.string().hex().length(24).required(),
   commentaire: Joi.string().trim().max(1000).allow('', null),
   documents: Joi.array().items(Joi.string().hex().length(24)).default([]),
@@ -274,6 +313,7 @@ module.exports = {
   verifyTwoFactorSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
   createOfferSchema,
   updateOfferSchema,
   validateOfferSchema,

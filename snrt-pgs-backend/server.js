@@ -9,6 +9,7 @@ const connectDB = require('./src/config/database');
 const { CONFIG, assertRequiredEnv } = require('./src/config/constants');
 const logger = require('./src/utils/logger');
 const errorHandler = require('./src/middlewares/errorHandler');
+const { initGridFS } = require('./src/services/gridfsService'); // ✅ AJOUTÉ
 
 const authRoutes = require('./src/routes/authRoutes');
 const offerRoutes = require('./src/routes/offerRoutes');
@@ -19,6 +20,7 @@ const departmentRoutes = require('./src/routes/departmentRoutes');
 const documentRoutes = require('./src/routes/documentRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const studentRoutes = require('./src/routes/studentRoutes');
 // BUGFIX (code mort) : resultsRoutes existait (routes + controller complets,
 // getResults/getResultDetail lisent bien documentsConcours.ResultatConcours
 // deja alimente par offerController.uploadConcoursDocument) mais n'etait
@@ -77,6 +79,7 @@ app.use('/api/v1/results', resultsRoutes);
 // notifications, utilisateurs) ---
 app.use('/api/v1/applications', applicationRoutes);
 app.use('/api/v1/departments', departmentRoutes);
+app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/users', userRoutes);
@@ -106,6 +109,9 @@ app.use(errorHandler);
 // -----------------------------------------------------------------------------
 async function start() {
   await connectDB();
+  
+  // ✅ Initialiser GridFS après la connexion MongoDB
+  initGridFS();
 
   const server = app.listen(CONFIG.port, () => {
     logger.info(`[Server] PGS API demarree sur le port ${CONFIG.port} (${CONFIG.nodeEnv})`);

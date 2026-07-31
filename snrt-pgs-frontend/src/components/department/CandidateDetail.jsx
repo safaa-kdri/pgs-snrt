@@ -25,8 +25,9 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    TextField,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled } from '@mui/material/styles'; // ✅ IMPORTANT : styled doit être importé
 import {
     ArrowBack,
     Person,
@@ -48,7 +49,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 
 // ============================================
-// STYLES
+// STYLES - STATUTS ALIGNÉS AVEC LE BACKEND
 // ============================================
 
 const DetailCard = styled(Paper)({
@@ -68,15 +69,17 @@ const SectionTitle = styled(Typography)({
     gap: '8px',
 });
 
+// ✅ STATUTS ALIGNÉS AVEC LE BACKEND
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        soumise: { bg: '#dbeafe', text: '#1d4ed8' },
-        en_analyse: { bg: '#fef3c7', text: '#d97706' },
-        entretien: { bg: '#f3e8ff', text: '#6b21a8' },
-        acceptee: { bg: '#d1fae5', text: '#065f46' },
-        refuse: { bg: '#fee2e2', text: '#991b1b' },
+        'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
+        'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EnAnalyse': { bg: '#fef3c7', text: '#d97706' },
+        'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
+        'Acceptee': { bg: '#d1fae5', text: '#065f46' },
+        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
     };
-    const color = colors[status] || colors.soumise;
+    const color = colors[status] || colors['Soumise'];
     return {
         backgroundColor: color.bg,
         color: color.text,
@@ -134,7 +137,7 @@ const CandidateDetail = () => {
                 niveau: 'Master 2',
                 offre: 'Stage Développement Web',
                 dateSoumission: '2026-07-15',
-                statut: 'en_analyse',
+                statut: 'EnAnalyse',
                 documents: [
                     { nom: 'CV_Youssef_EL_HASSANI.pdf', type: 'CV', valide: true },
                     { nom: 'Lettre_motivation.pdf', type: 'Lettre de motivation', valide: true },
@@ -167,13 +170,15 @@ const CandidateDetail = () => {
         }
     };
 
+    // ✅ STATUTS ALIGNÉS AVEC LE BACKEND
     const getStatusLabel = (status) => {
         const labels = {
-            soumise: 'Soumise',
-            en_analyse: 'En analyse',
-            entretien: 'Entretien',
-            acceptee: 'Acceptée',
-            refuse: 'Refusée',
+            'Brouillon': 'Brouillon',
+            'Soumise': 'Soumise',
+            'EnAnalyse': 'En analyse',
+            'Entretien': 'Entretien',
+            'Acceptee': 'Acceptée',
+            'Refusee': 'Refusée',
         };
         return labels[status] || status;
     };
@@ -198,13 +203,13 @@ const CandidateDetail = () => {
 
     const handleConfirmAction = () => {
         if (dialogAction === 'accepter') {
-            setCandidate({ ...candidate, statut: 'acceptee' });
+            setCandidate({ ...candidate, statut: 'Acceptee' });
             setSuccess('✅ Candidat accepté avec succès !');
         } else if (dialogAction === 'refuser') {
-            setCandidate({ ...candidate, statut: 'refuse' });
+            setCandidate({ ...candidate, statut: 'Refusee' });
             setSuccess('❌ Candidat refusé');
         } else if (dialogAction === 'entretien') {
-            setCandidate({ ...candidate, statut: 'entretien' });
+            setCandidate({ ...candidate, statut: 'Entretien' });
             setSuccess('📅 Entretien programmé');
         }
         setOpenDialog(false);
@@ -212,7 +217,6 @@ const CandidateDetail = () => {
     };
 
     const handleViewDocument = (doc) => {
-        // Simuler la visualisation d'un document
         alert(`📄 Visualisation de ${doc.nom} (simulé)`);
     };
 
@@ -285,7 +289,7 @@ const CandidateDetail = () => {
                         </Box>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 2 }}>
-                        {candidate.statut === 'soumise' && (
+                        {candidate.statut === 'Soumise' && (
                             <Button
                                 variant="outlined"
                                 startIcon={<Pending />}
@@ -295,7 +299,7 @@ const CandidateDetail = () => {
                                 Analyser
                             </Button>
                         )}
-                        {(candidate.statut === 'en_analyse' || candidate.statut === 'soumise') && (
+                        {(candidate.statut === 'EnAnalyse' || candidate.statut === 'Soumise') && (
                             <>
                                 <Button
                                     variant="outlined"

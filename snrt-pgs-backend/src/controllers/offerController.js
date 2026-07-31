@@ -25,10 +25,10 @@ const createOffer = asyncHandler(async (req, res) => {
 
 
 const listOffers = asyncHandler(async (req, res) => {
-  const { statut, typeStage, departementId, periodeId, search, page = 1, limit = 20 } = req.query;
+  const { statut, typeStage, departementId, periodeId, search, date, page = 1, limit = 20 } = req.query;
   const filter = {};
 
-
+  console.log('📥 [listOffers] Paramètres reçus:', { statut, typeStage, departementId, periodeId, search, date, page, limit });
 
   if (!req.user || req.user.role === ROLES.ETUDIANT) {
     filter.statut = OFFER_STATUS.PUBLIEE;
@@ -39,22 +39,90 @@ const listOffers = asyncHandler(async (req, res) => {
   if (typeStage) filter.typeStage = typeStage;
   if (departementId) filter.departementId = departementId;
   if (periodeId) filter.periodeId = periodeId;
-  if (search) filter.$text = { $search: search };
+  
+  if (search) {
+    filter.$text = { $search: search };
+    console.log('📥 [listOffers] Recherche textuelle:', search);
+  }
+
+  // ✅ SUPPORT DE LA DATE (recherche par date limite de candidature)
+  if (date) {
+    const searchDate = new Date(date);
+    filter.$or = [
+      { dateLimiteCandidature: { $lte: searchDate } },
+      { dateDebut: { $lte: searchDate }, dateFin: { $gte: searchDate } }
+    ];
+    console.log('📥 [listOffers] Recherche par date:', date);
+  }
+
+  console.log('📥 [listOffers] Filter final:', JSON.stringify(filter, null, 2));
 
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
+  // ✅ TRI AVEC PRIORITÉ AUX OFFRES DISPONIBLES (NON EXPIRÉES)
+  // 1. Offres disponibles (dateLimiteCandidature >= aujourd'hui) : triées par date limite (proche → lointain)
+  // 2. Offres expirées (dateLimiteCandidature < aujourd'hui) : en dernier
   const [offers, total] = await Promise.all([
     Offer.find(filter)
-      .sort({ datePublication: -1, createdAt: -1 })
+      .sort({ 
+        // ✅ 1. Priorité : Offres disponibles (non expirées) en premier
+        // MongoDB ne permet pas de tri conditionnel directement,
+        // on utilise l'agrégation ou on trie en 2 étapes.
+        // Solution : on trie par dateLimiteCandidature et on sépare
+        dateLimiteCandidature: 1,
+        // ✅ 2. datePublication en second tri
+        datePublication: -1,
+        // ✅ 3. createdAt en dernier
+        createdAt: -1
+      })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum),
     Offer.countDocuments(filter),
   ]);
 
+  // ✅ TRI MANUEL : Offres disponibles en premier, expirées en dernier
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const sortedOffers = offers.sort((a, b) => {
+    const dateA = a.dateLimiteCandidature ? new Date(a.dateLimiteCandidature) : null;
+    const dateB = b.dateLimiteCandidature ? new Date(b.dateLimiteCandidature) : null;
+    
+    // Mettre à minuit pour comparer les dates
+    if (dateA) dateA.setHours(0, 0, 0, 0);
+    if (dateB) dateB.setHours(0, 0, 0, 0);
+    
+    const aExpired = !dateA || dateA < today;
+    const bExpired = !dateB || dateB < today;
+    
+    // ✅ 1. Priorité : Offres disponibles (non expirées) en premier
+    if (aExpired && !bExpired) return 1;
+    if (!aExpired && bExpired) return -1;
+    
+    // ✅ 2. Pour les offres disponibles : tri par date limite (proche → lointain)
+    if (!aExpired && !bExpired) {
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateA - dateB;
+    }
+    
+    // ✅ 3. Pour les offres expirées : tri par date limite (proche → lointain)
+    if (aExpired && bExpired) {
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateB - dateA; // Expirées : les plus anciennes en premier
+    }
+    
+    return 0;
+  });
+
+  console.log(`📥 [listOffers] ${sortedOffers.length} offres trouvées sur ${total}`);
+  console.log(`📥 [listOffers] Tri : disponibles en premier, expirées en dernier`);
+
   return res.status(200).json({
     success: true,
-    offers,
+    offers: sortedOffers,
     pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
   });
 });

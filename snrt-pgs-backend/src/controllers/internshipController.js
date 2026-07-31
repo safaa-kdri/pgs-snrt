@@ -367,8 +367,6 @@ exports.closeInternship = async (req, res) => {
         
         logger.info(`Stage clôturé: ${internship._id} par ${req.user?.email}`);
         
-        // TODO: Générer l'attestation automatiquement (pdfService)
-        
         res.status(200).json({
             success: true,
             data: internship,
@@ -487,6 +485,263 @@ exports.validateDeliverable = async (req, res) => {
         });
     } catch (error) {
         logger.error(`Erreur validateDeliverable: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// ============================================
+// ✅ NOUVELLES FONCTIONS
+// ============================================
+
+const pdfService = require('../services/pdfService');
+const emailService = require('../services/emailService');
+
+// ============================================
+// RH - VALIDER LES DOCUMENTS DE CANDIDATURE
+// ============================================
+exports.validateApplicationDocuments = async (req, res) => {
+    try {
+        const { applicationId, decision } = req.body;
+        const application = await Application.findById(applicationId)
+            .populate('etudiantId')
+            .populate('offreId');
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Candidature non trouvée'
+            });
+        }
+
+        if (decision === 'accepte') {
+            application.statut = 'Acceptee';
+            await application.save();
+
+            const internship = await Internship.findOne({ applicationId: application._id });
+            if (internship) {
+                const pdfPath = await pdfService.generateEngagementConfidentialite(internship);
+                await emailService.sendEngagementConfidentialiteEmail({
+                    to: application.etudiantId.email,
+                    studentName: `${application.etudiantId.prenom} ${application.etudiantId.nom}`,
+                    pdfPath: pdfPath,
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Candidature acceptée. Le stagiaire va recevoir le document d\'engagement.'
+            });
+
+        } else {
+            application.statut = 'Refusee';
+            await application.save();
+
+            return res.status(200).json({
+                success: true,
+                message: 'Candidature refusée'
+            });
+        }
+    } catch (error) {
+        logger.error(`Erreur validateApplicationDocuments: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// ============================================
+// RH - ENVOYER LA DEMANDE AU DIRECTEUR
+// ============================================
+exports.sendToDirecteur = async (req, res) => {
+    try {
+        const { internshipId } = req.params;
+        const { directeurEmail, directeurNom } = req.body;
+
+        const internship = await Internship.findById(internshipId)
+            .populate('etudiantId')
+            .populate('offreId')
+            .populate('encadrantId');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        const pdfPath = await pdfService.generateDemandeStage({
+            _id: internship._id,
+            etudiantNom: `${internship.etudiantId.prenom} ${internship.etudiantId.nom}`,
+            dateDebut: internship.dateDebut,
+            dateFin: internship.dateFin,
+        });
+
+        await emailService.sendDemandeDirecteurEmail({
+            to: directeurEmail,
+            directeurNom: directeurNom,
+            studentName: `${internship.etudiantId.prenom} ${internship.etudiantId.nom}`,
+            startDate: new Date(internship.dateDebut).toLocaleDateString('fr-FR'),
+            endDate: new Date(internship.dateFin).toLocaleDateString('fr-FR'),
+            pdfPath: pdfPath,
+        });
+
+        internship.statut = 'EnAttenteValidationDirecteur';
+        await internship.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Demande envoyée au Directeur avec succès',
+            data: { pdfPath }
+        });
+    } catch (error) {
+        logger.error(`Erreur sendToDirecteur: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// ============================================
+// RH - ENVOYER LA FICHE SIGNÉE À L'ÉTUDIANT
+// ============================================
+exports.sendFicheSigneeToStudent = async (req, res) => {
+    try {
+        const { internshipId } = req.params;
+        const { ficheSigneePath } = req.body;
+
+        const internship = await Internship.findById(internshipId)
+            .populate('etudiantId');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        await emailService.sendFicheSigneeEtudiant({
+            to: internship.etudiantId.email,
+            studentName: `${internship.etudiantId.prenom} ${internship.etudiantId.nom}`,
+            pdfPath: ficheSigneePath,
+        });
+
+        internship.statut = 'ValideParDirecteur';
+        await internship.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Fiche signée envoyée à l\'étudiant avec succès'
+        });
+    } catch (error) {
+        logger.error(`Erreur sendFicheSigneeToStudent: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// ============================================
+// RH - GÉNÉRER L'ATTESTATION DE STAGE
+// ============================================
+exports.generateAttestation = async (req, res) => {
+    try {
+        const { internshipId } = req.params;
+
+        const internship = await Internship.findById(internshipId)
+            .populate('etudiantId')
+            .populate('offreId')
+            .populate('encadrantId');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        const hasRapport = internship.livrables.some(l => 
+            l.type === 'Rapport' && l.valide === true
+        );
+
+        if (!hasRapport) {
+            return res.status(400).json({
+                success: false,
+                message: 'Le stagiaire doit déposer son rapport avant de générer l\'attestation'
+            });
+        }
+
+        const pdfPath = await pdfService.generateAttestation(internship);
+
+        await emailService.sendAttestationStage({
+            to: internship.etudiantId.email,
+            studentName: `${internship.etudiantId.prenom} ${internship.etudiantId.nom}`,
+            pdfPath: pdfPath,
+        });
+
+        internship.statut = 'Termine';
+        await internship.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Attestation de stage générée et envoyée avec succès',
+            data: { pdfPath }
+        });
+    } catch (error) {
+        logger.error(`Erreur generateAttestation: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// ============================================
+// ÉTUDIANT - DÉPOSER LE PDF D'ENGAGEMENT SIGNÉ
+// ============================================
+exports.uploadEngagementConfidentialite = async (req, res) => {
+    try {
+        const { internshipId } = req.params;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aucun fichier fourni'
+            });
+        }
+
+        const internship = await Internship.findById(internshipId);
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        internship.livrables.push({
+            nom: 'Engagement Confidentialité Signé',
+            type: 'Autre',
+            chemin: file.path,
+            dateDepot: new Date(),
+            valide: false,
+        });
+
+        await internship.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Document d\'engagement déposé avec succès',
+            data: internship
+        });
+    } catch (error) {
+        logger.error(`Erreur uploadEngagementConfidentialite: ${error.message}`);
         res.status(500).json({
             success: false,
             message: error.message

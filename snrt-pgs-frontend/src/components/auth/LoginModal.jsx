@@ -111,7 +111,7 @@ const LoginModal = ({ open, onClose, onLoginSuccess }) => {
                 setError('');
                 onLoginSuccess?.();
                 onClose();
-                // ✅ Rediriger vers l'accueil après connexion
+                // ✅ REDIRIGER VERS L'ACCUEIL
                 navigate('/', { replace: true });
             }
         } catch (err) {
@@ -128,7 +128,7 @@ const LoginModal = ({ open, onClose, onLoginSuccess }) => {
         <StyledDialog open={open} onClose={onClose}>
             <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
                 <Typography variant="h5" fontWeight={700} color="#1a2332">
-                    🔐 Connexion requise
+                    Connexion requise
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     Veuillez vous connecter pour postuler à cette offre

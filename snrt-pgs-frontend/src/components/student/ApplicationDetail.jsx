@@ -1,4 +1,4 @@
-// src/components/rh/ApplicationDetail.jsx
+// src/components/student/ApplicationDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -9,49 +9,29 @@ import {
     Grid,
     Chip,
     Button,
-    Avatar,
-    Divider,
     CircularProgress,
     Alert,
-    Card,
-    CardContent,
     List,
     ListItem,
     ListItemText,
     ListItemIcon,
     IconButton,
     Tooltip,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
+    Divider,
+    Tabs,
+    Tab,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
     ArrowBack,
-    Person,
-    Email,
-    Phone,
-    School,
-    Work,
     Description,
     CheckCircle,
     Pending,
-    Cancel,
     Download,
-    Visibility,
-    Event,
-    Message,
-    ThumbUp,
-    ThumbDown,
-    Assignment,
+    Timeline,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-
-// ============================================
-// STYLES
-// ============================================
+import api from '../../services/api';
 
 const DetailCard = styled(Paper)({
     borderRadius: '16px',
@@ -61,121 +41,154 @@ const DetailCard = styled(Paper)({
 });
 
 const SectionTitle = styled(Typography)({
-    fontSize: '16px',
-    fontWeight: 600,
+    fontSize: '18px',
+    fontWeight: 700,
     color: '#1a2332',
     marginBottom: '16px',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '10px',
 });
 
+// ✅ STATUTS ALIGNÉS AVEC LE BACKEND
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        soumise: { bg: '#dbeafe', text: '#1d4ed8' },
-        en_analyse: { bg: '#fef3c7', text: '#d97706' },
-        entretien: { bg: '#f3e8ff', text: '#6b21a8' },
-        acceptee: { bg: '#d1fae5', text: '#065f46' },
-        refuse: { bg: '#fee2e2', text: '#991b1b' },
+        'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
+        'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EnAnalyse': { bg: '#fef3c7', text: '#d97706' },
+        'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
+        'Acceptee': { bg: '#d1fae5', text: '#065f46' },
+        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
     };
-    const color = colors[status] || colors.soumise;
+    const color = colors[status] || colors['Soumise'];
     return {
         backgroundColor: color.bg,
         color: color.text,
         fontWeight: 600,
-        fontSize: '13px',
-        height: '32px',
-        padding: '0 16px',
+        fontSize: '12px',
+        height: '28px',
+        padding: '0 14px',
     };
 });
 
-const InfoItem = styled(Box)({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '8px 0',
-    '& .MuiSvgIcon-root': {
-        color: '#148aa0',
-        fontSize: '20px',
+const StyledTabs = styled(Tabs)({
+    '& .MuiTabs-indicator': {
+        backgroundColor: '#148aa0',
+        height: '3px',
     },
 });
 
-// ============================================
-// COMPOSANT PRINCIPAL
-// ============================================
+const StyledTab = styled(Tab)({
+    textTransform: 'none',
+    fontWeight: 600,
+    fontSize: '15px',
+    fontFamily: 'Inter, sans-serif',
+    minHeight: '48px',
+    '&.Mui-selected': {
+        color: '#148aa0',
+    },
+});
 
-const ApplicationDetail = () => {
+const buildFileHref = (doc) => {
+    if (!doc) return null;
+    
+    const apiRoot = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+    
+    if (doc.gridFsId) {
+        return `${apiRoot}/api/v1/documents/file/${doc.gridFsId}`;
+    }
+    
+    if (doc.url) {
+        if (doc.url.startsWith('/')) {
+            return `${apiRoot}${doc.url}`;
+        }
+        return doc.url;
+    }
+    
+    if (doc.chemin) {
+        if (doc.chemin.startsWith('/')) {
+            return `${apiRoot}${doc.chemin}`;
+        }
+        return doc.chemin;
+    }
+    
+    return null;
+};
+
+const ApplicationDetailStudent = () => {
     const navigate = useNavigate();
     const { id } = useParams();
     const { user } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [application, setApplication] = useState(null);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [dialogAction, setDialogAction] = useState('');
-    const [comment, setComment] = useState('');
-    const [success, setSuccess] = useState('');
     const [error, setError] = useState('');
+    const [tabValue, setTabValue] = useState(0);
 
     useEffect(() => {
         fetchApplicationDetail();
     }, [id]);
 
+    const handleTabChange = (event, newValue) => {
+        setTabValue(newValue);
+    };
+
     const fetchApplicationDetail = async () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
-
-            const mockApplication = {
-                id: id || '1',
-                candidat: {
-                    nom: 'Youssef EL HASSANI',
-                    email: 'youssef@test.ma',
-                    telephone: '0612345987',
-                    cin: 'AB123456',
-                    universite: 'Université Mohammed V',
-                    filiere: 'Informatique',
-                    niveau: 'Master 2',
-                },
-                offre: 'Stage Développement Web',
-                departement: 'DSI',
-                typeStage: 'PFE',
-                dateSoumission: '2026-07-15',
-                statut: 'en_analyse',
-                documents: [
-                    { nom: 'CV_Youssef_EL_HASSANI.pdf', type: 'CV', valide: true },
-                    { nom: 'Lettre_motivation.pdf', type: 'Lettre de motivation', valide: true },
-                    { nom: 'Releve_notes_Master1.pdf', type: 'Relevé de notes', valide: false },
-                ],
-                competences: [
-                    { nom: 'JavaScript', niveau: 'Avancé' },
-                    { nom: 'React', niveau: 'Avancé' },
-                    { nom: 'Node.js', niveau: 'Intermédiaire' },
-                ],
-                historique: [
-                    { date: '2026-07-15 14:30', action: 'Candidature soumise', commentaire: 'Candidature envoyée avec succès' },
-                    { date: '2026-07-16 09:00', action: 'Candidature en analyse', commentaire: 'Début de l\'analyse par le service RH' },
-                ],
-                remarques: [],
-            };
-
-            setApplication(mockApplication);
-
+            const response = await api.get(`/applications/${id}`);
+            let data = response.data.data || response.data;
+            
+            if (data) {
+                if (!data.historique || data.historique.length === 0) {
+                    const defaultHistory = [];
+                    const isSubmitted = data.statut !== 'Brouillon';
+                    
+                    if (isSubmitted) {
+                        defaultHistory.push({
+                            date: data.dateSoumission || data.createdAt || new Date(),
+                            action: 'Candidature soumise',
+                            nouveauStatut: 'Soumise',
+                            ancienStatut: 'Brouillon',
+                            commentaire: 'Candidature soumise avec succès',
+                        });
+                    }
+                    
+                    if (data.statut && data.statut !== 'Soumise' && data.statut !== 'Brouillon') {
+                        defaultHistory.push({
+                            date: data.updatedAt || new Date(),
+                            action: `Candidature ${getStatusLabel(data.statut).toLowerCase()}`,
+                            nouveauStatut: data.statut,
+                            ancienStatut: 'Soumise',
+                            commentaire: `Statut mis à jour : ${getStatusLabel(data.statut)}`,
+                        });
+                    }
+                    
+                    if (defaultHistory.length > 0) {
+                        data.historique = defaultHistory;
+                    }
+                }
+            }
+            
+            setApplication(data);
         } catch (error) {
             console.error('Erreur chargement candidature:', error);
-            setError('Erreur lors du chargement de la candidature');
+            setError(error.response?.data?.message || 'Erreur lors du chargement de la candidature');
         } finally {
             setLoading(false);
         }
     };
 
+    // ✅ STATUTS ALIGNÉS AVEC LE BACKEND
     const getStatusLabel = (status) => {
         const labels = {
-            soumise: 'Soumise',
-            en_analyse: 'En analyse',
-            entretien: 'Entretien',
-            acceptee: 'Acceptée',
-            refuse: 'Refusée',
+            'Brouillon': 'Brouillon',
+            'Soumise': 'Soumise',
+            'EnAnalyse': 'En analyse',
+            'Entretien': 'Entretien',
+            'Acceptee': 'Acceptée',
+            'Refusee': 'Refusée',
         };
         return labels[status] || status;
     };
@@ -191,36 +204,35 @@ const ApplicationDetail = () => {
         });
     };
 
-    const handleOpenDialog = (action) => {
-        setDialogAction(action);
-        setComment('');
-        setOpenDialog(true);
-    };
-
-    const handleCloseDialog = () => {
-        setOpenDialog(false);
-        setComment('');
-    };
-
-    const handleConfirmAction = () => {
-        if (dialogAction === 'accepter') {
-            setApplication({ ...application, statut: 'acceptee' });
-            setSuccess('✅ Candidature acceptée avec succès !');
-        } else if (dialogAction === 'refuser') {
-            setApplication({ ...application, statut: 'refuse' });
-            setSuccess('❌ Candidature refusée');
-        } else if (dialogAction === 'entretien') {
-            setApplication({ ...application, statut: 'entretien' });
-            setSuccess('📅 Entretien programmé');
+    const handleDownloadDocument = (doc) => {
+        if (!doc) return;
+        const href = buildFileHref(doc);
+        
+        if (href) {
+            const isPdf = doc.mimeType === 'application/pdf' || 
+                          doc.nomOriginal?.toLowerCase().endsWith('.pdf') ||
+                          doc.nom?.toLowerCase().endsWith('.pdf');
+            
+            if (isPdf) {
+                window.open(href, '_blank');
+            } else {
+                const link = document.createElement('a');
+                link.href = href;
+                link.download = doc.nomOriginal || doc.nom || 'document';
+                link.target = '_blank';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } else {
+            setError('Impossible de télécharger ce document');
         }
-        setOpenDialog(false);
-        setTimeout(() => setSuccess(''), 3000);
     };
 
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={60} thickness={4} sx={{ color: '#148aa0' }} />
+                <CircularProgress size={44} sx={{ color: '#148aa0' }} />
             </Box>
         );
     }
@@ -233,8 +245,8 @@ const ApplicationDetail = () => {
                 </Alert>
                 <Button
                     startIcon={<ArrowBack />}
-                    onClick={() => navigate('/rh/applications')}
-                    sx={{ mt: 2 }}
+                    onClick={() => navigate('/dashboard/applications')}
+                    sx={{ mt: 2, textTransform: 'none' }}
                 >
                     Retour à la liste
                 </Button>
@@ -242,323 +254,194 @@ const ApplicationDetail = () => {
         );
     }
 
+    const historique = application.historique || application.auditTrail || [];
+    const documents = application.documents || [];
+
+    const renderHistorique = () => (
+        <Box sx={{ position: 'relative', pl: 2 }}>
+            {historique.length > 0 ? (
+                historique.map((item, idx) => {
+                    let dotColor = '#148aa0';
+                    const status = item.nouveauStatut || item.statut;
+                    
+                    if (status === 'Acceptee') {
+                        dotColor = '#22c55e';
+                    } else if (status === 'Refusee') {
+                        dotColor = '#ef4444';
+                    } else if (status === 'Brouillon') {
+                        dotColor = '#6b7280';
+                    } else if (status === 'Soumise') {
+                        dotColor = '#1d4ed8';
+                    } else if (status === 'EnAnalyse') {
+                        dotColor = '#f59e0b';
+                    } else if (status === 'Entretien') {
+                        dotColor = '#8b5cf6';
+                    }
+
+                    return (
+                        <Box key={idx} sx={{ 
+                            display: 'flex', 
+                            gap: 2, 
+                            pb: 2.5,
+                            borderLeft: idx < historique.length - 1 ? '2px solid #148aa0' : 'none',
+                            ml: 1,
+                            pl: 3,
+                            position: 'relative'
+                        }}>
+                            <Box sx={{
+                                position: 'absolute',
+                                left: -6,
+                                top: 4,
+                                width: 12,
+                                height: 12,
+                                borderRadius: '50%',
+                                backgroundColor: dotColor,
+                                border: '2px solid white',
+                                boxShadow: '0 0 0 2px #148aa0',
+                            }} />
+                            <Box sx={{ flex: 1 }}>
+                                <Typography variant="body2" fontWeight={600} color="#1a2332">
+                                    {item.action || item.nouveauStatut || item.ancienStatut || 'Mise à jour'}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                    {formatDate(item.date || item.createdAt)}
+                                </Typography>
+                                {item.commentaire && (
+                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                        {item.commentaire}
+                                    </Typography>
+                                )}
+                                {item.ancienStatut && item.nouveauStatut && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                        Statut précédent : <strong>{getStatusLabel(item.ancienStatut)}</strong>
+                                    </Typography>
+                                )}
+                            </Box>
+                        </Box>
+                    );
+                })
+            ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+                    Aucun historique disponible
+                </Typography>
+            )}
+        </Box>
+    );
+
+    const renderDocuments = () => (
+        <>
+            {documents.length > 0 ? (
+                <List dense sx={{ p: 0 }}>
+                    {documents.map((doc, idx) => (
+                        <ListItem 
+                            key={idx} 
+                            sx={{ 
+                                px: 0, 
+                                py: 1.5,
+                                borderBottom: idx < documents.length - 1 ? '1px solid #f0f2f5' : 'none',
+                                alignItems: 'flex-start'
+                            }}
+                        >
+                            <ListItemIcon sx={{ minWidth: 36, mt: 0.5 }}>
+                                {doc.isVerified ? (
+                                    <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
+                                ) : (
+                                    <Pending sx={{ color: '#f59e0b', fontSize: 20 }} />
+                                )}
+                            </ListItemIcon>
+                            <ListItemText
+                                primary={
+                                    <Typography variant="body2" fontWeight={500} color="#1a2332">
+                                        {doc.nomOriginal || doc.nom || 'Document'}
+                                    </Typography>
+                                }
+                                secondary={
+                                    <>
+                                        <Typography variant="caption" color="text.secondary" display="block">
+                                            {doc.type || 'Non spécifié'} • {doc.isVerified ? 'Validé' : 'En attente'}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block">
+                                            {doc.dateUpload ? formatDate(doc.dateUpload) : 'Date non spécifiée'}
+                                        </Typography>
+                                    </>
+                                }
+                            />
+                            <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                                <Tooltip title="Télécharger">
+                                    <IconButton 
+                                        size="small" 
+                                        onClick={() => handleDownloadDocument(doc)}
+                                        sx={{ color: '#4f46e5' }}
+                                    >
+                                        <Download fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        </ListItem>
+                    ))}
+                </List>
+            ) : (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                    <Description sx={{ fontSize: 48, color: '#d1d5db' }} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Aucun document déposé
+                    </Typography>
+                </Box>
+            )}
+        </>
+    );
+
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
-            {/* ===== EN-TÊTE ===== */}
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: 4 }}>
                 <Button
                     startIcon={<ArrowBack />}
-                    onClick={() => navigate('/rh/applications')}
-                    sx={{ mb: 2, textTransform: 'none', color: '#666' }}
+                    onClick={() => navigate('/dashboard/applications')}
+                    sx={{ mb: 3, textTransform: 'none', color: '#666' }}
                 >
                     Retour à la liste
                 </Button>
 
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <Avatar
-                            sx={{
-                                width: 80,
-                                height: 80,
-                                backgroundColor: '#148aa0',
-                                fontSize: 32,
-                                fontWeight: 700,
-                                color: '#fff',
-                            }}
-                        >
-                            {application.candidat.nom.split(' ').map(n => n[0]).join('')}
-                        </Avatar>
-                        <Box>
-                            <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                                {application.candidat.nom}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {application.offre} - {application.departement}
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                                <StatusChip label={getStatusLabel(application.statut)} status={application.statut} />
-                                <Chip label={application.typeStage} size="small" sx={{ backgroundColor: '#e0e7ff', color: '#4338ca' }} />
-                            </Box>
-                        </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                        {application.statut === 'soumise' && (
-                            <Button
-                                variant="outlined"
-                                startIcon={<Pending />}
-                                sx={{ borderRadius: '12px', textTransform: 'none', borderColor: '#f59e0b', color: '#f59e0b' }}
-                                onClick={() => handleOpenDialog('analyse')}
-                            >
-                                Analyser
-                            </Button>
-                        )}
-                        {(application.statut === 'en_analyse' || application.statut === 'soumise') && (
-                            <>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<Event />}
-                                    sx={{ borderRadius: '12px', textTransform: 'none', borderColor: '#8b5cf6', color: '#8b5cf6' }}
-                                    onClick={() => handleOpenDialog('entretien')}
-                                >
-                                    Entretien
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<ThumbUp />}
-                                    sx={{ backgroundColor: '#22c55e', borderRadius: '12px', textTransform: 'none' }}
-                                    onClick={() => handleOpenDialog('accepter')}
-                                >
-                                    Accepter
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<ThumbDown />}
-                                    sx={{ backgroundColor: '#ef4444', borderRadius: '12px', textTransform: 'none' }}
-                                    onClick={() => handleOpenDialog('refuser')}
-                                >
-                                    Refuser
-                                </Button>
-                            </>
-                        )}
-                    </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
+                        Suivi de candidature
+                    </Typography>
+                    <StatusChip label={getStatusLabel(application.statut)} status={application.statut} />
                 </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {application.offreId?.titre || application.offre || 'Offre sans titre'}
+                </Typography>
             </Box>
 
-            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
 
-            <Grid container spacing={3}>
-                {/* ===== GAUCHE ===== */}
-                <Grid item xs={12} md={4}>
-                    <DetailCard>
-                        <SectionTitle>
-                            <Person sx={{ color: '#148aa0' }} />
-                            Informations candidat
-                        </SectionTitle>
-                        <InfoItem>
-                            <Email />
-                            <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Email
-                                </Typography>
-                                <Typography variant="body2">{application.candidat.email}</Typography>
-                            </Box>
-                        </InfoItem>
-                        <InfoItem>
-                            <Phone />
-                            <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Téléphone
-                                </Typography>
-                                <Typography variant="body2">{application.candidat.telephone}</Typography>
-                            </Box>
-                        </InfoItem>
-                        <InfoItem>
-                            <School />
-                            <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Université
-                                </Typography>
-                                <Typography variant="body2">{application.candidat.universite}</Typography>
-                            </Box>
-                        </InfoItem>
-                        <InfoItem>
-                            <Work />
-                            <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Filière / Niveau
-                                </Typography>
-                                <Typography variant="body2">
-                                    {application.candidat.filiere} - {application.candidat.niveau}
-                                </Typography>
-                            </Box>
-                        </InfoItem>
-                        <InfoItem>
-                            <Pending />
-                            <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Date de soumission
-                                </Typography>
-                                <Typography variant="body2">
-                                    {formatDate(application.dateSoumission)}
-                                </Typography>
-                            </Box>
-                        </InfoItem>
-                    </DetailCard>
+            <Paper sx={{ borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+                <StyledTabs
+                    value={tabValue}
+                    onChange={handleTabChange}
+                    sx={{
+                        borderBottom: '1px solid #e5e7eb',
+                        px: 2,
+                    }}
+                >
+                    <StyledTab 
+                        icon={<Timeline sx={{ fontSize: 20 }} />} 
+                        iconPosition="start"
+                        label="Avancement" 
+                    />
+                    <StyledTab 
+                        icon={<Description sx={{ fontSize: 20 }} />} 
+                        iconPosition="start"
+                        label={`Documents (${documents.length})`} 
+                    />
+                </StyledTabs>
 
-                    {/* ===== Compétences ===== */}
-                    <DetailCard>
-                        <SectionTitle>
-                            <Work sx={{ color: '#8b5cf6' }} />
-                            Compétences
-                        </SectionTitle>
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {application.competences.map((comp, idx) => (
-                                <Chip
-                                    key={idx}
-                                    label={`${comp.nom} - ${comp.niveau}`}
-                                    size="small"
-                                    sx={{ backgroundColor: '#f3e8ff', color: '#6b21a8', mb: 1 }}
-                                />
-                            ))}
-                        </Box>
-                    </DetailCard>
-                </Grid>
-
-                {/* ===== DROITE ===== */}
-                <Grid item xs={12} md={8}>
-                    {/* ===== Documents ===== */}
-                    <DetailCard>
-                        <SectionTitle>
-                            <Description sx={{ color: '#22c55e' }} />
-                            Documents
-                        </SectionTitle>
-                        <List dense>
-                            {application.documents.map((doc, idx) => (
-                                <ListItem key={idx} sx={{ borderBottom: idx < application.documents.length - 1 ? '1px solid #f0f2f5' : 'none' }}>
-                                    <ListItemIcon>
-                                        {doc.valide ? (
-                                            <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
-                                        ) : (
-                                            <Pending sx={{ color: '#f59e0b', fontSize: 20 }} />
-                                        )}
-                                    </ListItemIcon>
-                                    <ListItemText
-                                        primary={doc.nom}
-                                        secondary={doc.type}
-                                    />
-                                    <Box>
-                                        <Tooltip title="Voir">
-                                            <IconButton size="small" sx={{ color: '#148aa0' }}>
-                                                <Visibility fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Télécharger">
-                                            <IconButton size="small" sx={{ color: '#4f46e5' }}>
-                                                <Download fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </Box>
-                                </ListItem>
-                            ))}
-                        </List>
-                    </DetailCard>
-
-                    {/* ===== Historique ===== */}
-                    <DetailCard>
-                        <SectionTitle>
-                            <Assignment sx={{ color: '#f59e0b' }} />
-                            Historique
-                        </SectionTitle>
-                        {application.historique.map((item, idx) => (
-                            <Box key={idx} sx={{ display: 'flex', gap: 2, py: 1, borderBottom: idx < application.historique.length - 1 ? '1px solid #f0f2f5' : 'none' }}>
-                                <Avatar sx={{ width: 32, height: 32, bgcolor: '#e8f0fe', fontSize: 14 }}>
-                                    {idx + 1}
-                                </Avatar>
-                                <Box>
-                                    <Typography variant="body2" fontWeight={500}>
-                                        {item.action}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                        {formatDate(item.date)}
-                                    </Typography>
-                                    {item.commentaire && (
-                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                            {item.commentaire}
-                                        </Typography>
-                                    )}
-                                </Box>
-                            </Box>
-                        ))}
-                    </DetailCard>
-                </Grid>
-            </Grid>
-
-            {/* ===== DIALOG DE CONFIRMATION ===== */}
-            <Dialog
-                open={openDialog}
-                onClose={handleCloseDialog}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: '16px', padding: '8px' },
-                }}
-            >
-                <DialogTitle>
-                    {dialogAction === 'accepter' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ThumbUp sx={{ color: '#22c55e' }} /> Accepter la candidature
-                        </Box>
-                    )}
-                    {dialogAction === 'refuser' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ThumbDown sx={{ color: '#ef4444' }} /> Refuser la candidature
-                        </Box>
-                    )}
-                    {dialogAction === 'entretien' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Event sx={{ color: '#8b5cf6' }} /> Programmer un entretien
-                        </Box>
-                    )}
-                    {dialogAction === 'analyse' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Pending sx={{ color: '#f59e0b' }} /> Passer en analyse
-                        </Box>
-                    )}
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body1" sx={{ mb: 2 }}>
-                        {dialogAction === 'accepter' && `Êtes-vous sûr de vouloir accepter la candidature de ${application.candidat.nom} ?`}
-                        {dialogAction === 'refuser' && `Êtes-vous sûr de vouloir refuser la candidature de ${application.candidat.nom} ?`}
-                        {dialogAction === 'entretien' && `Voulez-vous programmer un entretien avec ${application.candidat.nom} ?`}
-                        {dialogAction === 'analyse' && `Voulez-vous passer la candidature de ${application.candidat.nom} en analyse ?`}
-                    </Typography>
-                    {(dialogAction === 'refuser' || dialogAction === 'entretien') && (
-                        <TextField
-                            label={dialogAction === 'refuser' ? "Motif du refus" : "Commentaires"}
-                            value={comment}
-                            onChange={(e) => setComment(e.target.value)}
-                            fullWidth
-                            multiline
-                            rows={3}
-                            placeholder={dialogAction === 'refuser' ? "Expliquez la raison du refus..." : "Ajoutez des commentaires..."}
-                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                        />
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button
-                        onClick={handleCloseDialog}
-                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                    >
-                        Annuler
-                    </Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleConfirmAction}
-                        sx={{
-                            backgroundColor:
-                                dialogAction === 'accepter' ? '#22c55e' :
-                                dialogAction === 'refuser' ? '#ef4444' :
-                                dialogAction === 'entretien' ? '#8b5cf6' : '#f59e0b',
-                            borderRadius: '10px',
-                            textTransform: 'none',
-                            '&:hover': {
-                                backgroundColor:
-                                    dialogAction === 'accepter' ? '#16a34a' :
-                                    dialogAction === 'refuser' ? '#dc2626' :
-                                    dialogAction === 'entretien' ? '#7c3aed' : '#d97706',
-                            },
-                        }}
-                    >
-                        {dialogAction === 'accepter' ? 'Accepter' :
-                         dialogAction === 'refuser' ? 'Refuser' :
-                         dialogAction === 'entretien' ? 'Programmer' : 'Analyser'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                <Box sx={{ p: 3 }}>
+                    {tabValue === 0 ? renderHistorique() : renderDocuments()}
+                </Box>
+            </Paper>
         </Container>
     );
 };
 
-export default ApplicationDetail;
+export default ApplicationDetailStudent;

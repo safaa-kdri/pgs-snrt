@@ -46,7 +46,7 @@ const EvaluationSchema = new mongoose.Schema({
         },
         niveau: {
             type: String,
-            enum: ['Débutant', 'Intermédiaire', 'Avancé', 'Expert'],
+            enum: ['Debutant', 'Intermediaire', 'Avance', 'Expert'],
             required: [true, 'Le niveau est obligatoire']
         },
         note: {

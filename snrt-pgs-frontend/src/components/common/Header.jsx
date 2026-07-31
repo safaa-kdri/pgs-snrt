@@ -1,6 +1,7 @@
 // src/components/common/Header.jsx
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation, useNavigate, Link } from 'react-router-dom'; // ✅ AJOUTER useLocation ici
 import {
     AppBar,
     Toolbar,
@@ -9,24 +10,19 @@ import {
     Box,
     Container
 } from '@mui/material';
-import { Link, useNavigate } from 'react-router-dom';
 import { logout, loadCurrentUser } from '../../store/slices/authSlice';
 
 const Header = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
-    const location = useLocation();
+    const location = useLocation(); // ✅ MAINTENANT useLocation est défini
     
     const { isAuthenticated, user, status } = useSelector((state) => state.auth);
     
+    // ✅ Vérifier si l'utilisateur est déjà connecté (via localStorage)
     useEffect(() => {
-        // ✅ Vérifier si l'utilisateur est déjà connecté (via localStorage)
         const hasUser = localStorage.getItem('user');
         
-        // ✅ Appeler /me SEULEMENT si :
-        // 1. L'utilisateur n'est PAS déjà authentifié
-        // 2. Le statut n'est PAS 'loading' (évite les boucles)
-        // 3. Il y a un utilisateur dans localStorage (signe de connexion)
         if (!isAuthenticated && status !== 'loading' && hasUser) {
             dispatch(loadCurrentUser());
         }
@@ -176,30 +172,10 @@ const Header = () => {
 
                     {/* ===== PARTIE DROITE ===== */}
                     {isAuthenticated ? (
-                        <Button
-                            onClick={handleLogout}
-                            variant="contained"
-                            sx={{
-                                backgroundColor: 'white',
-                                color: '#43455a',
-                                borderRadius: '50px',
-                                px: 3,
-                                py: 0.8,
-                                fontFamily: '"Inria Sans", sans-serif',
-                                fontSize: '15px',
-                                fontWeight: 400,
-                                textTransform: 'none',
-                                letterSpacing: '0.5px',
-                                minWidth: '120px',
-                                flexShrink: 0,
-                                '&:hover': { backgroundColor: '#f8f6f5' },
-                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
-                            }}
-                        >
-                            <i className="fa-solid fa-sign-out-alt"></i>
-                            Déconnexion
-                        </Button>
+                        // ✅ Connecté : PAS de bouton déconnexion (juste un espace vide)
+                        <Box sx={{ width: '120px' }} />
                     ) : (
+                        // ✅ Non connecté : bouton S'inscrire
                         <Button
                             component={Link}
                             to="/register"

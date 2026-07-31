@@ -8,6 +8,7 @@ const {
   verifyTwoFactorSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema, // ✅ AJOUTER
 } = require('../utils/validators');
 
 const router = express.Router();
@@ -30,5 +31,8 @@ router.post('/reset-password/:token', validate(resetPasswordSchema), authControl
 
 // --- Profil de l'utilisateur connecte ---
 router.get('/me', authenticate(), authController.me);
+
+// ✅ AJOUTER LA ROUTE CHANGER MOT DE PASSE
+router.put('/change-password', authenticate(), validate(changePasswordSchema), authController.changePassword);
 
 module.exports = router;

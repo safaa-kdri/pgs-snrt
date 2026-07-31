@@ -16,9 +16,10 @@ import {
 import { styled } from '@mui/material/styles';
 import { useDispatch } from 'react-redux';
 import { verify2FA } from '../../store/slices/authSlice';
+import api from '../../services/api';
 
 // ============================================
-// STYLES (inchangés)
+// STYLES
 // ============================================
 
 const PageContainer = styled(Container)({
@@ -131,34 +132,6 @@ const ActionButton = styled(Button)({
     '&:hover': { backgroundColor: 'transparent' },
 });
 
-const SuccessButtonOutlined = styled(Button)({
-    borderRadius: '30px',
-    padding: '10px 32px',
-    fontFamily: 'Inter, sans-serif',
-    fontWeight: 500,
-    fontSize: '15px',
-    textTransform: 'none',
-    boxShadow: 'none',
-    borderColor: '#148aa0',
-    color: '#148aa0',
-    backgroundColor: 'transparent',
-    border: '1px solid #148aa0',
-    '&:hover': { backgroundColor: 'rgba(20, 138, 160, 0.05)', borderColor: '#148aa0' },
-});
-
-const SuccessButtonContained = styled(Button)({
-    borderRadius: '30px',
-    padding: '10px 32px',
-    fontFamily: 'Inter, sans-serif',
-    fontWeight: 500,
-    fontSize: '15px',
-    textTransform: 'none',
-    boxShadow: 'none',
-    backgroundColor: '#148aa0',
-    color: '#ffffff',
-    '&:hover': { backgroundColor: '#0b7890' },
-});
-
 const StyledAlert = styled(Alert)({
     borderRadius: '10px',
     fontFamily: 'Inter, sans-serif',
@@ -182,13 +155,11 @@ const Verify2FA = () => {
     const [success, setSuccess] = useState(false);
     const [userData, setUserData] = useState(null);
 
-    // ✅ VÉRIFIER SI DÉJÀ CONNECTÉ
+    // Vérifier si déjà connecté
     useEffect(() => {
-        // ✅ Si déjà connecté avec accessToken, rediriger vers dashboard
-        const token = localStorage.getItem('token');
         const user = localStorage.getItem('user');
         
-        if (token && user) {
+        if (user) {
             try {
                 const userData = JSON.parse(user);
                 const role = userData?.role || userData?.userType;
@@ -207,7 +178,8 @@ const Verify2FA = () => {
                         navigate('/supervisor', { replace: true });
                         break;
                     default:
-                        navigate('/dashboard', { replace: true });
+                        // ✅ REDIRIGER VERS L'ACCUEIL
+                        navigate('/', { replace: true });
                         break;
                 }
                 return;
@@ -216,12 +188,10 @@ const Verify2FA = () => {
             }
         }
 
-        // ✅ Vérifier que le preAuthToken existe (ou qu'il y a un email en cache)
         const storedEmail = localStorage.getItem('2faEmail');
         if (storedEmail) {
             setEmail(storedEmail);
         } else {
-            // Si pas d'email en cache, rediriger vers login
             navigate('/login', { replace: true });
         }
     }, [navigate]);
@@ -232,14 +202,6 @@ const Verify2FA = () => {
         setLoading(true);
 
         try {
-            // ✅ Vérifier d'abord si accessToken existe déjà
-            const token = localStorage.getItem('token');
-            if (token) {
-                // Si token existe, l'utilisateur est déjà connecté
-                navigate('/dashboard', { replace: true });
-                return;
-            }
-
             const resultAction = await dispatch(verify2FA({ code }));
 
             if (verify2FA.rejected.match(resultAction)) {
@@ -254,29 +216,12 @@ const Verify2FA = () => {
                 localStorage.setItem('user', JSON.stringify(userData));
             }
 
-            // ✅ Rediriger vers dashboard
-            const role = userData?.role || userData?.userType;
-            switch (role) {
-                case 'Administrateur':
-                    navigate('/admin', { replace: true });
-                    break;
-                case 'RH':
-                    navigate('/rh', { replace: true });
-                    break;
-                case 'Departement':
-                    navigate('/department', { replace: true });
-                    break;
-                case 'Encadrant':
-                    navigate('/supervisor', { replace: true });
-                    break;
-                default:
-                    navigate('/dashboard', { replace: true });
-                    break;
-            }
+            // ✅ REDIRIGER VERS L'ACCUEIL
+            navigate('/', { replace: true });
+            
         } catch (err) {
             const errorMsg = err?.response?.data?.message || err?.message || 'Erreur de vérification';
             
-            // ✅ Si l'erreur est "preAuthToken manquant", rediriger vers login
             if (errorMsg.includes('Session expiree') || errorMsg.includes('preAuthToken')) {
                 localStorage.removeItem('2faEmail');
                 navigate('/login', { replace: true });
@@ -295,11 +240,10 @@ const Verify2FA = () => {
 
         try {
             await api.post('/auth/resend-2fa');
-            setError('✅ Nouveau code envoyé par email');
+            setError('Nouveau code envoyé par email');
         } catch (err) {
             const errorMsg = err?.response?.data?.message || 'Erreur lors du renvoi';
             
-            // ✅ Si l'erreur est "preAuthToken manquant", rediriger vers login
             if (errorMsg.includes('Session expiree') || errorMsg.includes('preAuthToken')) {
                 localStorage.removeItem('2faEmail');
                 navigate('/login', { replace: true });
@@ -317,10 +261,7 @@ const Verify2FA = () => {
         navigate('/', { replace: true });
     };
 
-    // ========================================== //
-    // ÉTAT SUCCÈS
-    // ========================================== //
-
+    // État succès
     if (success) {
         const fullName = `${userData?.prenom || ''} ${userData?.nom || ''}`.trim() || 'Utilisateur';
 
@@ -345,13 +286,14 @@ const Verify2FA = () => {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     margin: '0 auto',
-                                    fontSize: '36px',
                                 }}>
-                                    ✅
+                                    <Typography variant="h3" sx={{ color: '#22c55e' }}>
+                                        ✓
+                                    </Typography>
                                 </Box>
                             </Box>
 
-                            <CardTitle>Authentification réussie !</CardTitle>
+                            <CardTitle>Authentification réussie</CardTitle>
                             <CardSubtitle>
                                 Bienvenue <strong>{fullName}</strong>
                             </CardSubtitle>
@@ -363,15 +305,13 @@ const Verify2FA = () => {
                                 flexWrap: 'wrap',
                                 mt: 2
                             }}>
-                                <SuccessButtonOutlined onClick={goToHome}>
-                                    <i className="fa-solid fa-arrow-left" style={{ marginRight: '8px' }}></i>
+                                <ActionButton
+                                    onClick={goToHome}
+                                    sx={{ color: '#6d7884' }}
+                                >
+                                    <i className="fa-solid fa-arrow-left" style={{ marginRight: '6px' }}></i>
                                     Accueil
-                                </SuccessButtonOutlined>
-
-                                <SuccessButtonContained onClick={() => navigate('/dashboard')}>
-                                    Dashboard
-                                    <i className="fa-solid fa-arrow-right" style={{ marginLeft: '8px' }}></i>
-                                </SuccessButtonContained>
+                                </ActionButton>
                             </Box>
                         </CardContent>
                     </StyledCard>
@@ -380,10 +320,7 @@ const Verify2FA = () => {
         );
     }
 
-    // ========================================== //
-    // FORMULAIRE 2FA
-    // ========================================== //
-
+    // Formulaire 2FA
     return (
         <PageContainer maxWidth="xl">
             <Box sx={{
@@ -395,14 +332,14 @@ const Verify2FA = () => {
             }}>
                 <StyledCard>
                     <CardContent sx={{ p: 0 }}>
-                        <CardTitle>🔐 Vérification à deux facteurs</CardTitle>
+                        <CardTitle>Vérification à deux facteurs</CardTitle>
                         <CardSubtitle>
                             Un code de vérification a été envoyé à votre adresse email.<br />
                             Veuillez le saisir ci-dessous.
                         </CardSubtitle>
 
                         {error && (
-                            <StyledAlert severity={error.includes('✅') ? 'success' : 'error'}>
+                            <StyledAlert severity={error.includes('Nouveau code') ? 'success' : 'error'}>
                                 {error}
                             </StyledAlert>
                         )}

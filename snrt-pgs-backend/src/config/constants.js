@@ -1,3 +1,4 @@
+// src/config/constants.js
 require('dotenv').config();
 
 const ROLES = Object.freeze({
@@ -61,9 +62,11 @@ const CONFIG = Object.freeze({
 
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
-    accessExpires: process.env.JWT_ACCESS_EXPIRES || '15m',
+    // ✅ AUGMENTER LA DURÉE DU TOKEN D'ACCÈS (ex: 24h pour les étudiants)
+    accessExpires: process.env.JWT_ACCESS_EXPIRES || '24h',
     refreshSecret: process.env.JWT_REFRESH_SECRET,
-    refreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
+    // ✅ AUGMENTER LA DURÉE DU REFRESH TOKEN (ex: 30 jours)
+    refreshExpires: process.env.JWT_REFRESH_EXPIRES || '30d',
     preAuthSecret: process.env.JWT_PREAUTH_SECRET,
     preAuthExpires: process.env.JWT_PREAUTH_EXPIRES || '5m',
   },
@@ -71,8 +74,6 @@ const CONFIG = Object.freeze({
   cookies: {
     domain: process.env.COOKIE_DOMAIN || 'localhost',
     secure: process.env.COOKIE_SECURE === 'true',
-    // 'strict' (defaut, meme site), 'lax', ou 'none' (cross-site, exige secure=true).
-    // A mettre a 'none' si le frontend est sur un domaine different du backend en prod.
     sameSite: process.env.COOKIE_SAMESITE || 'strict',
   },
 
@@ -86,7 +87,6 @@ const CONFIG = Object.freeze({
   },
 
   bruteForce: {
-
     maxAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS, 10) || 3,
     lockMinutes: parseInt(process.env.LOCK_DURATION_MINUTES, 10) || 60,
   },
@@ -110,9 +110,6 @@ function assertRequiredEnv() {
     process.exit(1);
   }
 
-  // Les navigateurs rejettent silencieusement SameSite=None si Secure n'est
-  // pas egalement positionne (cookie jamais envoye => 401 en boucle cote
-  // frontend). On previent tout de suite plutot que de laisser deviner.
   if (CONFIG.cookies.sameSite.toLowerCase() === 'none' && !CONFIG.cookies.secure) {
     console.error(
       "[CONFIG] COOKIE_SAMESITE=none exige COOKIE_SECURE=true (et HTTPS), sinon les navigateurs refusent le cookie."

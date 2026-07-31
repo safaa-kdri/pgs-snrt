@@ -1,6 +1,6 @@
 // src/components/common/SidebarAuth.jsx
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom"; // ✅ Ajout de useLocation
 import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
@@ -27,47 +27,71 @@ import {
 const SideCard = styled(Card)({
   backgroundColor: "#f7f7f7",
   borderRadius: "19px",
-  padding: "32px 20px 20px",
+  padding: "50px 16px 16px",
   textAlign: "center",
-  minHeight: "480px",
+  minHeight: "350px",
+  maxWidth: "285px",
+  width: "100%",
+  margin: "0 auto",
   boxShadow: "none",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   "& h2": {
-    margin: "0 0 18px",
-    color: "#07111b",
+    margin: "0 0 18px",  // ✅ Augmenté de 14px à 20px
+    color: "#4a4a4a",
     fontSize: "18px",
     lineHeight: 1.2,
-    fontWeight: 400,
+    fontWeight: 700,
     fontFamily: '"Inter", sans-serif',
   },
 });
 
 const AttemptsText = styled(Typography)({
-  margin: "0 0 18px",
+  margin: "10px 0 18px",  // ✅ Ajout de marginTop: 16px
   color: "#687480",
   fontSize: "13px",
-  lineHeight: 1.5,
+  lineHeight: 1.6,
   fontFamily: "Inter, sans-serif",
+  textAlign: "center",
   "& strong": { fontWeight: 700 },
 });
 
+// ============================================
+// ⬇️ STYLES DES CHAMPS DE SAISIE
+// ============================================
+
 const StyledTextField = styled(TextField)({
+  width: "100%",
+  maxWidth: "175px",
+  margin: "0 auto 10px",
+  display: "block",
+
   "& .MuiOutlinedInput-root": {
     borderRadius: "27px",
     backgroundColor: "#ffffff",
-    height: "42px",
-    "& fieldset": { borderColor: "#e1e6eb" },
-    "&:hover fieldset": { borderColor: "#e1e6eb" },
-    "&.Mui-focused fieldset": { borderColor: "#148aa0" },
+    height: "50px",
+
+    "& fieldset": {
+      borderColor: "#e1e6eb",
+    },
+
+    "&:hover fieldset": {
+      borderColor: "#e1e6eb",
+    },
+
+    "&.Mui-focused fieldset": {
+      borderColor: "#148aa0",
+    },
   },
+
   "& .MuiInputBase-input": {
     padding: "0 20px 0 45px",
     fontSize: "15px",
     color: "#6d7884",
     fontFamily: "Inter, sans-serif",
   },
+
   "& .MuiInputAdornment-root": {
     position: "absolute",
     left: "16px",
@@ -77,16 +101,16 @@ const StyledTextField = styled(TextField)({
     zIndex: 1,
     pointerEvents: "none",
   },
-  width: "100%",
-  maxWidth: "220px",
-  margin: "0 auto 10px",
-  display: "block",
 });
+
+// ============================================
+// ⬇️ STYLES DU CAPTCHA - FOND GRIS CLAIR COMME LA CARTE
+// ============================================
 
 const CaptchaBox = styled(Box)({
   height: "42px",
   margin: "6px 0",
-  background: "#e8e8e8",
+  background: "#f7f7f7", // ✅ Même couleur que la carte grise
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -98,7 +122,12 @@ const CaptchaBox = styled(Box)({
   },
 });
 
+// ============================================
+// ⬇️ STYLES DU CHAMP CAPTCHA
+// ============================================
+
 const CaptchaInput = styled(TextField)({
+  width: "120px",
   "& .MuiOutlinedInput-root": {
     borderRadius: "6px",
     height: "36px",
@@ -111,8 +140,11 @@ const CaptchaInput = styled(TextField)({
     color: "#6d7884",
     fontFamily: "Inter, sans-serif",
   },
-  width: "120px",
 });
+
+// ============================================
+// ⬇️ STYLES DU BOUTON RÉGÉNÉRER
+// ============================================
 
 const GrayButton = styled(Button)({
   height: "36px",
@@ -128,14 +160,18 @@ const GrayButton = styled(Button)({
   "&:hover": { backgroundColor: "#555" },
 });
 
+// ============================================
+// ⬇️ STYLES DU BOUTON SE CONNECTER
+// ============================================
+
 const LoginButton = styled(Button)({
   width: "100%",
-  height: "42px",
+  height: "50px",
   marginBottom: "8px",
-  maxWidth: "220px",
+  maxWidth: "175px",
   marginLeft: "auto",
   marginRight: "auto",
-  borderRadius: "23px",
+  borderRadius: "27px",
   backgroundColor: "#148aa0",
   color: "#fff",
   fontSize: "15px",
@@ -144,6 +180,19 @@ const LoginButton = styled(Button)({
   fontFamily: "Inter, sans-serif",
   "&:hover": { backgroundColor: "#0b7890" },
   "& i": { marginRight: "8px" },
+});
+
+// ============================================
+// ⬇️ STYLES DU COMBOT (CAPTCHA INPUT + BOUTON REGENERER)
+// ============================================
+
+const CaptchaWrapper = styled(Box)({
+  display: "flex",
+  gap: "8px",
+  marginBottom: "12px",
+  justifyContent: "center",
+  width: "100%",
+  maxWidth: "175px", // ✅ Même largeur que le bouton "Se connecter"
 });
 
 const ForgotLink = styled(Button)({
@@ -157,6 +206,7 @@ const ForgotLink = styled(Button)({
   border: "none",
   padding: 0,
   fontFamily: "Inter, sans-serif",
+  textTransform: "none",
   "&:hover": { opacity: 0.8 },
 });
 
@@ -229,6 +279,7 @@ const LogoutButton = styled(Button)({
 const SidebarAuth = () => {
   console.log("SidebarAuth mounted — file updated:", new Date().toISOString());
   const navigate = useNavigate();
+  const location = useLocation(); // ✅ Ajout de useLocation
   const dispatch = useDispatch();
   
   const { user, isAuthenticated } = useSelector((state) => state.auth);
@@ -236,10 +287,15 @@ const SidebarAuth = () => {
   const [cin, setCin] = useState("");
   const [password, setPassword] = useState("");
   const [captchaInput, setCaptchaInput] = useState("");
-  const [captchaText, setCaptchaText] = useState("0vty6d");
+  const [captchaText, setCaptchaText] = useState("");
   const [error, setError] = useState("");
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  // ✅ GÉNÉRER LE CAPTCHA AU CHARGEMENT ET À CHAQUE CHANGEMENT DE PAGE
+  useEffect(() => {
+    regenerateCaptcha();
+  }, [location.pathname]); // ✅ Dépendance ajoutée
 
   const regenerateCaptcha = () => {
     const chars =
@@ -362,9 +418,12 @@ const SidebarAuth = () => {
       <h2>Authentification</h2>
 
       <AttemptsText>
-        Vous avez <strong>{3 - attempts}</strong> tentative(s) restante(s).
-        Après la 3ème tentative incorrecte, votre compte sera{" "}
-        <strong>bloqué pendant 60 minutes.</strong>
+        <div>Vous avez <strong>3 tentatives</strong> pour</div>
+        <div>entrer un mot de passe</div>
+        <div>correct. Après la 3ème</div>
+        <div>tentative incorrecte, votre </div> 
+        <div>compte sera <strong>bloqué pendant</strong></div>
+        <div><strong>60 minutes.</strong></div>
       </AttemptsText>
 
       {error && (
@@ -393,7 +452,8 @@ const SidebarAuth = () => {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <i className="fa-solid fa-id-card" style={{ fontSize: 18, color: "#aab1b8" }}></i>
+                {/* ✅ Icône ENVELOPPE (mail) pour CIN - TAILLE RÉDUITE */}
+                <i className="fa-solid fa-envelope" style={{ fontSize: 15, color: "#aab1b8" }}></i>
               </InputAdornment>
             ),
           }}
@@ -409,7 +469,8 @@ const SidebarAuth = () => {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <i className="fa-solid fa-lock" style={{ fontSize: 18, color: "#aab1b8" }}></i>
+                {/* ✅ Icône CADENAS - TAILLE RÉDUITE */}
+                <i className="fa-solid fa-lock" style={{ fontSize: 15, color: "#aab1b8" }}></i>
               </InputAdornment>
             ),
           }}
@@ -457,7 +518,8 @@ const SidebarAuth = () => {
           </svg>
         </CaptchaBox>
 
-        <Box sx={{ display: "flex", gap: 1, mb: 2, justifyContent: "center" }}>
+        {/* ✅ CAPTCHA WRAPPER - MÊME LARGEUR QUE LE BOUTON SE CONNECTER */}
+        <CaptchaWrapper>
           <CaptchaInput
             placeholder="Saisissez"
             variant="outlined"
@@ -471,7 +533,7 @@ const SidebarAuth = () => {
           >
             Régénérer
           </GrayButton>
-        </Box>
+        </CaptchaWrapper>
 
         <LoginButton type="submit" disabled={loading || isBlocked}>
           <i className="fa-solid fa-arrow-right-to-bracket"></i>
@@ -480,7 +542,7 @@ const SidebarAuth = () => {
       </form>
 
       <ForgotLink onClick={() => navigate("/forgot-password")}>
-        Mot de passe oublié !
+        mot de passe oublié
       </ForgotLink>
 
       <TermsText>

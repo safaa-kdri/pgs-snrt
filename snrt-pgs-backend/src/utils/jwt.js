@@ -1,3 +1,4 @@
+// src/utils/jwt.js
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { CONFIG } = require('../config/constants');
@@ -6,10 +7,6 @@ const { CONFIG } = require('../config/constants');
 const COOKIE_BASE_OPTIONS = {
   httpOnly: true,
   secure: CONFIG.cookies.secure,
-  // Pilote par COOKIE_SAMESITE ('strict' par defaut). Passer a 'none' (avec
-  // COOKIE_SECURE=true) si le frontend est sur un domaine different du
-  // backend, sinon le navigateur ignore silencieusement le Set-Cookie et
-  // /auth/me renvoie 401 en boucle malgre un login/2FA reussi.
   sameSite: CONFIG.cookies.sameSite,
   domain: CONFIG.nodeEnv === 'production' ? CONFIG.cookies.domain : undefined,
   path: '/',
@@ -40,11 +37,15 @@ const verifyRefreshToken = (token) => verifyToken(token, CONFIG.jwt.refreshSecre
 const verifyPreAuthToken = (token) => verifyToken(token, CONFIG.jwt.preAuthSecret);
 
 function setAccessTokenCookie(res, token) {
-  res.cookie('accessToken', token, { ...COOKIE_BASE_OPTIONS, maxAge: 15 * 60 * 1000 });
+  // ✅ AUGMENTER LA DURÉE DU COOKIE ACCESS TOKEN (24h)
+  const maxAge = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
+  res.cookie('accessToken', token, { ...COOKIE_BASE_OPTIONS, maxAge });
 }
 
 function setRefreshTokenCookie(res, token) {
-  res.cookie('refreshToken', token, { ...COOKIE_BASE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 });
+  // ✅ AUGMENTER LA DURÉE DU REFRESH TOKEN (30 jours)
+  const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 jours en millisecondes
+  res.cookie('refreshToken', token, { ...COOKIE_BASE_OPTIONS, maxAge });
 }
 
 function setPreAuthCookie(res, token) {

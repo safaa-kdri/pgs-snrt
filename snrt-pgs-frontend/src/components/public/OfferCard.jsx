@@ -40,16 +40,25 @@ const InfoText = styled(Typography)({
     lineHeight: 1.6,
 });
 
-const BadgeStyled = styled(Badge)({
-    backgroundColor: '#e8edf0',
-    color: '#2d3748',
-    fontWeight: 500,
-    fontSize: '13px',
-    padding: '4px 12px',
-    borderRadius: '4px',
-    fontFamily: 'Inter, sans-serif',
-    float: 'right',
-    marginTop: '4px',
+const BadgeStyled = styled(Badge)(({ type }) => {
+    const colors = {
+        'PFE': { bg: '#dbeafe', color: '#1d4ed8' },
+        'PFA': { bg: '#dcfce7', color: '#15803d' },
+        'Initiation': { bg: '#fef3c7', color: '#b45309' },
+        'Ete': { bg: '#fce4ec', color: '#b91c1c' },
+    };
+    const style = colors[type] || { bg: '#e8edf0', color: '#2d3748' };
+    return {
+        backgroundColor: style.bg,
+        color: style.color,
+        fontWeight: 500,
+        fontSize: '13px',
+        padding: '4px 12px',
+        borderRadius: '4px',
+        fontFamily: 'Inter, sans-serif',
+        float: 'right',
+        marginTop: '4px',
+    };
 });
 
 const PostulerButton = styled(Button)({
@@ -67,10 +76,26 @@ const PostulerButton = styled(Button)({
     },
 });
 
+// ============================================
+// COMPOSANT PRINCIPAL
+// ============================================
+
 const OfferCard = ({ offer }) => {
     const navigate = useNavigate();
     const { isAuthenticated } = useAuth();
     const [submitted, setSubmitted] = useState(false);
+
+    // ✅ VÉRIFIER SI L'OFFRE EST EXPIRÉE
+    const isOfferExpired = () => {
+        if (!offer.dateLimiteCandidature) return false;
+        const today = new Date();
+        const limitDate = new Date(offer.dateLimiteCandidature);
+        today.setHours(0, 0, 0, 0);
+        limitDate.setHours(0, 0, 0, 0);
+        return limitDate < today;
+    };
+
+    const expired = isOfferExpired();
 
     const handleClick = () => {
         navigate(`/offres/${offer._id || offer.id}`);
@@ -80,12 +105,12 @@ const OfferCard = ({ offer }) => {
         e.stopPropagation();
         e.preventDefault();
 
-        // ✅ Si connecté → rediriger vers la page de candidature
         if (isAuthenticated) {
             navigate(`/apply/${offer._id || offer.id}`);
         } else {
-            // ✅ Si non connecté → rediriger vers la page de connexion
-            navigate('/login', { state: { from: `/apply/${offer._id || offer.id}` } });
+            navigate('/login', { 
+                state: { from: `/apply/${offer._id || offer.id}` } 
+            });
         }
     };
 
@@ -104,16 +129,13 @@ const OfferCard = ({ offer }) => {
             'PFA': 'PFA',
             'Initiation': 'Initiation',
             'Ete': 'Ete',
-            'Master': 'Master',
-            'Licence': 'Licence',
-            'Technicien': 'Technicien'
         };
         return types[offer.typeStage] || offer.typeStage || 'Stage';
     };
 
     const getButtonText = () => {
-        if (submitted) return '✓ Candidature envoyée';
-        return '+ Postuler';
+        if (submitted) return 'Candidature envoyée';
+        return 'Postuler';
     };
 
     return (
@@ -128,28 +150,36 @@ const OfferCard = ({ offer }) => {
                         <br />
                         Délai dépôt : {formatDate(offer.dateLimiteCandidature || offer.dateFin)}
                     </InfoText>
-                    <PostulerButton
-                        onClick={handlePostuler}
-                        disabled={submitted}
-                        disableRipple={true}
-                        disableFocusRipple={true}
-                        disableElevation={true}
-                        sx={{ 
-                            mt: 1, 
-                            backgroundColor: submitted ? '#2E7D32' : '#FFFFFF',
-                            color: submitted ? '#FFFFFF' : '#0F8DB5',
-                            border: submitted ? 'none' : '1px solid #0F8DB5',
-                            '&:hover': {
-                                backgroundColor: submitted ? '#2E7D32' : '#f0f7fa',
-                            }
-                        }}
-                    >
-                        {getButtonText()}
-                    </PostulerButton>
+                    
+                    {/* ✅ BOUTON POSTULER - MASQUÉ SI EXPIRÉ */}
+                    {!expired && (
+                        <PostulerButton
+                            onClick={handlePostuler}
+                            disabled={submitted}
+                            disableRipple={true}
+                            disableFocusRipple={true}
+                            disableElevation={true}
+                            sx={{ 
+                                mt: 1, 
+                                backgroundColor: submitted ? '#2E7D32' : '#FFFFFF',
+                                color: submitted ? '#FFFFFF' : '#0F8DB5',
+                                border: submitted ? 'none' : '1px solid #0F8DB5',
+                                '&:hover': {
+                                    backgroundColor: submitted ? '#2E7D32' : '#f0f7fa',
+                                }
+                            }}
+                        >
+                            {getButtonText()}
+                        </PostulerButton>
+                    )}
                 </Box>
-                <BadgeStyled>
-                    {getBadgeLabel()}
-                </BadgeStyled>
+
+                {/* ✅ TYPE DE STAGE - MASQUÉ SI EXPIRÉ */}
+                {!expired && (
+                    <BadgeStyled type={offer.typeStage}>
+                        {getBadgeLabel()}
+                    </BadgeStyled>
+                )}
             </Box>
         </CardWrapper>
     );

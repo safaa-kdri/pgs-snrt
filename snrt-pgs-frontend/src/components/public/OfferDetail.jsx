@@ -52,6 +52,8 @@ const InfoRow = styled(Box)({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '6px 0',
+    flexWrap: 'wrap',
+    gap: '8px',
 });
 
 const InfoText = styled(Typography)({
@@ -123,6 +125,31 @@ const Paragraph = styled(Typography)({
     color: '#2D3748',
     marginBottom: '12px',
     textAlign: 'justify',
+});
+
+// ✅ CORRIGÉ : Activités en lignes séparées
+const ActivityItem = styled(Box)({
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '10px',
+    marginBottom: '12px',
+    paddingLeft: '8px',
+});
+
+const ActivityBullet = styled(Typography)({
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 700,
+    fontSize: '16px',
+    color: '#148aa0',
+    minWidth: '20px',
+});
+
+const ActivityText = styled(Typography)({
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 400,
+    fontSize: '16px',
+    lineHeight: '28px',
+    color: '#2D3748',
 });
 
 const BulletItem = styled(Box)({
@@ -209,7 +236,10 @@ const OfferDetail = () => {
     const [submitted, setSubmitted] = useState(false);
 
     const { selectedOffer, loading, error } = useSelector((state) => state.offers);
-    const isAuthenticated = !!localStorage.getItem('token');
+    const { isAuthenticated: authIsAuthenticated } = useSelector((state) => state.auth);
+    
+    // ✅ UNIQUEMENT le user (pas de token)
+    const isAuthenticated = authIsAuthenticated || !!localStorage.getItem('user');
 
     useEffect(() => {
         if (id) {
@@ -220,17 +250,21 @@ const OfferDetail = () => {
         };
     }, [dispatch, id]);
 
-    const handlePostuler = async () => {
+    // ✅ BOUTON POSTULER FONCTIONNEL
+    const handlePostuler = () => {
         if (!isAuthenticated) {
-            navigate('/');
+            // Rediriger vers login avec le chemin de retour
+            navigate('/login', { 
+                state: { from: `/apply/${id}` } 
+            });
             return;
         }
-        try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            setSubmitted(true);
-        } catch (err) {
-            console.error('Erreur:', err);
-        }
+        // Rediriger vers la page de candidature
+        navigate(`/apply/${id}`);
+    };
+
+    const handleGoBack = () => {
+        navigate('/');
     };
 
     const handleDownload = () => {
@@ -295,7 +329,7 @@ const OfferDetail = () => {
 
                 <InfoCard>
                     <InfoRow>
-                        <InfoText>Type de recrutement : {offer.typeStage || 'Stage'}</InfoText>
+                        <InfoText>Type de stage : {offer.typeStage || 'Stage'}</InfoText>
                     </InfoRow>
 
                     <InfoDivider />
@@ -321,12 +355,16 @@ const OfferDetail = () => {
                 <SubSectionTitle>Activités</SubSectionTitle>
 
                 {offer.sujets && offer.sujets.length > 0 ? (
-                    offer.sujets.map((sujet, index) => (
-                        <BulletItem key={index}>
-                            <BulletTitle>• {sujet.titre} :</BulletTitle>
-                            <BulletDescription>{sujet.description}</BulletDescription>
-                        </BulletItem>
-                    ))
+                    <Box sx={{ mb: 2 }}>
+                        {offer.sujets.map((sujet, index) => (
+                            <ActivityItem key={index}>
+                                <ActivityBullet>•</ActivityBullet>
+                                <ActivityText>
+                                    <strong>{sujet.titre}</strong> : {sujet.description}
+                                </ActivityText>
+                            </ActivityItem>
+                        ))}
+                    </Box>
                 ) : (
                     <Paragraph>Aucune activité spécifiée pour cette offre.</Paragraph>
                 )}
@@ -342,7 +380,7 @@ const OfferDetail = () => {
 
                 <Box sx={{ mt: 3 }}>
                     <Button
-                        onClick={() => navigate('/offres')}
+                        onClick={handleGoBack}
                         sx={{ 
                             color: '#6d7884', 
                             textTransform: 'none', 
@@ -352,7 +390,7 @@ const OfferDetail = () => {
                             }
                         }}
                     >
-                        ← Retour aux offres
+                        ← Retour
                     </Button>
                 </Box>
             </DetailContainer>

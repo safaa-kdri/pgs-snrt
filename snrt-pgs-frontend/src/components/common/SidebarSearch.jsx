@@ -1,5 +1,6 @@
 // src/components/common/SidebarSearch.jsx
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Card,
     Typography,
@@ -18,28 +19,31 @@ import { styled } from '@mui/material/styles';
 const SearchCard = styled(Card)({
     backgroundColor: '#f7f7f7',
     borderRadius: '19px',
-    padding: '32px 20px 20px',
-    minHeight: '480px',
+    padding: '24px 16px 16px',
+    minHeight: '350px',
+    maxWidth: '265px',
+    width: '100%',
+    margin: '0 auto',
     boxShadow: 'none',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     '& h2': {
-        marginBottom: '18px',
-        color: '#07111b',
+        marginBottom: '14px',
+        color: '#4a4a4a', // ✅ Gris foncé (était #07111b noir)
         fontSize: '18px',
-        fontWeight: 400,
+        fontWeight: 700,
         textAlign: 'center',
         fontFamily: '"Inria Sans", sans-serif',
     },
 });
 
 const SearchField = styled(TextField)({
-    width: '100%',
-    maxWidth: '220px',
-    marginBottom: '10px',
+    width: '120%',
+    maxWidth: '165px',
+    marginBottom: '8px',
     '& .MuiOutlinedInput-root': {
-        height: '42px',
+        height: '45px',
         borderRadius: '27px',
         background: '#fff',
         '& fieldset': { borderColor: '#e1e6eb' },
@@ -50,15 +54,19 @@ const SearchField = styled(TextField)({
         padding: '0 28px',
         fontSize: '15px',
         color: '#6d7884',
+        '&::placeholder': {
+            color: '#888888',
+            opacity: 1,
+        },
     },
 });
 
 const DateField = styled(TextField)({
-    width: '100%',
-    maxWidth: '220px',
+    width: '120%',
+    maxWidth: '165px',
     marginBottom: '10px',
     '& .MuiOutlinedInput-root': {
-        height: '42px',
+        height: '48px',
         borderRadius: '27px',
         background: '#fff',
         '& fieldset': { borderColor: '#e1e6eb' },
@@ -66,17 +74,22 @@ const DateField = styled(TextField)({
         '&.Mui-focused fieldset': { borderColor: '#148aa0' },
     },
     '& .MuiInputBase-input': {
-        padding: '0 45px 0 28px',
+        padding: '0 23px 0 28px',
         fontSize: '15px',
         color: '#6d7884',
+        '&::placeholder': {
+            color: '#1a2332',
+            opacity: 1,
+        },
     },
 });
 
 const SearchButton = styled(Button)({
-    width: '200px',
-    height: '42px',
+    width: '120%',
+    maxWidth: '165px',
+    height: '48px',
     marginTop: '2px',
-    borderRadius: '23px',
+    borderRadius: '27px',
     background: '#148aa0',
     color: '#fff',
     fontWeight: 700,
@@ -86,26 +99,44 @@ const SearchButton = styled(Button)({
 });
 
 // ============================================
+// TYPES DE STAGE DISPONIBLES
+// ============================================
+const STAGE_TYPES = [
+    'PFE',
+    'PFA',
+    'Initiation',
+    'Ete'
+];
+
+// ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
 const SidebarSearch = ({ onSearch }) => {
+    const navigate = useNavigate();
     const [profil, setProfil] = useState('');
-    const [domaine, setDomaine] = useState('');
+    const [typeStage, setTypeStage] = useState('');
     const [date, setDate] = useState('');
 
     const handleSearch = () => {
-        const filters = {};
-        if (profil) filters.profil = profil;
-        if (domaine) filters.domaine = domaine;
-        if (date) filters.date = date;
+        const params = new URLSearchParams();
+        if (profil) params.append('search', profil);
+        if (typeStage) params.append('typeStage', typeStage);
+        if (date) params.append('date', date);
 
-        console.log('🔍 Recherche avec filtres:', filters);
+        console.log('🔍 Recherche avec filtres:', { profil, typeStage, date });
+        console.log('🔗 URL générée:', `/?${params.toString()}`);
+
+        navigate(`/?${params.toString()}`);
 
         if (onSearch) {
-            onSearch(filters);
-        } else {
-            alert('🔍 Fonctionnalité de recherche (bientôt disponible)');
+            onSearch({ profil, typeStage, date });
+        }
+    };
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            handleSearch();
         }
     };
 
@@ -118,42 +149,61 @@ const SidebarSearch = ({ onSearch }) => {
                 variant="outlined"
                 value={profil}
                 onChange={(e) => setProfil(e.target.value)}
+                onKeyPress={handleKeyPress}
             />
 
             <SearchField
                 select
-                value={domaine}
-                onChange={(e) => setDomaine(e.target.value)}
+                value={typeStage}
+                onChange={(e) => setTypeStage(e.target.value)}
                 variant="outlined"
+                SelectProps={{
+                    displayEmpty: true,
+                    IconComponent: () => null,
+                }}
+                sx={{
+                    '& .MuiSelect-select': {
+                        color: '#1a2332',
+                        fontWeight: typeStage ? 500 : 400,
+                    },
+                }}
             >
-                <MenuItem value="">* Sélectionner</MenuItem>
-                <MenuItem value="Informatique">Informatique</MenuItem>
-                <MenuItem value="Audiovisuel">Audiovisuel</MenuItem>
-                <MenuItem value="Gestion">Gestion</MenuItem>
-                <MenuItem value="Communication">Communication</MenuItem>
-                <MenuItem value="Marketing">Marketing</MenuItem>
-                <MenuItem value="Finance">Finance</MenuItem>
+                <MenuItem value="" sx={{ color: '#1a2332', fontWeight: 400 }}>
+                    * Sélectionner
+                </MenuItem>
+                {STAGE_TYPES.map((type) => (
+                    <MenuItem key={type} value={type} sx={{ fontWeight: 500, color: '#1a2332' }}>
+                        {type}
+                    </MenuItem>
+                ))}
             </SearchField>
 
             <DateField
-                placeholder="jj/mm/aaaa"
+                type="date"
                 variant="outlined"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                InputProps={{
-                    endAdornment: (
-                        <InputAdornment
-                            position="end"
-                            sx={{
-                                position: 'absolute',
-                                right: 16,
-                                color: '#333',
-                                pointerEvents: 'none',
-                            }}
-                        >
-                            <i className="fa-solid fa-calendar"></i>
-                        </InputAdornment>
-                    ),
+                onKeyPress={handleKeyPress}
+                InputLabelProps={{ shrink: true }}
+                placeholder="jj/mm/aaaa"
+                slotProps={{
+                    input: {
+                        sx: {
+                            '&::placeholder': {
+                                color: '#1a2332',
+                                opacity: 1,
+                            },
+                        },
+                    },
+                }}
+                sx={{
+                    '& .MuiInputBase-input': {
+                        color: '#1a2332',
+                    },
+                    '& .MuiInputBase-input::placeholder': {
+                        color: '#1a2332',
+                        opacity: 1,
+                    },
                 }}
             />
 

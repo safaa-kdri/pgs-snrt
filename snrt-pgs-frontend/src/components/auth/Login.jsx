@@ -82,14 +82,14 @@ const StyledTextField = styled(TextField)({
         pointerEvents: 'none',
     },
     width: '100%',
-    maxWidth: '800px', // ✅ Même largeur que le bouton
+    maxWidth: '800px',
     margin: '0 auto 12px',
     display: 'block',
 });
 
 const CaptchaContainer = styled(Box)({
     width: '100%',
-    maxWidth: '800px', // ✅ Même largeur que le bouton
+    maxWidth: '800px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'flex-start',
@@ -145,7 +145,7 @@ const LoginButton = styled(Button)({
     width: '100%',
     height: '38px',
     marginTop: '6px',
-    maxWidth: '800px', // ✅ Largeur de référence
+    maxWidth: '800px',
     marginLeft: 'auto',
     marginRight: 'auto',
     borderRadius: '27px',
@@ -165,13 +165,13 @@ const LoginButton = styled(Button)({
 
 const Login = () => {
     const navigate = useNavigate();
-    const location = useLocation();
+    const location = useLocation(); // ✅ Déjà présent
     const dispatch = useDispatch();
 
     const [cin, setCin] = useState('');
     const [password, setPassword] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
-    const [captchaText, setCaptchaText] = useState('0vty6d');
+    const [captchaText, setCaptchaText] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [attempts, setAttempts] = useState(0);
@@ -179,12 +179,16 @@ const Login = () => {
     const from = location.state?.from || '/';
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
         const user = localStorage.getItem('user');
-        if (token && user) {
+        if (user) {
             navigate('/', { replace: true });
         }
     }, [navigate]);
+
+    // ✅ GÉNÉRER LE CAPTCHA AU CHARGEMENT ET À CHAQUE CHANGEMENT DE PAGE
+    useEffect(() => {
+        regenerateCaptcha();
+    }, [location.pathname]); // ✅ Dépendance ajoutée
 
     const regenerateCaptcha = () => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -234,7 +238,8 @@ const Login = () => {
             }
 
             if (result?.user) {
-                navigate(from, { replace: true });
+                // ✅ REDIRIGER VERS L'ACCUEIL
+                navigate('/', { replace: true });
             }
         } catch (err) {
             setAttempts(prev => prev + 1);

@@ -1,18 +1,18 @@
 // src/controllers/documentController.js
 const Document = require('../models/Document');
 const Application = require('../models/Application');
-const storageService = require('../services/storageService');
-const { ROLES, STAFF_TREATMENT_ROLES } = require('../config/constants');
+const gridfsService = require('../services/gridfsService');
+const { ROLES } = require('../config/constants');
+const logger = require('../utils/logger');
 
+// ============================================
+// UPLOAD - Stocker dans GridFS
+// ============================================
 exports.uploadDocument = async (req, res) => {
     try {
         const { type, applicationId, uploadedByModel } = req.body;
         let { candidatId } = req.body;
 
-        // IDOR (critique) : un etudiant ne peut uploader un document que pour
-        // lui-meme. Avant ce correctif, n'importe quel utilisateur pouvait
-        // fournir le candidatId d'un autre etudiant et uploader un document
-        // (ex: faux CV) en son nom.
         if (req.user?.role === ROLES.ETUDIANT) {
             candidatId = req.user.id;
         } else if (!candidatId) {
@@ -22,14 +22,50 @@ exports.uploadDocument = async (req, res) => {
             });
         }
 
-        const document = await storageService.createDocumentFromUpload({
-            file: req.file,
-            type,
-            candidatId,
-            applicationId,
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aucun fichier fourni'
+            });
+        }
+
+        // ✅ Upload vers GridFS
+        const gridfsFile = await gridfsService.uploadFile(
+            req.file.buffer,
+            req.file.originalname,
+            req.file.mimetype
+        );
+
+        // ✅ Vérifier que gridfsFile a bien un _id
+        if (!gridfsFile || !gridfsFile._id) {
+            throw new Error('Erreur lors de l\'upload vers GridFS');
+        }
+
+        // ✅ Créer le document avec tous les champs requis
+        const document = await Document.create({
+            nomOriginal: req.file.originalname,
+            nomStocke: req.file.originalname, // ✅ AJOUTÉ - nomStocke requis
+            type: type || 'Autre',
+            mimeType: req.file.mimetype,
+            taille: req.file.size,
+            gridFsId: gridfsFile._id,
+            url: `/api/v1/documents/file/${gridfsFile._id}`,
+            candidatId: candidatId,
+            applicationId: applicationId || null,
             uploadedBy: req.user?._id,
-            uploadedByModel: uploadedByModel || 'UtilisateurExterne'
+            uploadedByModel: uploadedByModel || 'UtilisateurExterne',
+            statut: 'EnAttente'
         });
+
+        if (applicationId) {
+            const application = await Application.findById(applicationId);
+            if (application && !application.documents.includes(document._id)) {
+                application.documents.push(document._id);
+                await application.save();
+            }
+        }
+
+        logger.info(`Document uploadé: ${document.nomOriginal}`);
 
         return res.status(201).json({
             success: true,
@@ -37,112 +73,62 @@ exports.uploadDocument = async (req, res) => {
             data: document
         });
     } catch (error) {
+        logger.error(`Erreur uploadDocument: ${error.message}`);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de l’upload du document',
+            message: 'Erreur lors de l\'upload',
             error: error.message
         });
     }
 };
 
-exports.uploadDocumentForApplication = async (req, res) => {
+// ============================================
+// TÉLÉCHARGER
+// ============================================
+exports.downloadDocument = async (req, res) => {
     try {
-        const { type, uploadedByModel } = req.body;
-        let { candidatId } = req.body;
-        const { applicationId } = req.params;
+        const { fileId } = req.params;
 
-        const application = await Application.findById(applicationId);
-
-        if (!application) {
+        const document = await Document.findOne({ gridFsId: fileId });
+        if (!document) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Document non trouvé'
             });
         }
 
-        // IDOR (critique) : un etudiant ne peut deposer un document que sur
-        // sa propre candidature, et uniquement en son propre nom.
         if (req.user?.role === ROLES.ETUDIANT) {
-            if (application.etudiantId.toString() !== req.user.id) {
+            if (document.candidatId.toString() !== req.user.id) {
                 return res.status(403).json({
                     success: false,
-                    message: 'Vous ne pouvez déposer des documents que sur votre propre candidature'
+                    message: 'Accès refusé'
                 });
             }
-            candidatId = req.user.id;
         }
 
-        const finalCandidatId = candidatId || application.etudiantId;
+        const downloadStream = gridfsService.downloadFile(fileId);
 
-        const document = await storageService.createDocumentFromUpload({
-            file: req.file,
-            type,
-            candidatId: finalCandidatId,
-            applicationId,
-            uploadedBy: req.user?._id,
-            uploadedByModel: uploadedByModel || 'UtilisateurExterne'
-        });
+        res.setHeader('Content-Type', document.mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${document.nomOriginal}"`);
 
-        return res.status(201).json({
-            success: true,
-            message: 'Document associé à la candidature avec succès',
-            data: document
-        });
+        downloadStream.pipe(res);
     } catch (error) {
+        logger.error(`Erreur downloadDocument: ${error.message}`);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de l’upload du document',
-            error: error.message
+            message: 'Erreur lors du téléchargement'
         });
     }
 };
 
-exports.getApplicationDocuments = async (req, res) => {
+// ============================================
+// PRÉVISUALISER (Base64)
+// ============================================
+exports.previewDocument = async (req, res) => {
     try {
-        const { applicationId } = req.params;
+        const { fileId } = req.params;
 
-        const application = await Application.findById(applicationId).select('etudiantId');
-
-        if (!application) {
-            return res.status(404).json({
-                success: false,
-                message: 'Candidature non trouvée'
-            });
-        }
-
-        // IDOR (critique) : un etudiant ne peut consulter que les documents
-        // de sa propre candidature.
-        if (req.user?.role === ROLES.ETUDIANT && application.etudiantId.toString() !== req.user.id) {
-            return res.status(403).json({
-                success: false,
-                message: 'Accès refusé à cette candidature'
-            });
-        }
-
-        const documents = await Document.find({ applicationId })
-            .sort({ createdAt: -1 });
-
-        return res.status(200).json({
-            success: true,
-            count: documents.length,
-            data: documents
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: 'Erreur lors de la récupération des documents',
-            error: error.message
-        });
-    }
-};
-
-exports.getDocumentById = async (req, res) => {
-    try {
-        const document = await Document.findById(req.params.id)
-            .populate('candidatId', 'nom prenom email cin')
-            .populate('applicationId')
-            .populate('verifiedBy', 'nom prenom email');
-
+        const document = await Document.findOne({ gridFsId: fileId });
         if (!document) {
             return res.status(404).json({
                 success: false,
@@ -150,33 +136,40 @@ exports.getDocumentById = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un etudiant ne peut consulter que ses propres documents.
-        const ownerId = document.candidatId?._id
-            ? document.candidatId._id.toString()
-            : document.candidatId?.toString();
-        if (req.user?.role === ROLES.ETUDIANT && ownerId !== req.user.id) {
-            return res.status(403).json({
-                success: false,
-                message: 'Accès refusé à ce document'
-            });
+        if (req.user?.role === ROLES.ETUDIANT) {
+            if (document.candidatId.toString() !== req.user.id) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Accès refusé'
+                });
+            }
         }
+
+        const base64 = await gridfsService.getFileAsBase64(fileId);
 
         return res.status(200).json({
             success: true,
-            data: document
+            data: {
+                base64: base64,
+                mimeType: document.mimeType,
+                nomOriginal: document.nomOriginal
+            }
         });
     } catch (error) {
+        logger.error(`Erreur previewDocument: ${error.message}`);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la récupération du document',
-            error: error.message
+            message: 'Erreur lors de la prévisualisation'
         });
     }
 };
 
+// ============================================
+// SUPPRIMER
+// ============================================
 exports.deleteDocument = async (req, res) => {
     try {
-        const document = await Document.findById(req.params.id).select('candidatId');
+        const document = await Document.findById(req.params.id);
 
         if (!document) {
             return res.status(404).json({
@@ -185,50 +178,93 @@ exports.deleteDocument = async (req, res) => {
             });
         }
 
-        // IDOR (critique) : un etudiant ne peut supprimer que ses propres documents.
-        if (req.user?.role === ROLES.ETUDIANT && document.candidatId.toString() !== req.user.id) {
-            return res.status(403).json({
-                success: false,
-                message: 'Vous ne pouvez supprimer que vos propres documents'
-            });
+        if (req.user?.role === ROLES.ETUDIANT) {
+            if (document.candidatId.toString() !== req.user.id) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Vous ne pouvez supprimer que vos propres documents'
+                });
+            }
         }
 
-        await storageService.deleteDocument(req.params.id, req.user?._id);
+        if (document.gridFsId) {
+            await gridfsService.deleteFile(document.gridFsId);
+        }
+        await document.softDelete(req.user?._id);
 
         return res.status(200).json({
             success: true,
             message: 'Document supprimé avec succès'
         });
     } catch (error) {
+        logger.error(`Erreur deleteDocument: ${error.message}`);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la suppression du document',
-            error: error.message
+            message: 'Erreur lors de la suppression'
         });
     }
 };
 
-exports.verifyDocument = async (req, res) => {
+// ============================================
+// RÉCUPÉRER UN DOCUMENT PAR ID
+// ============================================
+exports.getDocumentById = async (req, res) => {
     try {
-        // Critique : seul le personnel charge du traitement des candidatures
-        // (RH / departement / administrateur) peut valider ou refuser un
-        // document. Avant ce correctif, un etudiant pouvait valider/refuser
-        // n'importe quel document, y compris le sien ou celui d'un tiers.
-        if (!STAFF_TREATMENT_ROLES.includes(req.user?.role)) {
-            return res.status(403).json({
+        const document = await Document.findById(req.params.id)
+            .populate('candidatId', 'nom prenom email cin')
+            .populate('applicationId');
+
+        if (!document) {
+            return res.status(404).json({
                 success: false,
-                message: 'Seuls le RH, le departement ou un administrateur peuvent vérifier un document'
+                message: 'Document non trouvé'
             });
         }
 
-        const { statut, commentaire } = req.body;
+        if (req.user?.role === ROLES.ETUDIANT) {
+            if (document.candidatId._id.toString() !== req.user.id) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Accès refusé'
+                });
+            }
+        }
 
-        const document = await storageService.verifyDocument({
-            documentId: req.params.id,
-            statut,
-            commentaire,
-            verifiedBy: req.user?._id
+        return res.status(200).json({
+            success: true,
+            data: document
         });
+    } catch (error) {
+        logger.error(`Erreur getDocumentById: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération'
+        });
+    }
+};
+
+// ============================================
+// VÉRIFIER UN DOCUMENT (RH)
+// ============================================
+exports.verifyDocument = async (req, res) => {
+    try {
+        const { statut, commentaire } = req.body;
+        const document = await Document.findById(req.params.id);
+
+        if (!document) {
+            return res.status(404).json({
+                success: false,
+                message: 'Document non trouvé'
+            });
+        }
+
+        document.statut = statut || 'Valide';
+        document.commentaire = commentaire || '';
+        document.isVerified = statut === 'Valide';
+        document.verifiedBy = req.user?._id;
+        document.verifiedAt = new Date();
+
+        await document.save();
 
         return res.status(200).json({
             success: true,
@@ -236,10 +272,10 @@ exports.verifyDocument = async (req, res) => {
             data: document
         });
     } catch (error) {
+        logger.error(`Erreur verifyDocument: ${error.message}`);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la vérification du document',
-            error: error.message
+            message: 'Erreur lors de la vérification'
         });
     }
 };

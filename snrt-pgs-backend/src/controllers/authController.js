@@ -86,7 +86,17 @@ async function issueSession(res, user, userType, req) {
 // REGISTER
 // ============================================
 const register = asyncHandler(async (req, res) => {
-  const { motDePasse, email, ...rest } = req.body;
+  const { motDePasse, email, emailConfirmation, acceptTerms, ...rest } = req.body;
+
+  // ✅ Vérifier que les emails correspondent
+  if (email !== emailConfirmation) {
+    throw ApiError.badRequest('Les adresses email ne correspondent pas.');
+  }
+
+  // ✅ Vérifier que l'utilisateur a accepté les conditions
+  if (!acceptTerms) {
+    throw ApiError.badRequest('Vous devez accepter les conditions d\'utilisation.');
+  }
 
   validatePasswordPolicy(motDePasse, 'externe');
 
@@ -104,7 +114,10 @@ const register = asyncHandler(async (req, res) => {
   const user = await UtilisateurExterne.create({
     ...rest,
     email: email.trim().toLowerCase(),
+    emailConfirmation: emailConfirmation.trim().toLowerCase(),
     motDePasse: motDePasseHash,
+    acceptTerms: true,
+    termsAcceptedAt: new Date(),
   });
 
   logger.audit('REGISTER_SUCCESS', { userId: user._id.toString(), email: user.email });
@@ -480,6 +493,53 @@ const me = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, user, role: req.user.role, userType: req.user.userType });
 });
 
+// ============================================
+// CHANGER MOT DE PASSE
+// ============================================
+const changePassword = asyncHandler(async (req, res) => {
+  const { ancienMotDePasse, nouveauMotDePasse } = req.body;
+  const userId = req.user.id;
+  const userType = req.user.userType;
+
+  if (!ancienMotDePasse || !nouveauMotDePasse) {
+    throw ApiError.badRequest('Veuillez fournir l\'ancien et le nouveau mot de passe.');
+  }
+
+  // ✅ Vérifier la politique de mot de passe selon le type d'utilisateur
+  // externe = 16 caractères, interne = 20 caractères
+  validatePasswordPolicy(nouveauMotDePasse, userType);
+
+  // Récupérer l'utilisateur avec son mot de passe
+  const user = await userLookup.findById(userId, userType, '+motDePasse');
+  if (!user) {
+    throw ApiError.notFound('Utilisateur introuvable.');
+  }
+
+  // Vérifier l'ancien mot de passe
+  const isPasswordValid = await verifyPassword(user.motDePasse, ancienMotDePasse);
+  if (!isPasswordValid) {
+    throw ApiError.badRequest('Le mot de passe actuel est incorrect.');
+  }
+
+  // Vérifier que le nouveau mot de passe est différent
+  const isSamePassword = await verifyPassword(user.motDePasse, nouveauMotDePasse);
+  if (isSamePassword) {
+    throw ApiError.badRequest('Le nouveau mot de passe doit être différent de l\'ancien.');
+  }
+
+  // Hacher et sauvegarder le nouveau mot de passe
+  user.motDePasse = await hashPassword(nouveauMotDePasse);
+  user.refreshTokens = []; // Invalider tous les refresh tokens
+  await user.save({ validateModifiedOnly: true });
+
+  logger.audit('PASSWORD_CHANGED', { userId: user._id.toString(), userType });
+
+  return res.status(200).json({
+    success: true,
+    message: 'Mot de passe modifié avec succès. Veuillez vous reconnecter.',
+  });
+});
+
 module.exports = {
   register,
   login,
@@ -490,4 +550,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   me,
+  changePassword,
 };

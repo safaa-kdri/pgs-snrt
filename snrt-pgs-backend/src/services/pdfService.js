@@ -352,3 +352,190 @@ exports.deletePDF = async (filePath) => {
         return false;
     }
 };
+
+// ============================================
+// GÉNÉRER LA FICHE DE DEMANDE DE STAGE (RH → DIRECTEUR)
+// ============================================
+exports.generateDemandeStage = async (internshipData) => {
+    try {
+        const doc = new PDFDocument({
+            size: 'A4',
+            margin: 50
+        });
+
+        const filePath = path.join(
+            __dirname,
+            '../../uploads/demandes_stage',
+            `demande_stage_${internshipData._id}.pdf`
+        );
+
+        ensureDirectoryExists(path.dirname(filePath));
+
+        const stream = fs.createWriteStream(filePath);
+        doc.pipe(stream);
+
+        // Logo SNRT
+        const logoPath = path.join(__dirname, '../../public/logo_snrt_final.png');
+        if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, 50, 30, { width: 80 });
+        }
+
+        doc.moveDown(2);
+
+        doc.fontSize(12)
+            .font('Helvetica-Bold')
+            .text('Société Nationale de Radiodiffusion et de Télévision', { align: 'center' });
+
+        doc.moveDown(3);
+
+        doc.fontSize(12)
+            .font('Helvetica')
+            .text('A', { align: 'left' });
+
+        doc.moveDown(0.5);
+
+        doc.fontSize(12)
+            .font('Helvetica-Bold')
+            .text(`Monsieur le Directeur Adjoint Chargé des Infrastructures et des Systèmes d'Information`);
+
+        doc.moveDown(2);
+
+        doc.fontSize(12)
+            .font('Helvetica-Bold')
+            .text(`Objet : Demande de stage concernant : "${internshipData.etudiantNom || 'Nom Prénom'}"`);
+
+        doc.moveDown(2);
+
+        const dateDebut = new Date(internshipData.dateDebut).toLocaleDateString('fr-FR');
+        const dateFin = new Date(internshipData.dateFin).toLocaleDateString('fr-FR');
+        const today = new Date().toLocaleDateString('fr-FR');
+
+        doc.fontSize(12)
+            .font('Helvetica')
+            .text(`Faisant suite à votre accord de stage concernant "${internshipData.etudiantNom || 'Nom Prénom'}" pour la période du ${dateDebut} au ${dateFin} au sein de votre direction ; j’ai l’honneur de vous demander de bien vouloir renseigner la fiche de stage ci-jointe, afin de confirmer la période du stage et de la retourner à la Direction des Ressources Humaines.`);
+
+        doc.moveDown(2);
+
+        doc.text(`Fait à Rabat le : ${today}`);
+
+        doc.moveDown(2);
+
+        doc.fontSize(10)
+            .font('Helvetica-Oblique')
+            .text('NB : Le stagiaire doit présenter à la Direction des Ressources Humaines la présente lettre pour toute demande d’attestation de stage.');
+
+        doc.moveDown(2);
+
+        doc.fontSize(8)
+            .font('Helvetica')
+            .text('SNRT SA, Capital social : 1 275 000 000,00 Dirhams – Siège social : 1, Rue El Brihi - Rabat 10.000 - Maroc', { align: 'center' })
+            .text('Tél. : +212 (0)5 37 66 91 90 / +212 (0)5 37 68 52 00 – Fax : +212 (0)5 37 72 20 47', { align: 'center' })
+            .text('R.C. : 60485 – T.P. : 25197490 – I.F. : 3304097 – I.C.E. : 000211903000067', { align: 'center' })
+            .text('Site Web : www.snrt.ma', { align: 'center' });
+
+        doc.end();
+
+        return new Promise((resolve, reject) => {
+            stream.on('finish', () => {
+                logger.info(`Demande de stage générée: ${filePath}`);
+                resolve(filePath);
+            });
+            stream.on('error', (error) => {
+                logger.error(`Erreur generation demande stage: ${error.message}`);
+                reject(error);
+            });
+        });
+    } catch (error) {
+        logger.error(`Erreur generateDemandeStage: ${error.message}`);
+        throw error;
+    }
+};
+
+// ============================================
+// GÉNÉRER LE PDF D'ENGAGEMENT DE CONFIDENTIALITÉ (PSRH-PR01-EN10-A)
+// ============================================
+exports.generateEngagementConfidentialite = async (internshipData) => {
+    try {
+        const doc = new PDFDocument({
+            size: 'A4',
+            margin: 50
+        });
+
+        const filePath = path.join(
+            __dirname,
+            '../../uploads/engagements',
+            `engagement_confidentialite_${internshipData._id}.pdf`
+        );
+
+        ensureDirectoryExists(path.dirname(filePath));
+
+        const stream = fs.createWriteStream(filePath);
+        doc.pipe(stream);
+
+        const logoPath = path.join(__dirname, '../../public/logo_snrt_final.png');
+        if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, 50, 30, { width: 80 });
+        }
+
+        doc.moveDown(2);
+
+        doc.fontSize(16)
+            .font('Helvetica-Bold')
+            .text('PSRH-PR01-EN10-A', { align: 'center' });
+
+        doc.moveDown(0.5);
+
+        doc.fontSize(14)
+            .font('Helvetica-Bold')
+            .text('ENGAGEMENT DE CONFIDENTIALITÉ', { align: 'center' });
+        doc.text('RÉSERVÉ AUX STAGIAIRES', { align: 'center' });
+
+        doc.moveDown(3);
+
+        const etudiant = internshipData.etudiantId || {};
+        
+        doc.fontSize(12)
+            .font('Helvetica')
+            .text(`Je soussigné(e), ${etudiant.prenom || ''} ${etudiant.nom || ''}, stagiaire au sein de la Société Nationale de Radiodiffusion et de Télévision (SNRT), m'engage à respecter la confidentialité des informations auxquelles j'aurai accès durant mon stage.`);
+
+        doc.moveDown();
+
+        doc.text(`Je m'engage à :`);
+
+        const engagements = [
+            'Ne pas divulguer les informations confidentielles de la SNRT',
+            'Ne pas reproduire ou copier les documents sans autorisation',
+            'Respecter les règles de sécurité et de confidentialité',
+            'Ne pas utiliser les informations à des fins personnelles',
+            'Restituer tous les documents et supports à la fin du stage'
+        ];
+
+        engagements.forEach((item, index) => {
+            doc.text(`  ${index + 1}. ${item}`);
+        });
+
+        doc.moveDown();
+
+        doc.text(`Fait à Rabat, le ${new Date().toLocaleDateString('fr-FR')}`);
+
+        doc.moveDown(2);
+
+        doc.text('Signature du stagiaire : _________________________');
+
+        doc.end();
+
+        return new Promise((resolve, reject) => {
+            stream.on('finish', () => {
+                logger.info(`Engagement confidentialité généré: ${filePath}`);
+                resolve(filePath);
+            });
+            stream.on('error', (error) => {
+                logger.error(`Erreur generation engagement: ${error.message}`);
+                reject(error);
+            });
+        });
+    } catch (error) {
+        logger.error(`Erreur generateEngagementConfidentialite: ${error.message}`);
+        throw error;
+    }
+};

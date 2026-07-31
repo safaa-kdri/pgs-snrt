@@ -1,3 +1,4 @@
+// src/models/UtilisateurExterne.js
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
 const { CIN_REGEX, PHONE_REGEX } = require('../utils/regex');
@@ -25,7 +26,7 @@ const utilisateurExterneSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Adresse email invalide.'],
     },
-    motDePasse: { type: String, required: true, select: false }, 
+    motDePasse: { type: String, required: true, select: false },
     telephone: {
       type: String,
       required: true,
@@ -51,6 +52,27 @@ const utilisateurExterneSchema = new mongoose.Schema(
     filiere: { type: String, default: null },
     niveau: { type: String, default: null },
     annee: { type: String, default: null },
+
+    // ✅ NOUVEAUX CHAMPS POUR LA TRACABILITÉ
+    emailConfirmation: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: null,
+    },
+    acceptTerms: {
+      type: Boolean,
+      default: false,
+      required: true, // ✅ Ajouter required: true pour correspondre à Joi
+    },
+    confirmEmail: {
+      type: Boolean,
+      default: false,
+    },
+    termsAcceptedAt: {
+      type: Date,
+      default: null,
+    },
 
     documents: { type: [documentSchema], default: [] },
 
@@ -85,7 +107,12 @@ const utilisateurExterneSchema = new mongoose.Schema(
 
     derniereConnexion: { type: Date, default: null },
   },
-  { timestamps: true, collection: 'utilisateurs_externes' }
+  { 
+    timestamps: true, 
+    collection: 'utilisateurs_externes',
+    // ✅ Ajouter strict: false pour accepter les champs non définis (optionnel)
+    // strict: false,
+  }
 );
 
 

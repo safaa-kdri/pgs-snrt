@@ -332,6 +332,14 @@ exports.submitApplication = async (req, res) => {
             });
         }
 
+        // ✅ Vérifier que la candidature a des documents
+        if (!application.documents || application.documents.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vous devez déposer au moins un document avant de soumettre votre candidature.'
+            });
+        }
+
         const documents = await Document.find({ _id: { $in: application.documents } }).select('type');
         const hasCv = documents.some((doc) => doc.type === 'CV');
         if (!hasCv) {

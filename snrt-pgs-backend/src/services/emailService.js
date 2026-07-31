@@ -43,15 +43,23 @@ function getTransporter() {
   return transporterPromise;
 }
 
-async function sendMail({ to, subject, html, text }) {
+async function sendMail({ to, subject, html, text, attachments }) {
   try {
     const transporter = await getTransporter();
-    const info = await transporter.sendMail({ from: CONFIG.smtp.from, to, subject, text, html });
+    const info = await transporter.sendMail({ 
+      from: CONFIG.smtp.from, 
+      to, 
+      subject, 
+      text, 
+      html,
+      attachments: attachments || []
+    });
 
     const previewUrl = nodemailer.getTestMessageUrl(info);
     if (previewUrl) {
       logger.info(`[Email] (Ethereal) Previsualisation de l'email envoye a ${to} : ${previewUrl}`);
     }
+    return info;
   } catch (err) {
     logger.error(`[Email] Echec d'envoi vers ${to}: ${err.message}`);
     throw err;
@@ -169,6 +177,128 @@ async function sendDocumentRejectedEmail({ to, studentName, documentName, reason
   });
 }
 
+// ============================================
+// ✅ NOUVELLES FONCTIONS
+// ============================================
+
+// ============================================
+// ENVOI DE L'ENGAGEMENT DE CONFIDENTIALITÉ
+// ============================================
+async function sendEngagementConfidentialiteEmail({ to, studentName, pdfPath }) {
+    const html = baseTemplate(
+        'Engagement de Confidentialité - SNRT',
+        `<p>Bonjour ${studentName},</p>
+         <p>Suite à l'acceptation de votre candidature, veuillez trouver ci-joint le document <strong>PSRH-PR01-EN10-A - Engagement de Confidentialité</strong>.</p>
+         <p>Veuillez imprimer ce document, le signer, puis le déposer sur la plateforme dans la section prévue à cet effet.</p>
+         <p>Ce document est obligatoire pour la poursuite de votre processus d'intégration.</p>`
+    );
+
+    await sendMail({
+        to,
+        subject: 'Engagement de Confidentialité - SNRT',
+        html,
+        text: `Bonjour ${studentName}, veuillez trouver ci-joint votre engagement de confidentialité.`,
+        attachments: [
+            {
+                filename: 'Engagement_Confidentialite_SNRT.pdf',
+                path: pdfPath,
+            }
+        ]
+    });
+}
+
+// ============================================
+// ENVOI DE LA DEMANDE AU DIRECTEUR
+// ============================================
+async function sendDemandeDirecteurEmail({ to, directeurNom, studentName, startDate, endDate, pdfPath }) {
+    const html = baseTemplate(
+        'Demande de Stage - Validation Directeur',
+        `<p>Bonjour Monsieur ${directeurNom},</p>
+         <p>Je vous prie de trouver ci-joint la fiche de demande de stage concernant <strong>${studentName}</strong>.</p>
+         <p><strong>Période du stage :</strong> du ${startDate} au ${endDate}</p>
+         <p>Je vous remercie de bien vouloir apposer votre signature et le cachet de la direction, puis de nous retourner ce document.</p>
+         <p>Cordialement,</p>
+         <p>Direction des Ressources Humaines</p>`
+    );
+
+    await sendMail({
+        to,
+        subject: 'Demande de Stage - Validation Directeur',
+        html,
+        text: `Bonjour Monsieur ${directeurNom}, veuillez trouver ci-joint la fiche de demande de stage pour ${studentName}.`,
+        attachments: [
+            {
+                filename: `Demande_Stage_${studentName}.pdf`,
+                path: pdfPath,
+            }
+        ]
+    });
+}
+
+// ============================================
+// ENVOI DE LA FICHE SIGNÉE À L'ÉTUDIANT
+// ============================================
+async function sendFicheSigneeEtudiant({ to, studentName, pdfPath }) {
+    const html = baseTemplate(
+        'Validation de votre stage - SNRT',
+        `<p>Bonjour ${studentName},</p>
+         <p>Nous avons le plaisir de vous informer que votre demande de stage a été <strong>validée</strong> par la Direction.</p>
+         <p>Vous trouverez ci-joint votre fiche de stage signée et cachetée.</p>
+         <p><strong>Prochaines étapes :</strong></p>
+         <ul>
+            <li>Conservez cette fiche avec votre rapport de stage</li>
+            <li>Présentez les deux documents à la Direction des Ressources Humaines pour obtenir votre attestation de stage</li>
+         </ul>
+         <p>Félicitations pour votre acceptation !</p>
+         <p>Cordialement,</p>
+         <p>Direction des Ressources Humaines</p>`
+    );
+
+    await sendMail({
+        to,
+        subject: 'Validation de votre stage - SNRT',
+        html,
+        text: `Bonjour ${studentName}, votre stage a été validé. Trouvez ci-joint votre fiche signée.`,
+        attachments: [
+            {
+                filename: `Fiche_Stage_Validee_${studentName}.pdf`,
+                path: pdfPath,
+            }
+        ]
+    });
+}
+
+// ============================================
+// ENVOI DE L'ATTESTATION DE STAGE
+// ============================================
+async function sendAttestationStage({ to, studentName, pdfPath }) {
+    const html = baseTemplate(
+        'Attestation de Stage - SNRT',
+        `<p>Bonjour ${studentName},</p>
+         <p>Suite à la validation de votre rapport de stage, nous avons le plaisir de vous délivrer votre <strong>attestation de stage</strong>.</p>
+         <p>Ce document officiel atteste de votre passage au sein de la SNRT et de votre contribution.</p>
+         <p>Nous vous souhaitons une excellente continuation dans vos projets futurs.</p>
+         <p>Cordialement,</p>
+         <p>Direction des Ressources Humaines</p>`
+    );
+
+    await sendMail({
+        to,
+        subject: 'Attestation de Stage - SNRT',
+        html,
+        text: `Bonjour ${studentName}, veuillez trouver ci-joint votre attestation de stage.`,
+        attachments: [
+            {
+                filename: `Attestation_Stage_${studentName}.pdf`,
+                path: pdfPath,
+            }
+        ]
+    });
+}
+
+// ============================================
+// EXPORTS
+// ============================================
 module.exports = {
   sendTwoFactorCodeEmail,
   sendPasswordResetEmail,
@@ -177,4 +307,9 @@ module.exports = {
   sendApplicationSubmittedEmail,
   sendApplicationStatusChangedEmail,
   sendDocumentRejectedEmail,
+  // ✅ NOUVELLES FONCTIONS
+  sendEngagementConfidentialiteEmail,
+  sendDemandeDirecteurEmail,
+  sendFicheSigneeEtudiant,
+  sendAttestationStage,
 };

@@ -143,14 +143,14 @@ const ResultCard = ({ result }) => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box sx={{ flex: 1 }}>
                     <ResultTitle>
-                        <a href={`/resultats/${result._id || result.id}`}>
-                            {result.titreOffre || result.offre?.titre || 'Offre sans titre'}
-                        </a>
+                        {/* ✅ Utiliser titreOffre ou fallback */}
+                        {result.titreOffre || result.offre?.titre || 'Offre sans titre'}
                     </ResultTitle>
                     <InfoText>
-                        Candidat : {result.candidatNom || 'Non spécifié'}
+                        {/* ✅ Afficher le nom du résultat */}
+                        Document : {result.resultatNom || 'Résultat de concours'}
                         <br />
-                        Date : {formatDate(result.dateResultat || result.datePublication || result.createdAt)}
+                        Publié le : {formatDate(result.resultatPublieLe || result.datePublication || result.createdAt)}
                     </InfoText>
                     <ResultButton 
                         onClick={handleVoirResultat}

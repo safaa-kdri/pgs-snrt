@@ -10,7 +10,7 @@ const DocumentSchema = new mongoose.Schema({
     },
     nomStocke: {
         type: String,
-        required: true,
+        required: true, // ✅ Ce champ est requis
         trim: true
     },
     type: {
@@ -28,10 +28,14 @@ const DocumentSchema = new mongoose.Schema({
     },
     chemin: {
         type: String,
-        required: true
+        required: false,
+        default: null
     },
     url: {
         type: String
+    },
+    gridFsId: {
+        type: mongoose.Schema.Types.ObjectId,
     },
     candidatId: {
         type: mongoose.Schema.Types.ObjectId,

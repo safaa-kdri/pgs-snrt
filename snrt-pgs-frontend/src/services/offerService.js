@@ -54,8 +54,7 @@ export const offerService = {
             return response.data;
         } catch (error) {
             console.error('❌ Erreur getTypes:', error);
-            // Fallback en cas d'erreur
-            return { types: ['PFE', 'PFA', 'Initiation', 'Ete', 'Master', 'Licence', 'Technicien'] };
+            return { types: ['PFE', 'PFA', 'Initiation', 'Ete'] };
         }
     },
 

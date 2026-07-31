@@ -7,6 +7,7 @@ const Application = require('../models/Application');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const { sendDocumentRejectedEmail } = require('./emailService');
 const logger = require('../utils/logger');
+const gridfsService = require('./gridfsService');
 
 const ALLOWED_DOCUMENT_TYPES = ['CV', 'LettreMotivation', 'Convention', 'Attestation', 'ReleveNotes', 'Autre'];
 
@@ -32,19 +33,33 @@ exports.createDocumentFromUpload = async ({
         throw new Error('Aucun fichier fourni');
     }
 
-    const document = await Document.create({
+    // Support memory uploads (GridFS) and disk uploads.
+    let docPayload = {
         nomOriginal: file.originalname,
-        nomStocke: file.filename,
         type: getDocumentType(type),
         mimeType: file.mimetype,
         taille: file.size,
-        chemin: file.path,
-        url: `/uploads/documents/${file.filename}`,
         candidatId,
         applicationId,
         uploadedBy,
         uploadedByModel
-    });
+    };
+
+    if (file.buffer) {
+        // Upload to GridFS
+        const uploaded = await gridfsService.uploadBuffer({ buffer: file.buffer, filename: file.originalname, contentType: file.mimetype });
+        docPayload.nomStocke = uploaded.filename;
+        docPayload.gridFsId = uploaded._id;
+        docPayload.chemin = null;
+        docPayload.url = `/api/v1/documents/stream/${uploaded._id}`;
+    } else {
+        // Disk-backed upload (backwards compatible)
+        docPayload.nomStocke = file.filename;
+        docPayload.chemin = file.path;
+        docPayload.url = `/uploads/documents/${file.filename}`;
+    }
+
+    const document = await Document.create(docPayload);
 
     if (applicationId) {
         const application = await Application.findById(applicationId);
@@ -63,12 +78,20 @@ exports.createDocumentFromUpload = async ({
 };
 
 exports.deletePhysicalFile = async (document) => {
-    if (!document?.chemin) return;
-
-    const filePath = path.resolve(document.chemin);
-
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+    // If file is stored on disk
+    if (document?.chemin) {
+        const filePath = path.resolve(document.chemin);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    }
+    // If file is stored in GridFS, delete from GridFS
+    if (document?.gridFsId) {
+        try {
+            await gridfsService.deleteById(document.gridFsId);
+        } catch (err) {
+            logger.warn(`[Storage] Erreur suppression GridFS: ${err.message}`);
+        }
     }
 };
 

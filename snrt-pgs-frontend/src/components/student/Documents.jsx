@@ -30,7 +30,6 @@ import {
     Upload,
     Delete,
     Download,
-    Visibility,
     CheckCircle,
     Pending,
     Cancel,
@@ -40,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
 
 // ============================================
 // STYLES
@@ -112,45 +112,12 @@ const Documents = () => {
     const fetchDocuments = async () => {
         setLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
-
-            const mockDocuments = [
-                {
-                    id: '1',
-                    nom: 'CV_Youssef_EL_HASSANI.pdf',
-                    type: 'CV',
-                    taille: '245 KB',
-                    dateUpload: '2026-07-15',
-                    statut: 'valide',
-                },
-                {
-                    id: '2',
-                    nom: 'Lettre_motivation.pdf',
-                    type: 'Lettre de motivation',
-                    taille: '120 KB',
-                    dateUpload: '2026-07-14',
-                    statut: 'valide',
-                },
-                {
-                    id: '3',
-                    nom: 'Releve_notes_Master1.pdf',
-                    type: 'Relevé de notes',
-                    taille: '890 KB',
-                    dateUpload: '2026-07-10',
-                    statut: 'en_attente',
-                },
-                {
-                    id: '4',
-                    nom: 'Attestation_scolarite.pdf',
-                    type: 'Attestation de scolarité',
-                    taille: '180 KB',
-                    dateUpload: '2026-06-28',
-                    statut: 'refuse',
-                },
-            ];
-
-            setDocuments(mockDocuments);
-
+            const response = await api.get('/documents', {
+                params: { candidatId: user?.id }
+            });
+            
+            const docs = response.data?.data || [];
+            setDocuments(docs);
         } catch (error) {
             console.error('Erreur chargement documents:', error);
         } finally {
@@ -159,8 +126,8 @@ const Documents = () => {
     };
 
     const getFileIcon = (nom) => {
-        if (nom.endsWith('.pdf')) return <PictureAsPdf sx={{ color: '#ef4444' }} />;
-        if (nom.endsWith('.png') || nom.endsWith('.jpg') || nom.endsWith('.jpeg')) {
+        if (nom?.endsWith('.pdf')) return <PictureAsPdf sx={{ color: '#ef4444' }} />;
+        if (nom?.endsWith('.png') || nom?.endsWith('.jpg') || nom?.endsWith('.jpeg')) {
             return <Image sx={{ color: '#22c55e' }} />;
         }
         return <Description sx={{ color: '#4f46e5' }} />;
@@ -175,6 +142,33 @@ const Documents = () => {
         return labels[status] || status;
     };
 
+    // ✅ buildFileHref - POUR LE TÉLÉCHARGEMENT UNIQUEMENT
+    const buildFileHref = (doc) => {
+        if (!doc) return null;
+        
+        const apiRoot = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+        
+        if (doc.gridFsId) {
+            return `${apiRoot}/api/v1/documents/file/${doc.gridFsId}`;
+        }
+        
+        if (doc.url) {
+            if (doc.url.startsWith('/')) {
+                return `${apiRoot}${doc.url}`;
+            }
+            return doc.url;
+        }
+        
+        if (doc.chemin) {
+            if (doc.chemin.startsWith('/')) {
+                return `${apiRoot}${doc.chemin}`;
+            }
+            return doc.chemin;
+        }
+        
+        return null;
+    };
+
     const handleFileSelect = (event) => {
         const file = event.target.files[0];
         if (file) {
@@ -187,19 +181,24 @@ const Documents = () => {
         if (!selectedFile) return;
 
         setUploading(true);
+        setError('');
+        setSuccess('');
+
         try {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            const formData = new FormData();
+            formData.append('document', selectedFile);
+            formData.append('type', 'Autre');
 
-            const newDoc = {
-                id: String(documents.length + 1),
-                nom: selectedFile.name,
-                type: 'Autre',
-                taille: `${Math.round(selectedFile.size / 1024)} KB`,
-                dateUpload: new Date().toISOString().split('T')[0],
-                statut: 'en_attente',
-            };
+            const response = await api.post('/documents', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
 
-            setDocuments([...documents, newDoc]);
+            const uploadedDoc = response?.data?.data;
+
+            if (uploadedDoc) {
+                setDocuments([uploadedDoc, ...documents]);
+            }
+
             setSuccess('✅ Document uploadé avec succès !');
             setOpenUploadDialog(false);
             setSelectedFile(null);
@@ -207,22 +206,48 @@ const Documents = () => {
 
         } catch (error) {
             console.error('Erreur upload:', error);
-            setError('❌ Erreur lors de l\'upload du document');
+            setError(error.response?.data?.message || '❌ Erreur lors de l\'upload du document');
         } finally {
             setUploading(false);
         }
     };
 
-    const handleDeleteDocument = (id) => {
-        setDocuments(documents.filter((d) => d.id !== id));
-        setSuccess('✅ Document supprimé avec succès');
-        setTimeout(() => setSuccess(''), 3000);
+    const handleDeleteDocument = async (id) => {
+        try {
+            await api.delete(`/documents/${id}`);
+            setDocuments(documents.filter((d) => d._id !== id));
+            setSuccess('✅ Document supprimé avec succès');
+            setTimeout(() => setSuccess(''), 3000);
+        } catch (error) {
+            console.error('Erreur suppression:', error);
+            setError('❌ Erreur lors de la suppression');
+        }
     };
 
+    // ✅ Téléchargement UNIQUEMENT
     const handleDownloadDocument = (doc) => {
-        // Simulation de téléchargement
-        console.log(`📥 Téléchargement de ${doc.nom}`);
-        alert(`📥 Téléchargement de ${doc.nom} (simulé)`);
+        if (!doc) return;
+        const href = buildFileHref(doc);
+        
+        if (href) {
+            const isPdf = doc.mimeType === 'application/pdf' || 
+                          doc.nomOriginal?.toLowerCase().endsWith('.pdf') ||
+                          doc.nom?.toLowerCase().endsWith('.pdf');
+            
+            if (isPdf) {
+                window.open(href, '_blank');
+            } else {
+                const link = document.createElement('a');
+                link.href = href;
+                link.download = doc.nomOriginal || doc.nom || 'document';
+                link.target = '_blank';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } else {
+            setError('Impossible de télécharger ce document');
+        }
     };
 
     if (loading) {
@@ -280,7 +305,7 @@ const Documents = () => {
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
 
             {/* ===== ZONE D'UPLOAD RAPIDE ===== */}
-            <UploadZone onClick={() => document.getElementById('file-input').click()}>
+            <UploadZone onClick={() => document.getElementById('file-input')?.click()}>
                 <input
                     id="file-input"
                     type="file"
@@ -325,12 +350,12 @@ const Documents = () => {
                             </TableRow>
                         ) : (
                             documents.map((doc) => (
-                                <TableRow key={doc.id} hover>
+                                <TableRow key={doc._id} hover>
                                     <TableCell>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            {getFileIcon(doc.nom)}
+                                            {getFileIcon(doc.nomOriginal)}
                                             <Typography variant="body2" fontWeight={500}>
-                                                {doc.nom}
+                                                {doc.nomOriginal}
                                             </Typography>
                                         </Box>
                                     </TableCell>
@@ -347,12 +372,12 @@ const Documents = () => {
                                     </TableCell>
                                     <TableCell>
                                         <Typography variant="body2" color="text.secondary">
-                                            {doc.taille}
+                                            {Math.round(doc.taille / 1024)} KB
                                         </Typography>
                                     </TableCell>
                                     <TableCell>
                                         <Typography variant="body2" color="text.secondary">
-                                            {new Date(doc.dateUpload).toLocaleDateString('fr-FR')}
+                                            {new Date(doc.createdAt).toLocaleDateString('fr-FR')}
                                         </Typography>
                                     </TableCell>
                                     <TableCell>
@@ -372,18 +397,10 @@ const Documents = () => {
                                                 <Download fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title="Voir">
-                                            <IconButton
-                                                size="small"
-                                                sx={{ color: '#4f46e5' }}
-                                            >
-                                                <Visibility fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
                                         <Tooltip title="Supprimer">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleDeleteDocument(doc.id)}
+                                                onClick={() => handleDeleteDocument(doc._id)}
                                                 sx={{ color: '#ef4444' }}
                                             >
                                                 <Delete fontSize="small" />

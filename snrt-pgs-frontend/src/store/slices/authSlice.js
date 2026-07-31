@@ -71,13 +71,11 @@ export const loadCurrentUser = createAsyncThunk(
     async (_, { rejectWithValue }) => {
         try {
             const user = await authService.me();
-            // ✅ Si l'utilisateur n'est pas connecté, retourner null (pas d'erreur)
             if (!user) {
                 return null;
             }
             return user;
         } catch (error) {
-            // ✅ Ignorer l'erreur 401 (l'utilisateur n'est pas connecté)
             if (error.response?.status === 401) {
                 return null;
             }
@@ -92,7 +90,7 @@ export const loadCurrentUser = createAsyncThunk(
 
 const initialState = {
     user: authService.getCurrentUser(),
-    isAuthenticated: authService.isAuthenticated(), // ✅ Flag de connexion
+    isAuthenticated: authService.isAuthenticated(),
     status: 'idle',
     loading: false,
     error: null,
@@ -111,7 +109,6 @@ const authSlice = createSlice({
             state.twoFactorRequired = false;
             state.twoFactorEmail = null;
         },
-        // ✅ Action pour mettre à jour isAuthenticated (utilisée après 2FA)
         setAuthenticated: (state, action) => {
             state.isAuthenticated = action.payload;
         },
@@ -128,16 +125,18 @@ const authSlice = createSlice({
                 state.error = null;
                 
                 if (action.payload.requiresTwoFactor) {
-                    // ✅ 2FA requise
                     state.isAuthenticated = false;
                     state.twoFactorRequired = true;
                     state.twoFactorEmail = action.payload.email || action.payload.message;
                 } else {
-                    // ✅ Connexion réussie (sans 2FA)
                     state.isAuthenticated = true;
                     state.user = action.payload.user || state.user;
                     state.twoFactorRequired = false;
                     state.twoFactorEmail = null;
+                    
+                    if (action.payload.user) {
+                        localStorage.setItem('user', JSON.stringify(action.payload.user));
+                    }
                 }
             })
             .addCase(login.rejected, (state, action) => {
@@ -167,16 +166,15 @@ const authSlice = createSlice({
             })
             .addCase(verify2FA.fulfilled, (state, action) => {
                 state.loading = false;
-                state.isAuthenticated = true; // ✅ Marquer comme connecté
+                state.isAuthenticated = true;
                 state.user = action.payload.user;
                 state.twoFactorRequired = false;
                 state.twoFactorEmail = null;
                 
-                // Nettoyer le localStorage
                 localStorage.removeItem('2faEmail');
                 localStorage.removeItem('2faUserId');
                 
-                // ✅ Sauvegarder l'utilisateur en localStorage (pour le flag)
+                // ✅ UNIQUEMENT le user - PAS de token
                 if (action.payload.user) {
                     localStorage.setItem('user', JSON.stringify(action.payload.user));
                 }
@@ -196,19 +194,28 @@ const authSlice = createSlice({
                 state.status = 'succeeded';
                 
                 if (action.payload && action.payload.user) {
-                    // ✅ Utilisateur connecté
                     state.isAuthenticated = true;
                     state.user = action.payload.user;
+                    localStorage.setItem('user', JSON.stringify(action.payload.user));
                 } else {
-                    // ✅ Utilisateur non connecté (normal, pas d'erreur)
-                    state.isAuthenticated = false;
-                    state.user = null;
+                    // ✅ Vérifier si un user existe en localStorage
+                    const storedUser = localStorage.getItem('user');
+                    if (storedUser) {
+                        try {
+                            state.user = JSON.parse(storedUser);
+                            state.isAuthenticated = true;
+                        } catch (e) {
+                            state.isAuthenticated = false;
+                            state.user = null;
+                        }
+                    } else {
+                        state.isAuthenticated = false;
+                        state.user = null;
+                    }
                 }
             })
             .addCase(loadCurrentUser.rejected, (state) => {
                 state.status = 'idle';
-                // ✅ NE PAS modifier isAuthenticated ici
-                // L'utilisateur peut être connecté via le cookie
             })
             
             // ===== FORGOT PASSWORD =====
@@ -227,14 +234,12 @@ const authSlice = createSlice({
             
             // ===== LOGOUT =====
             .addCase(logout.fulfilled, (state) => {
-                state.isAuthenticated = false; // ✅ Marquer comme déconnecté
+                state.isAuthenticated = false;
                 state.user = null;
                 state.twoFactorRequired = false;
                 state.twoFactorEmail = null;
-                // Le localStorage est nettoyé dans authService.logout
             })
             .addCase(logout.rejected, (state) => {
-                // Même en cas d'erreur, on déconnecte l'utilisateur
                 state.isAuthenticated = false;
                 state.user = null;
             });

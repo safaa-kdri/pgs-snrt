@@ -1,6 +1,6 @@
 // src/components/public/Home.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     Typography,
@@ -12,7 +12,7 @@ import {
     CircularProgress,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { fetchOffers, fetchDepartments, setPage } from '../../store/slices/offerSlice';
+import { fetchOffers, fetchDepartments, setPage, setFilter, resetFilters } from '../../store/slices/offerSlice';
 import { fetchResults, setPage as setResultPage } from '../../store/slices/resultSlice';
 import OfferCard from './OfferCard';
 import ResultCard from './ResultCard';
@@ -77,6 +77,7 @@ const Home = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const dispatch = useDispatch();
+    const [searchParams] = useSearchParams();
 
     // ========================================== //
     // 1️⃣ SELECTORS
@@ -97,111 +98,71 @@ const Home = () => {
     // ========================================== //
 
     const [activeTab, setActiveTab] = useState('offres');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     // ========================================== //
-    // 3️⃣ VÉRIFICATION CONNEXION
+    // 3️⃣ LECTURE DES PARAMÈTRES DE RECHERCHE
     // ========================================== //
 
     useEffect(() => {
-        if (location.state?.isAuthenticated) {
-            setIsAuthenticated(true);
-            return;
+        const search = searchParams.get('search') || '';
+        const typeStage = searchParams.get('typeStage') || '';
+        const date = searchParams.get('date') || '';
+
+        console.log('🔍 [Home] Lecture paramètres URL:', { search, typeStage, date });
+
+        dispatch(resetFilters());
+
+        if (search) {
+            dispatch(setFilter({ key: 'search', value: search }));
         }
+        if (typeStage) {
+            dispatch(setFilter({ key: 'typeStage', value: typeStage }));
+        }
+
+    }, [searchParams, dispatch]);
+
+    // ========================================== //
+    // 4️⃣ CHARGEMENT DES OFFRES - TOUJOURS ACTIF
+    // ========================================== //
+
+    useEffect(() => {
+        const params = {
+            statut: 'Publiée',
+            page: page,
+            limit: 10,
+        };
+
+        if (filters.search) params.search = filters.search;
+        if (filters.typeStage) params.typeStage = filters.typeStage;
         
-        const token = localStorage.getItem('token');
-        const storedUser = localStorage.getItem('user');
-        if (token && storedUser) {
-            setIsAuthenticated(true);
-        } else {
-            setIsAuthenticated(false);
-        }
-    }, [location]);
+        const date = searchParams.get('date') || '';
+        if (date) params.date = date;
 
-    // ========================================== //
-    // 4️⃣ REDIRECTION PAR RÔLE (SI DÉJÀ CONNECTÉ)
-    // ========================================== //
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const storedUser = localStorage.getItem('user');
-
-        if (token && storedUser) {
-            try {
-                const userData = JSON.parse(storedUser);
-                const role = userData?.role || userData?.userType;
-
-                if (location.state?.isAuthenticated) {
-                    return;
-                }
-
-                switch (role) {
-                    case 'Administrateur':
-                        navigate('/admin', { replace: true });
-                        break;
-                    case 'RH':
-                        navigate('/rh', { replace: true });
-                        break;
-                    case 'Departement':
-                        navigate('/department', { replace: true });
-                        break;
-                    case 'Encadrant':
-                        navigate('/supervisor', { replace: true });
-                        break;
-                    default:
-                        navigate('/dashboard', { replace: true });
-                        break;
-                }
-            } catch (e) {
-                console.error('Erreur parsing user:', e);
-            }
-        }
-    }, [navigate, location]);
-
-    // ========================================== //
-    // 5️⃣ CHARGEMENT DES OFFRES
-    // ========================================== //
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-        const isAuth = !!(token || user);
+        console.log('📤 [Home] Chargement des offres avec params:', params);
+        dispatch(fetchOffers(params));
         
-        if (isAuth) {
-            dispatch(fetchOffers({ statut: 'Publiée', page: 1, limit: 10 }));
-        }
+    }, [dispatch, filters, page, searchParams]);
+
+    // ========================================== //
+    // 5️⃣ CHARGEMENT DES DÉPARTEMENTS
+    // ========================================== //
+
+    useEffect(() => {
+        dispatch(fetchDepartments());
     }, [dispatch]);
 
     // ========================================== //
-    // 6️⃣ CHARGEMENT DES DÉPARTEMENTS
+    // 6️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF) - ✅ Accessible sans authentification
     // ========================================== //
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-        const isAuth = !!(token || user);
-        
-        if (isAuth) {
-            dispatch(fetchDepartments());
-        }
-    }, [dispatch]);
-
-    // ========================================== //
-    // 7️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF)
-    // ========================================== //
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-        const isAuth = !!(token || user);
-        
-        if (activeTab === 'resultats' && isAuth) {
+        if (activeTab === 'resultats') {
             dispatch(fetchResults({ page: 1, limit: 10 }));
         }
     }, [activeTab, dispatch]);
 
     // ========================================== //
-    // 8️⃣ RENDU DE LA PAGINATION
+    // 7️⃣ RENDU DE LA PAGINATION
     // ========================================== //
 
     const renderPagination = () => {
@@ -313,7 +274,7 @@ const Home = () => {
     };
 
     // ========================================== //
-    // 9️⃣ AFFICHAGE
+    // 8️⃣ AFFICHAGE
     // ========================================== //
 
     return (
@@ -335,7 +296,6 @@ const Home = () => {
                 Votre passerelle vers l'expérience professionnelle
             </HeroSubtitle>
 
-            {/* Trait fin de séparation */}
             <Box sx={{
                 width: '100%',
                 height: '1px',
@@ -343,75 +303,7 @@ const Home = () => {
                 margin: '8px 0 16px 0'
             }} />
 
-            {/* ========================================== */}
-            {/* ✅ BOUTONS DE NAVIGATION (UNIQUEMENT SI CONNECTÉ) */}
-            {/* ========================================== */}
-            {isAuthenticated && (
-                <Box sx={{ display: 'flex', gap: '12px', mb: 3, justifyContent: 'center' }}>
-                    <Button
-                        variant="outlined"
-                        onClick={() => navigate('/')}
-                        sx={{
-                            borderRadius: '30px',
-                            padding: '8px 24px',
-                            borderColor: '#148aa0',
-                            color: '#148aa0',
-                            fontFamily: 'Inter, sans-serif',
-                            fontWeight: 500,
-                            fontSize: '14px',
-                            textTransform: 'none',
-                            '&:hover': {
-                                backgroundColor: 'rgba(20, 138, 160, 0.05)',
-                                borderColor: '#148aa0',
-                            }
-                        }}
-                    >
-                        <i className="fa-solid fa-arrow-left" style={{ marginRight: '8px' }}></i>
-                        Accueil
-                    </Button>
-
-                    <Button
-                        variant="contained"
-                        onClick={() => {
-                            const token = localStorage.getItem('token');
-                            const storedUser = localStorage.getItem('user');
-                            if (token && storedUser) {
-                                try {
-                                    const userData = JSON.parse(storedUser);
-                                    const role = userData?.role || userData?.userType;
-                                    switch (role) {
-                                        case 'Administrateur': navigate('/admin'); break;
-                                        case 'RH': navigate('/rh'); break;
-                                        case 'Departement': navigate('/department'); break;
-                                        case 'Encadrant': navigate('/supervisor'); break;
-                                        default: navigate('/dashboard'); break;
-                                    }
-                                } catch (e) { navigate('/dashboard'); }
-                            } else {
-                                navigate('/dashboard');
-                            }
-                        }}
-                        sx={{
-                            borderRadius: '30px',
-                            padding: '8px 24px',
-                            backgroundColor: '#148aa0',
-                            color: '#ffffff',
-                            fontFamily: 'Inter, sans-serif',
-                            fontWeight: 500,
-                            fontSize: '14px',
-                            textTransform: 'none',
-                            '&:hover': {
-                                backgroundColor: '#0b7890',
-                            }
-                        }}
-                    >
-                        Dashboard
-                        <i className="fa-solid fa-arrow-right" style={{ marginLeft: '8px' }}></i>
-                    </Button>
-                </Box>
-            )}
-
-            {/* ===== ONGLETS STYLE SNRT ===== */}
+            {/* ===== ONGLETS ===== */}
             <Box sx={{ display: 'flex', gap: '2px', mb: 3 }}>
                 <Button
                     onClick={() => setActiveTab('offres')}
@@ -454,11 +346,10 @@ const Home = () => {
             </Box>
 
             {/* ========================================== */}
-            {/* CONTENU CONDITIONNEL SELON L'ONGLET */}
+            {/* CONTENU */}
             {/* ========================================== */}
 
             {activeTab === 'offres' ? (
-                // ===== ONGLET OFFRES =====
                 loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                         <CircularProgress sx={{ color: '#148aa0' }} />
@@ -469,11 +360,29 @@ const Home = () => {
                     <Box sx={{ padding: '20px', textAlign: 'center', background: '#fbf9f9', borderRadius: '19px' }}>
                         <i className="fa-solid fa-circle-info" style={{ fontSize: '24px', color: '#168eb4' }}></i>
                         <h3 style={{ margin: '10px 0 5px', fontFamily: 'Inter, sans-serif', fontWeight: 700 }}>
-                            Aucune offre disponible
+                            {searchParams.get('search') || searchParams.get('typeStage') || searchParams.get('date') ? 
+                                'Aucune offre ne correspond à vos critères de recherche.' :
+                                'Aucune offre disponible'
+                            }
                         </h3>
                         <p style={{ color: '#555', fontFamily: 'Inter, sans-serif' }}>
-                            Restez connecté. Les nouvelles offres seront bientôt publiées.
+                            {searchParams.get('search') || searchParams.get('typeStage') || searchParams.get('date') ? 
+                                'Essayez de modifier vos critères de recherche.' :
+                                'Restez connecté. Les nouvelles offres seront bientôt publiées.'
+                            }
                         </p>
+                        {(searchParams.get('search') || searchParams.get('typeStage') || searchParams.get('date')) && (
+                            <Button
+                                variant="outlined"
+                                onClick={() => {
+                                    navigate('/');
+                                    dispatch(resetFilters());
+                                }}
+                                sx={{ mt: 2, borderRadius: '20px', textTransform: 'none' }}
+                            >
+                                Réinitialiser la recherche
+                            </Button>
+                        )}
                     </Box>
                 ) : (
                     <>
@@ -486,79 +395,77 @@ const Home = () => {
                     </>
                 )
             ) : (
-                // ===== ONGLET RÉSULTATS =====
-                <>
-                    {resultsLoading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                            <CircularProgress sx={{ color: '#148aa0' }} />
+                // ✅ Onglet Résultats - Accessible sans authentification
+                resultsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                        <CircularProgress sx={{ color: '#148aa0' }} />
+                    </Box>
+                ) : resultsError ? (
+                    <Alert severity="error" sx={{ mt: 2 }}>{resultsError}</Alert>
+                ) : results.length === 0 ? (
+                    <Box sx={{ padding: '20px', textAlign: 'center', background: '#fbf9f9', borderRadius: '19px' }}>
+                        <i className="fa-solid fa-circle-info" style={{ fontSize: '24px', color: '#168eb4' }}></i>
+                        <h3 style={{ margin: '10px 0 5px', fontFamily: 'Inter, sans-serif', fontWeight: 700 }}>
+                            Aucun résultat publié
+                        </h3>
+                        <p style={{ color: '#555', fontFamily: 'Inter, sans-serif' }}>
+                            Les résultats seront publiés ici dès qu'ils seront disponibles.
+                        </p>
+                    </Box>
+                ) : (
+                    <>
+                        <Box sx={{ border: '1px solid #e8edf0', borderRadius: '8px', overflow: 'hidden' }}>
+                            {results.map((result) => (
+                                <ResultCard key={result._id} result={result} />
+                            ))}
                         </Box>
-                    ) : resultsError ? (
-                        <Alert severity="error" sx={{ mt: 2 }}>{resultsError}</Alert>
-                    ) : results.length === 0 ? (
-                        <Box sx={{ padding: '20px', textAlign: 'center', background: '#fbf9f9', borderRadius: '19px' }}>
-                            <i className="fa-solid fa-circle-info" style={{ fontSize: '24px', color: '#168eb4' }}></i>
-                            <h3 style={{ margin: '10px 0 5px', fontFamily: 'Inter, sans-serif', fontWeight: 700 }}>
-                                Aucun résultat publié
-                            </h3>
-                            <p style={{ color: '#555', fontFamily: 'Inter, sans-serif' }}>
-                                Les résultats seront publiés ici dès qu'ils seront disponibles.
-                            </p>
-                        </Box>
-                    ) : (
-                        <>
-                            <Box sx={{ border: '1px solid #e8edf0', borderRadius: '8px', overflow: 'hidden' }}>
-                                {results.map((result) => (
-                                    <ResultCard key={result._id} result={result} />
-                                ))}
+                        {resultsPages > 1 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3, gap: '4px' }}>
+                                <button
+                                    onClick={() => dispatch(setResultPage(Math.max(1, resultsPage - 1)))}
+                                    disabled={resultsPage === 1}
+                                    style={{
+                                        minWidth: '20px',
+                                        height: '20px',
+                                        border: '1px solid #d9dee3',
+                                        borderRadius: '4px',
+                                        background: '#ffffff',
+                                        color: '#f05f1c',
+                                        fontSize: '10px',
+                                        fontWeight: 500,
+                                        cursor: 'pointer',
+                                        fontFamily: 'Inter, sans-serif',
+                                        padding: '0 8px',
+                                    }}
+                                >
+                                    {'<<'}
+                                </button>
+                                <span style={{ padding: '0 10px', fontFamily: 'Inter, sans-serif', color: '#6d7884' }}>
+                                    {resultsPage} / {resultsPages}
+                                </span>
+                                <button
+                                    onClick={() => dispatch(setResultPage(Math.min(resultsPages, resultsPage + 1)))}
+                                    disabled={resultsPage === resultsPages}
+                                    style={{
+                                        minWidth: '32px',
+                                        height: '32px',
+                                        border: '1px solid #d9dee3',
+                                        borderRadius: '4px',
+                                        background: '#ffffff',
+                                        color: '#f05f1c',
+                                        fontSize: '13px',
+                                        fontWeight: 500,
+                                        cursor: 'pointer',
+                                        fontFamily: 'Inter, sans-serif',
+                                        padding: '0 8px',
+                                    }}
+                                >
+                                    {'>>'}
+                                </button>
                             </Box>
-                            {resultsPages > 1 && (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3, gap: '4px' }}>
-                                    <button
-                                        onClick={() => dispatch(setResultPage(Math.max(1, resultsPage - 1)))}
-                                        disabled={resultsPage === 1}
-                                        style={{
-                                            minWidth: '20px',
-                                            height: '20px',
-                                            border: '1px solid #d9dee3',
-                                            borderRadius: '4px',
-                                            background: '#ffffff',
-                                            color: '#f05f1c',
-                                            fontSize: '10px',
-                                            fontWeight: 500,
-                                            cursor: 'pointer',
-                                            fontFamily: 'Inter, sans-serif',
-                                            padding: '0 8px',
-                                        }}
-                                    >
-                                        {'<<'}
-                                    </button>
-                                    <span style={{ padding: '0 10px', fontFamily: 'Inter, sans-serif', color: '#6d7884' }}>
-                                        {resultsPage} / {resultsPages}
-                                    </span>
-                                    <button
-                                        onClick={() => dispatch(setResultPage(Math.min(resultsPages, resultsPage + 1)))}
-                                        disabled={resultsPage === resultsPages}
-                                        style={{
-                                            minWidth: '32px',
-                                            height: '32px',
-                                            border: '1px solid #d9dee3',
-                                            borderRadius: '4px',
-                                            background: '#ffffff',
-                                            color: '#f05f1c',
-                                            fontSize: '13px',
-                                            fontWeight: 500,
-                                            cursor: 'pointer',
-                                            fontFamily: 'Inter, sans-serif',
-                                            padding: '0 8px',
-                                        }}
-                                    >
-                                        {'>>'}
-                                    </button>
-                                </Box>
-                            )}
-                        </>
-                    )}
-                </>
+                        )}
+                    </>
+                )
             )}
         </Box>
     );

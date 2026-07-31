@@ -10,8 +10,6 @@ import {
     Alert,
     Box,
     CircularProgress,
-    Grid,
-    Avatar,
     Divider,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
@@ -24,21 +22,31 @@ import { authService } from '../../services/auth';
 // ============================================
 
 const ProfileCard = styled(Paper)({
-    backgroundColor: '#f7f7f7',
+    backgroundColor: '#fbf9f9',
     borderRadius: '19px',
     padding: '40px 35px 35px',
     boxShadow: 'none',
-    maxWidth: '800px',
+    maxWidth: '600px',
     margin: '0 auto',
+    border: '1px solid #e8edf0',
 });
 
-const ProfileAvatar = styled(Avatar)({
-    width: 100,
-    height: 100,
-    margin: '0 auto 20px',
-    backgroundColor: '#148aa0',
-    fontSize: 40,
+const PageTitle = styled(Typography)({
+    fontFamily: '"Inter", sans-serif',
     fontWeight: 700,
+    fontSize: '24px',
+    color: '#1a2332',
+    textAlign: 'center',
+    marginBottom: '4px',
+});
+
+const PageSubtitle = styled(Typography)({
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 400,
+    fontSize: '14px',
+    color: '#6d7884',
+    textAlign: 'center',
+    marginBottom: '24px',
 });
 
 const StyledTextField = styled(TextField)({
@@ -53,22 +61,54 @@ const StyledTextField = styled(TextField)({
     '& .MuiInputBase-input': {
         padding: '0 16px',
         fontSize: '14px',
-        color: '#707b86',
+        color: '#1a2332',
+        fontFamily: 'Inter, sans-serif',
+    },
+    '& .MuiInputLabel-root': {
+        fontFamily: 'Inter, sans-serif',
+        fontSize: '14px',
+        color: '#6d7884',
+        '&.Mui-focused': { color: '#148aa0' },
     },
     width: '100%',
 });
 
 const SaveButton = styled(Button)({
     height: '44px',
-    borderRadius: '12px',
+    borderRadius: '10px',
     backgroundColor: '#148aa0',
-    color: '#fff',
-    fontSize: '16px',
+    color: '#ffffff',
+    fontSize: '15px',
     fontWeight: 600,
     textTransform: 'none',
+    fontFamily: 'Inter, sans-serif',
+    padding: '0 40px',
     '&:hover': { backgroundColor: '#0b7890' },
     '&:disabled': { backgroundColor: '#a0c4cd' },
+});
+
+const CancelButton = styled(Button)({
+    height: '44px',
+    borderRadius: '10px',
+    borderColor: '#d1d5db',
+    color: '#6d7884',
+    fontSize: '15px',
+    fontWeight: 500,
+    textTransform: 'none',
+    fontFamily: 'Inter, sans-serif',
     padding: '0 40px',
+    '&:hover': {
+        borderColor: '#148aa0',
+        color: '#148aa0',
+        backgroundColor: 'rgba(20, 138, 160, 0.04)',
+    },
+});
+
+const StyledAlert = styled(Alert)({
+    borderRadius: '10px',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '14px',
+    marginBottom: '16px',
 });
 
 // ============================================
@@ -84,41 +124,21 @@ const Profile = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
+    // ✅ UNIQUEMENT LES CHAMPS MOT DE PASSE
     const [form, setForm] = useState({
-        nom: '',
-        prenom: '',
-        email: '',
-        telephone: '',
-        adresse: '',
-        ville: '',
-        pays: '',
-        universite: '',
-        filiere: '',
-        niveau: '',
-        annee: '',
+        ancienMotDePasse: '',
+        nouveauMotDePasse: '',
+        confirmationMotDePasse: '',
     });
 
-    const [originalForm, setOriginalForm] = useState({});
-
     useEffect(() => {
-        if (user) {
-            const userData = {
-                nom: user.nom || '',
-                prenom: user.prenom || '',
-                email: user.email || '',
-                telephone: user.telephone || '',
-                adresse: user.adresse || '',
-                ville: user.ville || '',
-                pays: user.pays || '',
-                universite: user.universite || '',
-                filiere: user.filiere || '',
-                niveau: user.niveau || '',
-                annee: user.annee || '',
-            };
-            setForm(userData);
-            setOriginalForm(userData);
-        }
-    }, [user]);
+        // Réinitialiser les champs quand le composant se monte
+        setForm({
+            ancienMotDePasse: '',
+            nouveauMotDePasse: '',
+            confirmationMotDePasse: '',
+        });
+    }, []);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -126,8 +146,24 @@ const Profile = () => {
         setSuccess('');
     };
 
-    const hasChanges = () => {
-        return JSON.stringify(form) !== JSON.stringify(originalForm);
+    const validateForm = () => {
+        if (!form.ancienMotDePasse) {
+            setError('Veuillez saisir votre mot de passe actuel');
+            return false;
+        }
+        if (!form.nouveauMotDePasse || form.nouveauMotDePasse.length < 8) {
+            setError('Le nouveau mot de passe doit contenir au moins 8 caractères');
+            return false;
+        }
+        if (form.nouveauMotDePasse !== form.confirmationMotDePasse) {
+            setError('Les nouveaux mots de passe ne correspondent pas');
+            return false;
+        }
+        if (form.ancienMotDePasse === form.nouveauMotDePasse) {
+            setError('Le nouveau mot de passe doit être différent de l\'ancien');
+            return false;
+        }
+        return true;
     };
 
     const handleSubmit = async (e) => {
@@ -135,216 +171,129 @@ const Profile = () => {
         setError('');
         setSuccess('');
 
-        if (!hasChanges()) {
-            setError('Aucune modification détectée');
+        if (!validateForm()) {
             return;
         }
 
         setSaving(true);
 
         try {
-            const response = await api.put('/users/me', form);
-            console.log('🟢 Profil mis à jour:', response.data);
+            // ✅ Appel API pour changer le mot de passe
+            const response = await api.put('/auth/change-password', {
+                ancienMotDePasse: form.ancienMotDePasse,
+                nouveauMotDePasse: form.nouveauMotDePasse,
+            });
 
-            const updatedUser = { ...user, ...form };
-            authService.setCurrentUser(updatedUser);
+            setSuccess('Mot de passe modifié avec succès');
+            
+            // Réinitialiser les champs
+            setForm({
+                ancienMotDePasse: '',
+                nouveauMotDePasse: '',
+                confirmationMotDePasse: '',
+            });
 
-            setSuccess('✅ Profil mis à jour avec succès !');
-            setOriginalForm(form);
+            // Déconnecter l'utilisateur après changement de mot de passe (optionnel)
+            // setTimeout(() => {
+            //     logout();
+            //     navigate('/login');
+            // }, 2000);
 
         } catch (err) {
-            console.error('🔴 Erreur:', err);
-            setError(err.response?.data?.message || 'Erreur lors de la mise à jour');
+            console.error('Erreur changement mot de passe:', err);
+            setError(err.response?.data?.message || 'Erreur lors du changement de mot de passe');
         } finally {
             setSaving(false);
         }
     };
 
-    const getInitials = () => {
-        if (form.prenom && form.nom) {
-            return `${form.prenom[0]}${form.nom[0]}`.toUpperCase();
-        }
-        return '?';
-    };
-
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={60} thickness={4} sx={{ color: '#148aa0' }} />
+                <CircularProgress size={48} sx={{ color: '#148aa0' }} />
             </Box>
         );
     }
 
     return (
-        <Container maxWidth="md" sx={{ py: 4 }}>
+        <Container maxWidth="sm" sx={{ py: 4 }}>
             <ProfileCard>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332', textAlign: 'center', mb: 1 }}>
-                    👤 Mon Profil
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mb: 4 }}>
-                    Gérez vos informations personnelles
-                </Typography>
-
-                <ProfileAvatar>{getInitials()}</ProfileAvatar>
+                <PageTitle>Changer mon mot de passe</PageTitle>
+                <PageSubtitle>
+                    Pour des raisons de sécurité, veuillez saisir votre mot de passe actuel
+                </PageSubtitle>
 
                 {error && (
-                    <Alert severity="error" sx={{ mb: 2, borderRadius: '10px' }}>
+                    <StyledAlert severity="error">
                         {error}
-                    </Alert>
+                    </StyledAlert>
                 )}
 
                 {success && (
-                    <Alert severity="success" sx={{ mb: 2, borderRadius: '10px' }}>
+                    <StyledAlert severity="success">
                         {success}
-                    </Alert>
+                    </StyledAlert>
                 )}
 
                 <form onSubmit={handleSubmit}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                            <StyledTextField
-                                label="Nom"
-                                name="nom"
-                                value={form.nom}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <StyledTextField
-                                label="Prénom"
-                                name="prenom"
-                                value={form.prenom}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <StyledTextField
-                                label="Email"
-                                name="email"
-                                type="email"
-                                value={form.email}
-                                onChange={handleChange}
-                                disabled={true}
-                                InputProps={{
-                                    readOnly: true,
-                                }}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <StyledTextField
-                                label="Téléphone"
-                                name="telephone"
-                                value={form.telephone}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <StyledTextField
-                                label="Adresse"
-                                name="adresse"
-                                value={form.adresse}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <StyledTextField
-                                label="Ville"
-                                name="ville"
-                                value={form.ville}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <StyledTextField
-                                label="Pays"
-                                name="pays"
-                                value={form.pays}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                    </Grid>
+                    <StyledTextField
+                        label="Mot de passe actuel"
+                        name="ancienMotDePasse"
+                        type="password"
+                        value={form.ancienMotDePasse}
+                        onChange={handleChange}
+                        disabled={saving}
+                        size="small"
+                        fullWidth
+                        sx={{ mb: 2 }}
+                    />
 
-                    <Divider sx={{ my: 3 }} />
+                    <Divider sx={{ my: 2 }} />
 
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1a2332', mb: 2 }}>
-                        🎓 Informations académiques
-                    </Typography>
+                    <StyledTextField
+                        label="Nouveau mot de passe"
+                        name="nouveauMotDePasse"
+                        type="password"
+                        value={form.nouveauMotDePasse}
+                        onChange={handleChange}
+                        disabled={saving}
+                        size="small"
+                        fullWidth
+                        sx={{ mb: 2 }}
+                    />
 
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                            <StyledTextField
-                                label="Université / École"
-                                name="universite"
-                                value={form.universite}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <StyledTextField
-                                label="Filière"
-                                name="filiere"
-                                value={form.filiere}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <StyledTextField
-                                label="Niveau"
-                                name="niveau"
-                                value={form.niveau}
-                                onChange={handleChange}
-                                disabled={saving}
-                            />
-                        </Grid>
-                    </Grid>
+                    <StyledTextField
+                        label="Confirmer le nouveau mot de passe"
+                        name="confirmationMotDePasse"
+                        type="password"
+                        value={form.confirmationMotDePasse}
+                        onChange={handleChange}
+                        disabled={saving}
+                        size="small"
+                        fullWidth
+                        sx={{ mb: 2 }}
+                    />
 
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
-                        <Button
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+                        <CancelButton
                             variant="outlined"
-                            sx={{
-                                borderColor: '#999',
-                                color: '#666',
-                                textTransform: 'none',
-                                borderRadius: '12px',
-                            }}
-                            onClick={() => navigate('/dashboard')}
+                            onClick={() => navigate('/dashboard/applications')}
                             disabled={saving}
                         >
                             Annuler
-                        </Button>
+                        </CancelButton>
                         <SaveButton
                             type="submit"
-                            disabled={saving || !hasChanges()}
+                            disabled={saving || !form.ancienMotDePasse || !form.nouveauMotDePasse || !form.confirmationMotDePasse}
                         >
                             {saving ? (
-                                <CircularProgress size={24} color="inherit" />
+                                <CircularProgress size={22} color="inherit" />
                             ) : (
-                                '💾 Enregistrer'
+                                'Changer le mot de passe'
                             )}
                         </SaveButton>
                     </Box>
                 </form>
-
-                <Box sx={{ mt: 4, textAlign: 'center' }}>
-                    <Button
-                        variant="text"
-                        sx={{ color: '#ef4444', textTransform: 'none' }}
-                        onClick={() => {
-                            logout();
-                            navigate('/login');
-                        }}
-                    >
-                        🚪 Se déconnecter
-                    </Button>
-                </Box>
             </ProfileCard>
         </Container>
     );

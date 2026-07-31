@@ -1,6 +1,6 @@
 // src/components/auth/LoginInterne.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // ✅ Ajout de useLocation
 import { useDispatch, useSelector } from 'react-redux';
 import {
     Typography,
@@ -249,12 +249,13 @@ const GrayButton = styled(Button)({
 
 const LoginInterne = () => {
     const navigate = useNavigate();
+    const location = useLocation(); // ✅ Ajout de useLocation
     const dispatch = useDispatch();
 
     const [cin, setCin] = useState('');
     const [password, setPassword] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
-    const [captchaText, setCaptchaText] = useState('0vty6d');
+    const [captchaText, setCaptchaText] = useState('');
     const [loginError, setLoginError] = useState('');
     const [attempts, setAttempts] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -283,6 +284,11 @@ const LoginInterne = () => {
             }
         }
     }, [isAuthenticated, user, navigate]);
+
+    // ✅ GÉNÉRER LE CAPTCHA AU CHARGEMENT ET À CHAQUE CHANGEMENT DE PAGE
+    useEffect(() => {
+        regenerateCaptcha();
+    }, [location.pathname]); // ✅ Dépendance ajoutée
 
     const regenerateCaptcha = () => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

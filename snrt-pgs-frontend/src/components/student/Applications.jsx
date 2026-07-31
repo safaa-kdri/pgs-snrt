@@ -22,23 +22,22 @@ import {
     Tooltip,
     MenuItem,
     LinearProgress,
+    Alert,
 } from '@mui/material';
 import {
     Search,
     Visibility,
     Refresh,
     FilterList,
-    CheckCircle,
-    Pending,
-    Cancel,
     Event,
     Description,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
 
 // ============================================
-// STYLES
+// STYLES - STATUTS CORRIGÉS
 // ============================================
 
 const PageHeader = styled(Box)({
@@ -55,16 +54,34 @@ const StyledTableCell = styled(TableCell)({
     color: '#1a2332',
 });
 
+// ✅ STATUTS ALIGNÉS AVEC LE BACKEND
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        brouillon: { bg: '#e5e7eb', text: '#6b7280' },
-        soumise: { bg: '#dbeafe', text: '#1d4ed8' },
-        en_analyse: { bg: '#fef3c7', text: '#d97706' },
-        entretien: { bg: '#f3e8ff', text: '#6b21a8' },
-        acceptee: { bg: '#d1fae5', text: '#065f46' },
-        refuse: { bg: '#fee2e2', text: '#991b1b' },
+        'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
+        'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EnAnalyse': { bg: '#fef3c7', text: '#d97706' },
+        'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
+        'Acceptee': { bg: '#d1fae5', text: '#065f46' },
+        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
     };
-    const color = colors[status] || colors.brouillon;
+    const color = colors[status] || colors['Soumise'];
+    return {
+        backgroundColor: color.bg,
+        color: color.text,
+        fontWeight: 500,
+        fontSize: '11px',
+        height: '24px',
+    };
+});
+
+const TypeChip = styled(Chip)(({ type }) => {
+    const colors = {
+        'PFE': { bg: '#dbeafe', text: '#1d4ed8' },
+        'PFA': { bg: '#dcfce7', text: '#15803d' },
+        'Initiation': { bg: '#fef3c7', text: '#b45309' },
+        'Ete': { bg: '#fce4ec', text: '#b91c1c' },
+    };
+    const color = colors[type] || { bg: '#e5e7eb', text: '#6b7280' };
     return {
         backgroundColor: color.bg,
         color: color.text,
@@ -83,6 +100,7 @@ const Applications = () => {
     const { user } = useAuth();
 
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [applications, setApplications] = useState([]);
     const [filteredApplications, setFilteredApplications] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -98,62 +116,23 @@ const Applications = () => {
 
     const fetchApplications = async () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
-
-            const mockApplications = [
-                {
-                    id: '1',
-                    offre: 'Stage Développement Web',
-                    entreprise: 'DSI - SNRT',
-                    dateSoumission: '2026-07-15',
-                    statut: 'acceptee',
-                    typeStage: 'PFE',
-                    progression: 100,
-                },
-                {
-                    id: '2',
-                    offre: 'Stage Data Science',
-                    entreprise: 'DSI - SNRT',
-                    dateSoumission: '2026-07-10',
-                    statut: 'entretien',
-                    typeStage: 'Master',
-                    progression: 75,
-                },
-                {
-                    id: '3',
-                    offre: 'Stage Cybersécurité',
-                    entreprise: 'DSI - SNRT',
-                    dateSoumission: '2026-07-01',
-                    statut: 'en_analyse',
-                    typeStage: 'PFE',
-                    progression: 50,
-                },
-                {
-                    id: '4',
-                    offre: 'Stage Marketing Digital',
-                    entreprise: 'Direction Marketing',
-                    dateSoumission: '2026-06-20',
-                    statut: 'refuse',
-                    typeStage: 'Licence',
-                    progression: 100,
-                },
-                {
-                    id: '5',
-                    offre: 'Stage DevOps',
-                    entreprise: 'DSI - SNRT',
-                    dateSoumission: '2026-06-15',
-                    statut: 'soumise',
-                    typeStage: 'PFA',
-                    progression: 25,
-                },
-            ];
-
-            setApplications(mockApplications);
-            setFilteredApplications(mockApplications);
-
+            const response = await api.get('/applications', {
+                params: { etudiantId: user?.id }
+            });
+            
+            const data = response.data?.data || response.data?.applications || [];
+            setApplications(data);
+            setFilteredApplications(data);
         } catch (error) {
             console.error('Erreur chargement candidatures:', error);
+            setError(
+                error.response?.data?.message || 
+                'Erreur lors du chargement des candidatures'
+            );
+            setApplications([]);
+            setFilteredApplications([]);
         } finally {
             setLoading(false);
         }
@@ -166,9 +145,8 @@ const Applications = () => {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(
                 (a) =>
-                    a.offre.toLowerCase().includes(term) ||
-                    a.entreprise.toLowerCase().includes(term) ||
-                    a.typeStage.toLowerCase().includes(term)
+                    (a.offreId?.titre || a.offre || '').toLowerCase().includes(term) ||
+                    (a.typeStage || a.offreId?.typeStage || '').toLowerCase().includes(term)
             );
         }
 
@@ -179,16 +157,30 @@ const Applications = () => {
         setFilteredApplications(filtered);
     };
 
+    // ✅ STATUTS ALIGNÉS AVEC LE BACKEND
     const getStatusLabel = (status) => {
         const labels = {
-            brouillon: 'Brouillon',
-            soumise: 'Soumise',
-            en_analyse: 'En analyse',
-            entretien: 'Entretien',
-            acceptee: 'Acceptée',
-            refuse: 'Refusée',
+            'Brouillon': 'Brouillon',
+            'Soumise': 'Soumise',
+            'EnAnalyse': 'En analyse',
+            'Entretien': 'Entretien',
+            'Acceptee': 'Acceptée',
+            'Refusee': 'Refusée',
         };
         return labels[status] || status;
+    };
+
+    // ✅ PROGRESSION ALIGNÉE AVEC LE BACKEND
+    const getProgression = (statut) => {
+        const map = {
+            'Brouillon': 0,
+            'Soumise': 20,
+            'EnAnalyse': 40,
+            'Entretien': 60,
+            'Acceptee': 80,
+            'Refusee': 100,
+        };
+        return map[statut] || 0;
     };
 
     const getProgressColor = (progress) => {
@@ -197,54 +189,54 @@ const Applications = () => {
         return '#ef4444';
     };
 
+    const getTypeStage = (app) => {
+        if (app.offreId?.typeStage) {
+            return app.offreId.typeStage;
+        }
+        if (app.typeStage) {
+            return app.typeStage;
+        }
+        return 'Stage';
+    };
+
+    // ✅ FILTRES ALIGNÉS AVEC LE BACKEND
     const statusOptions = [
         { value: 'all', label: 'Tous les statuts' },
-        { value: 'brouillon', label: 'Brouillon' },
-        { value: 'soumise', label: 'Soumise' },
-        { value: 'en_analyse', label: 'En analyse' },
-        { value: 'entretien', label: 'Entretien' },
-        { value: 'acceptee', label: 'Acceptée' },
-        { value: 'refuse', label: 'Refusée' },
+        { value: 'Brouillon', label: 'Brouillon' },
+        { value: 'Soumise', label: 'Soumise' },
+        { value: 'EnAnalyse', label: 'En analyse' },
+        { value: 'Entretien', label: 'Entretien' },
+        { value: 'Acceptee', label: 'Acceptée' },
+        { value: 'Refusee', label: 'Refusée' },
     ];
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+                <CircularProgress size={44} sx={{ color: '#148aa0' }} />
+            </Box>
+        );
+    }
 
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
-            {/* ===== EN-TÊTE ===== */}
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        📄 Mes candidatures
+                        Mes candidatures
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         {filteredApplications.length} candidature(s) trouvée(s)
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchApplications}
-                        disabled={loading}
-                        sx={{ borderRadius: '12px', textTransform: 'none' }}
-                    >
-                        Rafraîchir
-                    </Button>
-                    <Button
-                        variant="contained"
-                        sx={{
-                            backgroundColor: '#148aa0',
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            '&:hover': { backgroundColor: '#0b7890' },
-                        }}
-                        onClick={() => navigate('/offres')}
-                    >
-                        Postuler à une offre
-                    </Button>
-                </Box>
             </PageHeader>
 
-            {/* ===== FILTRES ===== */}
+            {error && (
+                <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>
+                    {error}
+                </Alert>
+            )}
+
             <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
                 <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} sm={5}>
@@ -311,7 +303,6 @@ const Applications = () => {
                 </Grid>
             </Paper>
 
-            {/* ===== TABLEAU ===== */}
             <TableContainer
                 component={Paper}
                 sx={{ borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
@@ -320,7 +311,6 @@ const Applications = () => {
                     <TableHead>
                         <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
                             <StyledTableCell>Offre</StyledTableCell>
-                            <StyledTableCell>Entreprise</StyledTableCell>
                             <StyledTableCell>Type</StyledTableCell>
                             <StyledTableCell>Date</StyledTableCell>
                             <StyledTableCell>Progression</StyledTableCell>
@@ -329,109 +319,83 @@ const Applications = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {loading ? (
+                        {filteredApplications.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                                    <CircularProgress size={40} sx={{ color: '#148aa0' }} />
-                                </TableCell>
-                            </TableRow>
-                        ) : filteredApplications.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                                <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
                                         Aucune candidature trouvée
                                     </Typography>
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredApplications.map((app) => (
-                                <TableRow key={app.id} hover>
-                                    <TableCell>
-                                        <Typography variant="body2" fontWeight={600}>
-                                            {app.offre}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2">{app.entreprise}</Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={app.typeStage}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: '#e0e7ff',
-                                                color: '#4338ca',
-                                                fontWeight: 500,
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {new Date(app.dateSoumission).toLocaleDateString('fr-FR')}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell sx={{ minWidth: 120 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Box sx={{ flex: 1 }}>
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={app.progression}
-                                                    sx={{
-                                                        height: 6,
-                                                        borderRadius: 3,
-                                                        backgroundColor: '#e5e7eb',
-                                                        '& .MuiLinearProgress-bar': {
-                                                            backgroundColor: getProgressColor(app.progression),
-                                                            borderRadius: 3,
-                                                        },
-                                                    }}
-                                                />
-                                            </Box>
-                                            <Typography variant="caption" fontWeight={500}>
-                                                {app.progression}%
+                            filteredApplications.map((app) => {
+                                const progress = getProgression(app.statut);
+                                const type = getTypeStage(app);
+                                return (
+                                    <TableRow key={app._id || app.id} hover>
+                                        <TableCell>
+                                            <Typography variant="body2" fontWeight={600}>
+                                                {app.offreId?.titre || app.offre || 'Offre sans titre'}
                                             </Typography>
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell>
-                                        <StatusChip
-                                            label={getStatusLabel(app.statut)}
-                                            status={app.statut}
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        <Tooltip title="Voir les détails">
-                                            <IconButton
+                                        </TableCell>
+                                        <TableCell>
+                                            <TypeChip
+                                                label={type}
+                                                type={type}
                                                 size="small"
-                                                onClick={() => navigate(`/dashboard/application/${app.id}`)}
-                                                sx={{ color: '#148aa0' }}
-                                            >
-                                                <Visibility fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        {app.statut === 'entretien' && (
-                                            <Tooltip title="Voir l'entretien">
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {app.dateSoumission || app.createdAt ? 
+                                                    new Date(app.dateSoumission || app.createdAt).toLocaleDateString('fr-FR') : 
+                                                    'Non spécifiée'
+                                                }
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell sx={{ minWidth: 120 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Box sx={{ flex: 1 }}>
+                                                    <LinearProgress
+                                                        variant="determinate"
+                                                        value={progress}
+                                                        sx={{
+                                                            height: 6,
+                                                            borderRadius: 3,
+                                                            backgroundColor: '#e5e7eb',
+                                                            '& .MuiLinearProgress-bar': {
+                                                                backgroundColor: getProgressColor(progress),
+                                                                borderRadius: 3,
+                                                            },
+                                                        }}
+                                                    />
+                                                </Box>
+                                                <Typography variant="caption" fontWeight={500}>
+                                                    {progress}%
+                                                </Typography>
+                                            </Box>
+                                        </TableCell>
+                                        <TableCell>
+                                            <StatusChip
+                                                label={getStatusLabel(app.statut)}
+                                                status={app.statut}
+                                                size="small"
+                                            />
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Tooltip title="Voir les détails">
                                                 <IconButton
                                                     size="small"
-                                                    sx={{ color: '#8b5cf6' }}
+                                                    onClick={() => navigate(`/dashboard/application/${app._id || app.id}`)}
+                                                    sx={{ color: '#148aa0' }}
                                                 >
-                                                    <Event fontSize="small" />
+                                                    <Visibility fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
-                                        )}
-                                        {app.statut === 'acceptee' && (
-                                            <Tooltip title="Voir la convention">
-                                                <IconButton
-                                                    size="small"
-                                                    sx={{ color: '#22c55e' }}
-                                                >
-                                                    <Description fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>

@@ -8,9 +8,12 @@ export const fetchOffers = createAsyncThunk(
     'offers/fetchOffers',
     async (params = {}, { rejectWithValue }) => {
         try {
+            console.log('📤 [fetchOffers] Paramètres:', params);
             const response = await offerService.getOffers(params);
+            console.log('📥 [fetchOffers] Réponse reçue:', response);
             return response;
         } catch (error) {
+            console.error('❌ Erreur fetchOffers:', error);
             return rejectWithValue(error.response?.data?.message || 'Erreur de chargement');
         }
     }
@@ -42,7 +45,16 @@ export const fetchDepartments = createAsyncThunk(
 
 // === SLICE ===
 
-const OFFER_TYPES = ['PFE', 'PFA', 'Initiation', 'Ete', 'Master', 'Licence', 'Technicien'];
+// ✅ CORRIGÉ : Types alignés avec le seed (uniquement PFE, PFA, Initiation, Ete)
+const OFFER_TYPES = ['PFE', 'PFA', 'Initiation', 'Ete'];
+
+const normalizeListResponse = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.departments)) return payload.departments;
+    if (Array.isArray(payload?.results)) return payload.results;
+    return [];
+};
 
 const initialState = {
     offers: [],
@@ -74,10 +86,12 @@ const offerSlice = createSlice({
             const { key, value } = action.payload;
             state.filters[key] = value;
             state.page = 1;
+            console.log(`🔄 [setFilter] ${key} = "${value}"`);
         },
         resetFilters: (state) => {
             state.filters = { statut: 'Publiée', typeStage: '', departementId: '', search: '' };
             state.page = 1;
+            console.log('🔄 [resetFilters] Filtres réinitialisés');
         },
         clearSelectedOffer: (state) => {
             state.selectedOffer = null;
@@ -85,7 +99,6 @@ const offerSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            // FETCH OFFERS
             .addCase(fetchOffers.pending, (state) => {
                 state.loading = true;
                 state.error = null;
@@ -97,13 +110,14 @@ const offerSlice = createSlice({
                 state.pages = action.payload.pagination?.pages || 0;
                 state.page = action.payload.pagination?.page || 1;
                 state.limit = action.payload.pagination?.limit || 10;
+                console.log(`✅ [fetchOffers] ${state.offers.length} offres chargées`);
             })
             .addCase(fetchOffers.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
                 state.offers = [];
+                console.error('❌ [fetchOffers] Erreur:', action.payload);
             })
-            // FETCH OFFER BY ID
             .addCase(fetchOfferById.pending, (state) => {
                 state.loading = true;
                 state.error = null;
@@ -117,9 +131,8 @@ const offerSlice = createSlice({
                 state.error = action.payload;
                 state.selectedOffer = null;
             })
-            // FETCH DEPARTMENTS
             .addCase(fetchDepartments.fulfilled, (state, action) => {
-                state.departments = action.payload.departments || action.payload || [];
+                state.departments = normalizeListResponse(action.payload);
             });
     }
 });

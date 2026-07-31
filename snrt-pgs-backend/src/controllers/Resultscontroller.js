@@ -4,7 +4,6 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { CONCOURS_DOCUMENT_TYPES } = require('../config/constants');
 
-
 const RESULT_DOC_TYPE = 'ResultatConcours';
 
 function extractResultatDoc(offer) {
@@ -23,7 +22,6 @@ const getResults = asyncHandler(async (req, res) => {
   const [offers, total] = await Promise.all([
     Offer.find(filter)
       .select('titre typeStage nbPostes dateLimiteCandidature datePublication departementId documentsConcours')
-    
       .sort({ 'documentsConcours.datePublication': -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum),
@@ -33,14 +31,19 @@ const getResults = asyncHandler(async (req, res) => {
   const results = offers.map((offer) => {
     const resultatDoc = extractResultatDoc(offer);
     return {
-      offreId: offer._id,
-      titre: offer.titre,
-      typeStage: offer.typeStage,
+      _id: offer._id,
+      // ✅ AJOUTER LE TITRE DE L'OFFRE
+      titreOffre: offer.titre || 'Offre sans titre',
+      typeStage: offer.typeStage || 'Stage',
       nbPostes: offer.nbPostes,
       dateLimiteCandidature: offer.dateLimiteCandidature,
       departementId: offer.departementId,
+      // ✅ AJOUTER LES INFORMATIONS DU RÉSULTAT
       resultatPublieLe: resultatDoc?.datePublication || null,
       resultatUrl: resultatDoc?.url || null,
+      resultatNom: resultatDoc?.nomOriginal || 'Résultat',
+      // ✅ Garder les données du document pour le frontend
+      documentsConcours: offer.documentsConcours,
     };
   });
 
@@ -55,7 +58,6 @@ const getResults = asyncHandler(async (req, res) => {
     },
   });
 });
-
 
 const getResultDetail = asyncHandler(async (req, res) => {
   const offer = await Offer.findById(req.params.id);
@@ -74,6 +76,7 @@ const getResultDetail = asyncHandler(async (req, res) => {
       description: offer.description,
       typeStage: offer.typeStage,
       nbPostes: offer.nbPostes,
+      dateLimiteCandidature: offer.dateLimiteCandidature,
       sujets: offer.sujets,
       documentsConcours: offer.documentsConcours.filter((doc) => CONCOURS_DOCUMENT_TYPES.includes(doc.type)),
     },

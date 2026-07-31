@@ -50,6 +50,11 @@ import Applications from './components/student/Applications';
 import Favorites from './components/student/Favorites';
 import Notifications from './components/student/Notifications';
 import Documents from './components/student/Documents';
+// ✅ NOUVEAUX IMPORTS
+import DepotEngagement from './components/student/DepotEngagement';
+import DepotRapport from './components/student/DepotRapport';
+import Attestation from './components/student/Attestation';
+import ApplicationDetailStudent from './components/student/ApplicationDetail';
 
 // ===== DEPARTMENT PAGES =====
 import CreateOffer from './components/department/CreateOffer';
@@ -136,6 +141,9 @@ function App() {
                 Favorites: typeof Favorites,
                 Notifications: typeof Notifications,
                 Documents: typeof Documents,
+                DepotEngagement: typeof DepotEngagement,
+                DepotRapport: typeof DepotRapport,
+                Attestation: typeof Attestation,
                 CreateOffer: typeof CreateOffer,
                 MyOffers: typeof MyOffers,
                 OfferDetailDept: typeof OfferDetailDept,
@@ -223,6 +231,12 @@ function App() {
                     <Route path="/dashboard/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
                     <Route path="/dashboard/documents" element={<PrivateRoute><Documents /></PrivateRoute>} />
                     <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+
+                    {/* ===== STUDENT - DEPOT ROUTES ===== */}
+                    <Route path="/depot-engagement/:internshipId" element={<PrivateRoute><DepotEngagement /></PrivateRoute>} />
+                    <Route path="/depot-rapport/:internshipId" element={<PrivateRoute><DepotRapport /></PrivateRoute>} />
+                    <Route path="/attestation/:internshipId" element={<PrivateRoute><Attestation /></PrivateRoute>} />
+                    <Route path="/dashboard/application/:id" element={<PrivateRoute><ApplicationDetailStudent /></PrivateRoute>} />
 
                     {/* ===== ADMIN ROUTES ===== */}
                     <Route path="/admin" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />

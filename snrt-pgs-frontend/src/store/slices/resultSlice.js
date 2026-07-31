@@ -16,6 +16,8 @@ export const fetchResults = createAsyncThunk(
             const params = { page, limit };
             if (offreId) params.offreId = offreId;
             
+            // ✅ On appelle l'API sans authentification (optionnalAuthenticate)
+            // L'API utilisera optionalAuthenticate qui ne bloque pas si non connecté
             const response = await api.get('/results', { params });
             return response.data;
         } catch (error) {
