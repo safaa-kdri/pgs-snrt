@@ -140,6 +140,26 @@ const StyledAlert = styled(Alert)({
     padding: '12px 16px',
 });
 
+const SuccessButtonOutlined = styled(ActionButton)({
+    color: '#6d7884',
+    border: '1px solid #e0e4e8',
+    borderRadius: '10px',
+    padding: '8px 20px',
+    '&:hover': {
+        backgroundColor: '#f0f2f5',
+    },
+});
+
+const SuccessButtonContained = styled(ActionButton)({
+    color: 'white',
+    backgroundColor: '#148aa0',
+    borderRadius: '10px',
+    padding: '8px 20px',
+    '&:hover': {
+        backgroundColor: '#0b7890',
+    },
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -155,43 +175,89 @@ const Verify2FA = () => {
     const [success, setSuccess] = useState(false);
     const [userData, setUserData] = useState(null);
 
-    // Vérifier si déjà connecté
+    // ✅ Rediriger vers le bon dashboard selon le rôle
+    const redirectByRole = (user, target = null) => {
+        const role = user?.role || user?.userType;
+        console.log('[Verify2FA] Redirection selon role:', role);
+        
+        if (target) {
+            navigate(target, { replace: true });
+            return;
+        }
+        
+        switch (role) {
+            case 'Administrateur':
+                navigate('/admin', { replace: true });
+                break;
+            case 'RH':
+                navigate('/rh', { replace: true });
+                break;
+            case 'Departement':
+                navigate('/department', { replace: true });
+                break;
+            case 'Encadrant':
+                navigate('/supervisor', { replace: true });
+                break;
+            default:
+                navigate('/dashboard', { replace: true });
+                break;
+        }
+    };
+
+    // ✅ Vérifier si déjà connecté
     useEffect(() => {
+        console.log('[Verify2FA] useEffect - Debut');
+        
+        const token = localStorage.getItem('token');
         const user = localStorage.getItem('user');
         
-        if (user) {
+        console.log('[Verify2FA] token present :', !!token);
+        console.log('[Verify2FA] user present :', !!user);
+        
+        if (token && user) {
             try {
                 const userData = JSON.parse(user);
-                const role = userData?.role || userData?.userType;
-                
-                switch (role) {
-                    case 'Administrateur':
-                        navigate('/admin', { replace: true });
-                        break;
-                    case 'RH':
-                        navigate('/rh', { replace: true });
-                        break;
-                    case 'Departement':
-                        navigate('/department', { replace: true });
-                        break;
-                    case 'Encadrant':
-                        navigate('/supervisor', { replace: true });
-                        break;
-                    default:
-                        // ✅ REDIRIGER VERS L'ACCUEIL
-                        navigate('/', { replace: true });
-                        break;
-                }
+                console.log('[Verify2FA] Utilisateur deja connecte, role:', userData?.role || userData?.userType);
+                redirectByRole(userData);
                 return;
             } catch (e) {
-                console.error('Erreur parsing user:', e);
+                console.error('[Verify2FA] Erreur parsing user:', e);
             }
         }
 
+        // ✅ Si token existe mais pas user → récupérer le user
+        if (token && !user) {
+            console.log('[Verify2FA] Token present mais pas user - recuperation...');
+            const fetchUser = async () => {
+                try {
+                    const response = await api.get('/auth/me');
+                    if (response.data?.user) {
+                        const userData = response.data.user;
+                        const userWithRole = {
+                            ...userData,
+                            role: userData.role || userData.userType || 'Etudiant',
+                            userType: userData.userType || userData.role || 'Etudiant',
+                        };
+                        localStorage.setItem('user', JSON.stringify(userWithRole));
+                        console.log('[Verify2FA] Utilisateur recupere depuis /me');
+                        redirectByRole(userWithRole);
+                        return;
+                    }
+                } catch (err) {
+                    console.error('[Verify2FA] Erreur recuperation user:', err);
+                }
+            };
+            fetchUser();
+            return;
+        }
+
         const storedEmail = localStorage.getItem('2faEmail');
+        console.log('[Verify2FA] storedEmail :', storedEmail);
+        
         if (storedEmail) {
             setEmail(storedEmail);
         } else {
+            console.log('[Verify2FA] Pas de 2faEmail, redirection vers /login');
             navigate('/login', { replace: true });
         }
     }, [navigate]);
@@ -201,28 +267,122 @@ const Verify2FA = () => {
         setError('');
         setLoading(true);
 
-        try {
-            const resultAction = await dispatch(verify2FA({ code }));
+        console.log('[Verify2FA] handleSubmit - Debut');
+        console.log('[Verify2FA] Code saisi :', code);
 
-            if (verify2FA.rejected.match(resultAction)) {
-                throw new Error(resultAction.payload || 'Code invalide ou expiré');
+        try {
+            const existingToken = localStorage.getItem('token');
+            const storedUser = localStorage.getItem('user');
+            
+            console.log('[Verify2FA] Token existant :', !!existingToken);
+            console.log('[Verify2FA] User existant :', !!storedUser);
+            
+            if (existingToken && storedUser) {
+                try {
+                    const userData = JSON.parse(storedUser);
+                    console.log('[Verify2FA] Deja connecte, redirection selon role');
+                    redirectByRole(userData);
+                    return;
+                } catch (e) {
+                    console.error('[Verify2FA] Erreur parsing:', e);
+                }
             }
 
+            // ✅ Si token existe mais pas user → récupérer
+            if (existingToken && !storedUser) {
+                try {
+                    const response = await api.get('/auth/me');
+                    if (response.data?.user) {
+                        const userData = response.data.user;
+                        const userWithRole = {
+                            ...userData,
+                            role: userData.role || userData.userType || 'Etudiant',
+                            userType: userData.userType || userData.role || 'Etudiant',
+                        };
+                        localStorage.setItem('user', JSON.stringify(userWithRole));
+                        console.log('[Verify2FA] User recupere');
+                        redirectByRole(userWithRole);
+                        return;
+                    }
+                } catch (err) {
+                    console.error('[Verify2FA] Erreur recuperation:', err);
+                }
+            }
+
+            console.log('[Verify2FA] Dispatch verify2FA avec code :', code);
+            const resultAction = await dispatch(verify2FA({ code }));
+            console.log('[Verify2FA] Resultat verify2FA :', resultAction);
+
+            if (verify2FA.rejected.match(resultAction)) {
+                console.error('[Verify2FA] verify2FA rejete :', resultAction.payload);
+                throw new Error(resultAction.payload || 'Code invalide ou expire');
+            }
+
+            console.log('[Verify2FA] verify2FA reussi !');
+            
             localStorage.removeItem('2faEmail');
             localStorage.removeItem('2faUserId');
 
             const userData = resultAction.payload?.user;
-            if (userData) {
-                localStorage.setItem('user', JSON.stringify(userData));
+            const authToken = resultAction.payload?.token;
+
+            console.log('[Verify2FA] userData recu :', userData);
+            console.log('[Verify2FA] authToken recu :', !!authToken);
+
+            if (authToken) {
+                localStorage.setItem('token', authToken);
+                console.log('[Verify2FA] Token stocke');
+            } else {
+                console.warn('[Verify2FA] Aucun token recu !');
             }
 
-            // ✅ REDIRIGER VERS L'ACCUEIL
-            navigate('/', { replace: true });
-            
+            if (userData) {
+                const userWithRole = {
+                    ...userData,
+                    role: userData.role || userData.userType || 'Etudiant',
+                    userType: userData.userType || userData.role || 'Etudiant',
+                };
+                localStorage.setItem('user', JSON.stringify(userWithRole));
+                console.log('[Verify2FA] userData stocke');
+                setUserData(userWithRole);
+            }
+
+            console.log('[Verify2FA] Token final present:', !!localStorage.getItem('token'));
+            console.log('[Verify2FA] User final present:', !!localStorage.getItem('user'));
+
+            // ✅ Redirection après 2FA
+            const role = userData?.role || userData?.userType;
+            console.log('[Verify2FA] Role pour redirection:', role);
+
+            switch (role) {
+                case 'Administrateur':
+                    console.log('[Verify2FA] REDIRECTION VERS /admin');
+                    navigate('/admin', { replace: true });
+                    break;
+                case 'RH':
+                    console.log('[Verify2FA] REDIRECTION VERS /rh');
+                    navigate('/rh', { replace: true });
+                    break;
+                case 'Departement':
+                    console.log('[Verify2FA] REDIRECTION VERS /department');
+                    navigate('/department', { replace: true });
+                    break;
+                case 'Encadrant':
+                    console.log('[Verify2FA] REDIRECTION VERS /supervisor');
+                    navigate('/supervisor', { replace: true });
+                    break;
+                default:
+                    console.log('[Verify2FA] REDIRECTION VERS /dashboard');
+                    navigate('/dashboard', { replace: true });
+                    break;
+            }
         } catch (err) {
-            const errorMsg = err?.response?.data?.message || err?.message || 'Erreur de vérification';
+            console.error('[Verify2FA] Erreur catch :', err);
+            const errorMsg = err?.response?.data?.message || err?.message || 'Erreur de verification';
+            console.log('[Verify2FA] Error message :', errorMsg);
             
             if (errorMsg.includes('Session expiree') || errorMsg.includes('preAuthToken')) {
+                console.log('[Verify2FA] Session expiree, redirection vers login');
                 localStorage.removeItem('2faEmail');
                 navigate('/login', { replace: true });
                 return;
@@ -231,6 +391,7 @@ const Verify2FA = () => {
             setError(errorMsg);
         } finally {
             setLoading(false);
+            console.log('[Verify2FA] handleSubmit - Fin');
         }
     };
 
@@ -238,13 +399,18 @@ const Verify2FA = () => {
         setError('');
         setLoading(true);
 
+        console.log('[Verify2FA] handleResend - Debut');
+
         try {
             await api.post('/auth/resend-2fa');
-            setError('Nouveau code envoyé par email');
+            setError('Nouveau code envoye par email');
+            console.log('[Verify2FA] Code renvoye avec succes');
         } catch (err) {
             const errorMsg = err?.response?.data?.message || 'Erreur lors du renvoi';
+            console.error('[Verify2FA] Erreur resend :', errorMsg);
             
             if (errorMsg.includes('Session expiree') || errorMsg.includes('preAuthToken')) {
+                console.log('[Verify2FA] Session expiree, redirection vers login');
                 localStorage.removeItem('2faEmail');
                 navigate('/login', { replace: true });
                 return;
@@ -257,6 +423,7 @@ const Verify2FA = () => {
     };
 
     const goToHome = () => {
+        console.log('[Verify2FA] goToHome - Retour a l\'accueil');
         localStorage.removeItem('2faEmail');
         navigate('/', { replace: true });
     };
@@ -293,7 +460,7 @@ const Verify2FA = () => {
                                 </Box>
                             </Box>
 
-                            <CardTitle>Authentification réussie</CardTitle>
+                            <CardTitle>Authentification reussie</CardTitle>
                             <CardSubtitle>
                                 Bienvenue <strong>{fullName}</strong>
                             </CardSubtitle>
@@ -305,13 +472,37 @@ const Verify2FA = () => {
                                 flexWrap: 'wrap',
                                 mt: 2
                             }}>
-                                <ActionButton
+                                <SuccessButtonOutlined
                                     onClick={goToHome}
-                                    sx={{ color: '#6d7884' }}
                                 >
                                     <i className="fa-solid fa-arrow-left" style={{ marginRight: '6px' }}></i>
                                     Accueil
-                                </ActionButton>
+                                </SuccessButtonOutlined>
+
+                                <SuccessButtonContained onClick={() => {
+                                    console.log('[Verify2FA] Clic sur Dashboard button');
+                                    const role = userData?.role || userData?.userType;
+                                    switch (role) {
+                                        case 'Administrateur':
+                                            navigate('/admin');
+                                            break;
+                                        case 'RH':
+                                            navigate('/rh');
+                                            break;
+                                        case 'Departement':
+                                            navigate('/department');
+                                            break;
+                                        case 'Encadrant':
+                                            navigate('/supervisor');
+                                            break;
+                                        default:
+                                            navigate('/dashboard');
+                                            break;
+                                    }
+                                }}>
+                                    Dashboard
+                                    <i className="fa-solid fa-arrow-right" style={{ marginLeft: '8px' }}></i>
+                                </SuccessButtonContained>
                             </Box>
                         </CardContent>
                     </StyledCard>
@@ -332,14 +523,14 @@ const Verify2FA = () => {
             }}>
                 <StyledCard>
                     <CardContent sx={{ p: 0 }}>
-                        <CardTitle>Vérification à deux facteurs</CardTitle>
+                        <CardTitle>Verification à deux facteurs</CardTitle>
                         <CardSubtitle>
-                            Un code de vérification a été envoyé à votre adresse email.<br />
+                            Un code de verification a ete envoye à votre adresse email.<br />
                             Veuillez le saisir ci-dessous.
                         </CardSubtitle>
 
                         {error && (
-                            <StyledAlert severity={error.includes('Nouveau code') ? 'success' : 'error'}>
+                            <StyledAlert severity={error.includes('Nouveau') ? 'success' : 'error'}>
                                 {error}
                             </StyledAlert>
                         )}
@@ -347,7 +538,7 @@ const Verify2FA = () => {
                         <form onSubmit={handleSubmit}>
                             <StyledTextField
                                 fullWidth
-                                label="Code de vérification"
+                                label="Code de verification"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                                 placeholder="— — — — — —"
@@ -376,7 +567,7 @@ const Verify2FA = () => {
                                 {loading ? (
                                     <CircularProgress size={24} sx={{ color: '#ffffff' }} />
                                 ) : (
-                                    'Vérifier'
+                                    'Verifier'
                                 )}
                             </VerifyButton>
                         </form>

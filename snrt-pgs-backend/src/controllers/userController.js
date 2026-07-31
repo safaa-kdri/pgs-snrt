@@ -7,7 +7,6 @@ const { hashPassword } = require('../utils/argon2');
 const { validatePasswordPolicy } = require('../utils/validators');
 const userLookup = require('../utils/userLookup');
 
-
 const getUserModel = (type) => {
     try {
         return userLookup.getModel(type);
@@ -16,9 +15,12 @@ const getUserModel = (type) => {
     }
 };
 
+// ============================================
+// CREATE
+// ============================================
+
 exports.createInternalUser = async (req, res) => {
     try {
-
         validatePasswordPolicy(req.body.motDePasse, 'interne');
 
         const motDePasseHash = await hashPassword(req.body.motDePasse);
@@ -39,11 +41,10 @@ exports.createInternalUser = async (req, res) => {
             data: userResponse
         });
     } catch (error) {
- 
         const statusCode = error.statusCode || 500;
         return res.status(statusCode).json({
             success: false,
-            message: statusCode === 500 ? 'Erreur lors de la création de l’utilisateur interne' : error.message,
+            message: statusCode === 500 ? 'Erreur lors de la création de l\'utilisateur interne' : error.message,
             details: error.details,
             error: statusCode === 500 ? error.message : undefined
         });
@@ -52,7 +53,6 @@ exports.createInternalUser = async (req, res) => {
 
 exports.createExternalUser = async (req, res) => {
     try {
-
         validatePasswordPolicy(req.body.motDePasse, 'externe');
 
         const motDePasseHash = await hashPassword(req.body.motDePasse);
@@ -75,12 +75,16 @@ exports.createExternalUser = async (req, res) => {
         const statusCode = error.statusCode || 500;
         return res.status(statusCode).json({
             success: false,
-            message: statusCode === 500 ? 'Erreur lors de la création de l’utilisateur externe' : error.message,
+            message: statusCode === 500 ? 'Erreur lors de la création de l\'utilisateur externe' : error.message,
             details: error.details,
             error: statusCode === 500 ? error.message : undefined
         });
     }
 };
+
+// ============================================
+// GET ALL
+// ============================================
 
 exports.getAllUsers = async (req, res) => {
     try {
@@ -89,52 +93,84 @@ exports.getAllUsers = async (req, res) => {
         if (type === 'interne') {
             const users = await UtilisateurInterne.find()
                 .select('-motDePasse')
-                .populate('roleId')
-                .populate('departementId')
-                .sort({ createdAt: -1 });
+                .populate({ path: 'roleId', select: 'nom' })
+                .populate({ path: 'departementId', select: 'nom description' })
+                .sort({ createdAt: -1 })
+                .lean();
+
+            const formatted = users.map(u => ({
+                ...u,
+                userType: 'interne',
+                role: u.roleId?.nom || 'Inconnu'
+            }));
 
             return res.status(200).json({
                 success: true,
                 type: 'interne',
-                count: users.length,
-                data: users
+                count: formatted.length,
+                data: formatted
             });
         }
 
         if (type === 'externe') {
             const users = await UtilisateurExterne.find()
                 .select('-motDePasse')
-                .populate('roleId')
-                .sort({ createdAt: -1 });
+                .sort({ createdAt: -1 })
+                .lean();
+
+            const formatted = users.map(u => ({
+                ...u,
+                userType: 'externe',
+                role: 'Etudiant',
+                roleId: null,
+                departementId: null
+            }));
 
             return res.status(200).json({
                 success: true,
                 type: 'externe',
-                count: users.length,
-                data: users
+                count: formatted.length,
+                data: formatted
             });
         }
 
-        const internalUsers = await UtilisateurInterne.find()
-            .select('-motDePasse')
-            .populate('roleId')
-            .populate('departementId')
-            .sort({ createdAt: -1 });
+        // Tous les utilisateurs
+        const [internalUsers, externalUsers] = await Promise.all([
+            UtilisateurInterne.find()
+                .select('-motDePasse')
+                .populate({ path: 'roleId', select: 'nom' })
+                .populate({ path: 'departementId', select: 'nom description' })
+                .sort({ createdAt: -1 })
+                .lean(),
+            UtilisateurExterne.find()
+                .select('-motDePasse')
+                .sort({ createdAt: -1 })
+                .lean()
+        ]);
 
-        const externalUsers = await UtilisateurExterne.find()
-            .select('-motDePasse')
-            .populate('roleId')
-            .sort({ createdAt: -1 });
+        const internes = internalUsers.map(u => ({
+            ...u,
+            userType: 'interne',
+            role: u.roleId?.nom || 'Inconnu'
+        }));
+
+        const externes = externalUsers.map(u => ({
+            ...u,
+            userType: 'externe',
+            role: 'Etudiant',
+            roleId: null,
+            departementId: null
+        }));
+
+        const allUsers = [...internes, ...externes];
 
         return res.status(200).json({
             success: true,
-            count: internalUsers.length + externalUsers.length,
-            data: {
-                internes: internalUsers,
-                externes: externalUsers
-            }
+            count: allUsers.length,
+            data: allUsers
         });
     } catch (error) {
+        console.error('❌ [getAllUsers] Erreur:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la récupération des utilisateurs',
@@ -143,41 +179,69 @@ exports.getAllUsers = async (req, res) => {
     }
 };
 
+// ============================================
+// GET BY ID
+// ============================================
+
 exports.getUserById = async (req, res) => {
     try {
         const { type, id } = req.params;
-        const UserModel = getUserModel(type);
 
-        if (!UserModel) {
-            return res.status(400).json({
-                success: false,
-                message: 'Type utilisateur invalide'
+        if (type === 'interne') {
+            const user = await UtilisateurInterne.findById(id)
+                .select('-motDePasse')
+                .populate({ path: 'roleId', select: 'nom' })
+                .populate({ path: 'departementId', select: 'nom description' })
+                .lean();
+
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Utilisateur interne non trouvé'
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: { ...user, userType: 'interne', role: user.roleId?.nom || 'Inconnu' }
             });
         }
 
-        let query = UserModel.findById(id).select('-motDePasse').populate('roleId');
-        if (type === 'interne') query = query.populate('departementId');
-        const user = await query;
+        if (type === 'externe') {
+            const user = await UtilisateurExterne.findById(id)
+                .select('-motDePasse')
+                .lean();
 
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'Utilisateur non trouvé'
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Utilisateur externe non trouvé'
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: { ...user, userType: 'externe', role: 'Etudiant', roleId: null, departementId: null }
             });
         }
 
-        return res.status(200).json({
-            success: true,
-            data: user
+        return res.status(400).json({
+            success: false,
+            message: 'Type utilisateur invalide'
         });
     } catch (error) {
+        console.error('❌ [getUserById] Erreur:', error);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la récupération de l’utilisateur',
+            message: 'Erreur lors de la récupération de l\'utilisateur',
             error: error.message
         });
     }
 };
+
+// ============================================
+// UPDATE
+// ============================================
 
 exports.updateUser = async (req, res) => {
     try {
@@ -191,7 +255,6 @@ exports.updateUser = async (req, res) => {
             });
         }
 
-
         const updateData = { ...req.body, updatedBy: req.user?._id };
         delete updateData.motDePasse;
         delete updateData.roleId;
@@ -201,10 +264,13 @@ exports.updateUser = async (req, res) => {
         delete updateData.cin;
 
         let query = UserModel.findByIdAndUpdate(id, updateData, { new: true, runValidators: true })
-            .select('-motDePasse')
-            .populate('roleId');
-        if (type === 'interne') query = query.populate('departementId');
-        const user = await query;
+            .select('-motDePasse');
+
+        if (type === 'interne') {
+            query = query.populate('roleId').populate('departementId');
+        }
+
+        const user = await query.lean();
 
         if (!user) {
             return res.status(404).json({
@@ -216,16 +282,21 @@ exports.updateUser = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: 'Utilisateur modifié avec succès',
-            data: user
+            data: { ...user, userType: type }
         });
     } catch (error) {
+        console.error('❌ [updateUser] Erreur:', error);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la modification de l’utilisateur',
+            message: 'Erreur lors de la modification de l\'utilisateur',
             error: error.message
         });
     }
 };
+
+// ============================================
+// DELETE (soft delete)
+// ============================================
 
 exports.deleteUser = async (req, res) => {
     try {
@@ -248,7 +319,6 @@ exports.deleteUser = async (req, res) => {
             });
         }
 
-
         user.actif = false;
         await user.softDelete(req.user?._id);
 
@@ -257,14 +327,18 @@ exports.deleteUser = async (req, res) => {
             message: 'Utilisateur supprimé avec succès'
         });
     } catch (error) {
+        console.error('❌ [deleteUser] Erreur:', error);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la suppression de l’utilisateur',
+            message: 'Erreur lors de la suppression de l\'utilisateur',
             error: error.message
         });
     }
 };
 
+// ============================================
+// RESTORE
+// ============================================
 
 exports.restoreUser = async (req, res) => {
     try {
@@ -278,7 +352,6 @@ exports.restoreUser = async (req, res) => {
             });
         }
 
-      
         const user = await UserModel.findByIdIncludingDeleted(id);
 
         if (!user) {
@@ -300,21 +373,29 @@ exports.restoreUser = async (req, res) => {
         user.updatedBy = req.user?._id;
         await user.save();
 
-        const userResponse = await UserModel.findById(id).select('-motDePasse').populate('roleId');
+        const userResponse = await UserModel.findById(id)
+            .select('-motDePasse')
+            .populate('roleId')
+            .lean();
 
         return res.status(200).json({
             success: true,
             message: 'Utilisateur restauré avec succès',
-            data: userResponse
+            data: { ...userResponse, userType: type }
         });
     } catch (error) {
+        console.error('❌ [restoreUser] Erreur:', error);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la restauration de l’utilisateur',
+            message: 'Erreur lors de la restauration de l\'utilisateur',
             error: error.message
         });
     }
 };
+
+// ============================================
+// CHANGE ROLE
+// ============================================
 
 exports.changeUserRole = async (req, res) => {
     try {
@@ -329,6 +410,14 @@ exports.changeUserRole = async (req, res) => {
             });
         }
 
+        // Externe n'a pas de rôle
+        if (type === 'externe') {
+            return res.status(400).json({
+                success: false,
+                message: 'Les utilisateurs externes n\'ont pas de rôle modifiable'
+            });
+        }
+
         const role = await Role.findById(roleId);
 
         if (!role) {
@@ -338,15 +427,15 @@ exports.changeUserRole = async (req, res) => {
             });
         }
 
-        let query = UserModel.findByIdAndUpdate(
+        const user = await UtilisateurInterne.findByIdAndUpdate(
             id,
             { roleId, updatedBy: req.user?._id },
             { new: true, runValidators: true }
         )
             .select('-motDePasse')
-            .populate('roleId');
-        if (type === 'interne') query = query.populate('departementId');
-        const user = await query;
+            .populate('roleId')
+            .populate('departementId')
+            .lean();
 
         if (!user) {
             return res.status(404).json({
@@ -358,9 +447,10 @@ exports.changeUserRole = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: 'Rôle modifié avec succès',
-            data: user
+            data: { ...user, userType: type }
         });
     } catch (error) {
+        console.error('❌ [changeUserRole] Erreur:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors du changement de rôle',
@@ -368,6 +458,10 @@ exports.changeUserRole = async (req, res) => {
         });
     }
 };
+
+// ============================================
+// ASSIGN DEPARTMENT
+// ============================================
 
 exports.assignDepartment = async (req, res) => {
     try {
@@ -390,7 +484,8 @@ exports.assignDepartment = async (req, res) => {
         )
             .select('-motDePasse')
             .populate('roleId')
-            .populate('departementId');
+            .populate('departementId')
+            .lean();
 
         if (!user) {
             return res.status(404).json({
@@ -402,16 +497,21 @@ exports.assignDepartment = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: 'Département assigné avec succès',
-            data: user
+            data: { ...user, userType: 'interne' }
         });
     } catch (error) {
+        console.error('❌ [assignDepartment] Erreur:', error);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de l’assignation du département',
+            message: 'Erreur lors de l\'assignation du département',
             error: error.message
         });
     }
 };
+
+// ============================================
+// CHANGE STATUS
+// ============================================
 
 exports.changeUserStatus = async (req, res) => {
     try {
@@ -431,10 +531,13 @@ exports.changeUserStatus = async (req, res) => {
             { actif, updatedBy: req.user?._id },
             { new: true, runValidators: true }
         )
-            .select('-motDePasse')
-            .populate('roleId');
-        if (type === 'interne') query = query.populate('departementId');
-        const user = await query;
+            .select('-motDePasse');
+
+        if (type === 'interne') {
+            query = query.populate('roleId').populate('departementId');
+        }
+
+        const user = await query.lean();
 
         if (!user) {
             return res.status(404).json({
@@ -446,9 +549,10 @@ exports.changeUserStatus = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: actif ? 'Utilisateur activé avec succès' : 'Utilisateur désactivé avec succès',
-            data: user
+            data: { ...user, userType: type }
         });
     } catch (error) {
+        console.error('❌ [changeUserStatus] Erreur:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors du changement de statut',

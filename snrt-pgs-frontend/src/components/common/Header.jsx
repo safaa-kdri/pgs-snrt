@@ -1,25 +1,55 @@
 // src/components/common/Header.jsx
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useLocation, useNavigate, Link } from 'react-router-dom'; // ✅ AJOUTER useLocation ici
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
     AppBar,
     Toolbar,
     Typography,
     Button,
     Box,
-    Container
+    Container,
+    IconButton,
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
+import { Menu as MenuIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { logout, loadCurrentUser } from '../../store/slices/authSlice';
 
-const Header = () => {
+// ============================================
+// STYLES
+// ============================================
+
+const BackButton = styled(Button)({
+    color: 'white',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: '50px',
+    padding: '6px 16px',
+    textTransform: 'none',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '14px',
+    '&:hover': {
+        backgroundColor: 'rgba(255,255,255,0.25)',
+    },
+    '& svg': {
+        marginRight: '8px',
+    },
+});
+
+const MenuButton = styled(IconButton)({
+    color: 'white',
+    '&:hover': {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+});
+
+const Header = ({ toggleDrawer }) => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
-    const location = useLocation(); // ✅ MAINTENANT useLocation est défini
+    const location = useLocation();
     
     const { isAuthenticated, user, status } = useSelector((state) => state.auth);
     
-    // ✅ Vérifier si l'utilisateur est déjà connecté (via localStorage)
+    // ✅ Vérifier si l'utilisateur est déjà connecté
     useEffect(() => {
         const hasUser = localStorage.getItem('user');
         
@@ -95,7 +125,7 @@ const Header = () => {
         );
     }
 
-    // ✅ HEADER NORMAL
+    // ✅ HEADER NORMAL (pages publiques)
     return (
         <AppBar
             position="sticky"
@@ -125,6 +155,7 @@ const Header = () => {
                         gap: 20,
                         flexShrink: 0
                     }}>
+                        {/* ===== Logo ===== */}
                         <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -157,6 +188,7 @@ const Header = () => {
                             </Typography>
                         </Box>
 
+                        {/* ===== Liens navigation ===== */}
                         <Box sx={{ 
                             display: 'flex', 
                             alignItems: 'center', 
@@ -172,10 +204,8 @@ const Header = () => {
 
                     {/* ===== PARTIE DROITE ===== */}
                     {isAuthenticated ? (
-                        // ✅ Connecté : PAS de bouton déconnexion (juste un espace vide)
                         <Box sx={{ width: '120px' }} />
                     ) : (
-                        // ✅ Non connecté : bouton S'inscrire
                         <Button
                             component={Link}
                             to="/register"

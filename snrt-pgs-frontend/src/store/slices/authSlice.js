@@ -174,7 +174,12 @@ const authSlice = createSlice({
                 localStorage.removeItem('2faEmail');
                 localStorage.removeItem('2faUserId');
                 
-                // ✅ UNIQUEMENT le user - PAS de token
+                // ✅ AJOUT : STOCKER LE TOKEN
+                if (action.payload.token) {
+                    localStorage.setItem('token', action.payload.token);
+                    console.log('✅ [authSlice] Token stocké dans localStorage');
+                }
+                
                 if (action.payload.user) {
                     localStorage.setItem('user', JSON.stringify(action.payload.user));
                 }
@@ -193,29 +198,48 @@ const authSlice = createSlice({
             .addCase(loadCurrentUser.fulfilled, (state, action) => {
                 state.status = 'succeeded';
                 
-                if (action.payload && action.payload.user) {
-                    state.isAuthenticated = true;
-                    state.user = action.payload.user;
-                    localStorage.setItem('user', JSON.stringify(action.payload.user));
-                } else {
-                    // ✅ Vérifier si un user existe en localStorage
-                    const storedUser = localStorage.getItem('user');
-                    if (storedUser) {
-                        try {
-                            state.user = JSON.parse(storedUser);
-                            state.isAuthenticated = true;
-                        } catch (e) {
-                            state.isAuthenticated = false;
-                            state.user = null;
-                        }
-                    } else {
-                        state.isAuthenticated = false;
-                        state.user = null;
+                const storedUser = localStorage.getItem('user');
+                let localUser = null;
+                if (storedUser) {
+                    try {
+                        localUser = JSON.parse(storedUser);
+                        console.log('🔍 [loadCurrentUser] Utilisateur localStorage:', localUser);
+                    } catch (e) {
+                        console.error('❌ [loadCurrentUser] Erreur parsing localStorage:', e);
                     }
+                }
+                
+                if (action.payload && action.payload.user) {
+                    const apiUser = action.payload.user;
+                    const finalRole = apiUser.role || localUser?.role || apiUser.userType || localUser?.userType;
+                    const finalUserType = apiUser.userType || localUser?.userType || apiUser.role || localUser?.role;
+                    
+                    state.user = {
+                        ...apiUser,
+                        role: finalRole,
+                        userType: finalUserType,
+                    };
+                    state.isAuthenticated = true;
+                    
+                    console.log('🔍 [loadCurrentUser] Utilisateur final:', {
+                        role: state.user.role,
+                        userType: state.user.userType,
+                    });
+                } 
+                else if (localUser) {
+                    state.user = localUser;
+                    state.isAuthenticated = true;
+                    console.log('🔍 [loadCurrentUser] Utilisateur depuis localStorage uniquement:', localUser);
+                } 
+                else {
+                    state.isAuthenticated = false;
+                    state.user = null;
+                    console.log('🔍 [loadCurrentUser] Aucun utilisateur trouvé');
                 }
             })
             .addCase(loadCurrentUser.rejected, (state) => {
                 state.status = 'idle';
+                console.log('🔴 [loadCurrentUser] Rejeté - statut idle');
             })
             
             // ===== FORGOT PASSWORD =====
@@ -238,10 +262,12 @@ const authSlice = createSlice({
                 state.user = null;
                 state.twoFactorRequired = false;
                 state.twoFactorEmail = null;
+                localStorage.removeItem('token');
             })
             .addCase(logout.rejected, (state) => {
                 state.isAuthenticated = false;
                 state.user = null;
+                localStorage.removeItem('token');
             });
     },
 });

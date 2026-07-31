@@ -79,7 +79,7 @@ async function issueSession(res, user, userType, req) {
   setAccessTokenCookie(res, accessToken);
   setRefreshTokenCookie(res, refreshToken);
 
-  return role;
+  return { role, accessToken };
 }
 
 // ============================================
@@ -218,7 +218,7 @@ const login = asyncHandler(async (req, res) => {
 });
 
 // ============================================
-// VERIFY 2FA/OTP
+// VERIFY 2FA/OTP - AVEC TOKEN DANS LA RÉPONSE
 // ============================================
 const verifyTwoFactor = asyncHandler(async (req, res) => {
   const { code } = req.body;
@@ -257,14 +257,17 @@ const verifyTwoFactor = asyncHandler(async (req, res) => {
   user.twoFactor.codeHash = null;
   user.twoFactor.expiresAt = null;
 
-  const role = await issueSession(res, user, payload.userType, req);
+  // ✅ Récupérer le role ET le token
+  const { role, accessToken } = await issueSession(res, user, payload.userType, req);
   clearPreAuthCookie(res);
 
   logger.audit('LOGIN_2FA_OK', { userId: user._id.toString() });
 
+  // ✅ RÉPONSE AVEC TOKEN
   return res.status(200).json({
     success: true,
     message: 'Connexion reussie.',
+    token: accessToken, // ✅ AJOUT DU TOKEN ICI
     user: {
       id: user._id,
       nom: user.nom,

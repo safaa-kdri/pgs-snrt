@@ -27,6 +27,8 @@ const studentRoutes = require('./src/routes/studentRoutes');
 // jamais monte ici - la fonctionnalite etait 100% inaccessible depuis
 // l'exterieur.
 const resultsRoutes = require('./src/routes/resultsRoutes');
+// ✅ AJOUT DES ROUTES PÉRIODES
+const periodRoutes = require('./src/routes/periodRoutes');
 
 assertRequiredEnv();
 
@@ -84,7 +86,10 @@ app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/users', userRoutes);
 
-// D'autres routers (periodRoutes, internshipRoutes...) seront montes ici au
+// ✅ ROUTES DES PÉRIODES (ajouté ici)
+app.use('/api/v1/periods', periodRoutes);
+
+// D'autres routers (internshipRoutes...) seront montes ici au
 // fur et a mesure de leur integration par le reste de l'equipe.
 
 // --- 404 ---
@@ -93,15 +98,6 @@ app.use((req, res) => {
 });
 
 // --- Gestion globale des erreurs (doit rester le dernier middleware) ---
-// BUGFIX (code mort / comportement) : ce bloc dupliquait moins bien
-// middlewares/errorHandler.js, qui existait deja dans le depot mais n'etait
-// jamais importe. errorHandler.js traduit en plus les erreurs Mongoose
-// (ValidationError, CastError, cle dupliquee 11000) et JWT en reponses
-// HTTP explicites (400/404/401) au lieu de les laisser tomber en 500
-// generique comme c'etait le cas ici. Voir src/middlewares/errorHandler.js
-// pour le detail de la fusion (la logique de masquage du message en cas
-// d'erreur non-operationnelle, qui existait ici, y a ete reportee pour ne
-// pas regresser sur ce point).
 app.use(errorHandler);
 
 // -----------------------------------------------------------------------------

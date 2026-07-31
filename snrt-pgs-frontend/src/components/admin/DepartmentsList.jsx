@@ -28,22 +28,24 @@ import {
     Avatar,
     Switch,
     FormControlLabel,
+    MenuItem,
 } from '@mui/material';
 import {
     Search,
     Add,
     Edit,
     Delete,
-    Business,
     Refresh,
     FilterList,
     CheckCircle,
     Block,
+    Visibility,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import api from '../../services/api';
 
 // ============================================
-// STYLES (même thème que les pages publiques)
+// STYLES
 // ============================================
 
 const PageHeader = styled(Box)({
@@ -87,6 +89,7 @@ const DepartmentsList = () => {
     const [filteredDepartments, setFilteredDepartments] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [error, setError] = useState('');
 
     // Dialog states
     const [openDialog, setOpenDialog] = useState(false);
@@ -96,6 +99,7 @@ const DepartmentsList = () => {
         nom: '',
         description: '',
         responsable: '',
+        status: 'active',
     });
 
     useEffect(() => {
@@ -108,53 +112,36 @@ const DepartmentsList = () => {
 
     const fetchDepartments = async () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
+            const response = await api.get('/departments');
+            
+            let data = [];
+            if (response.data?.data) {
+                data = response.data.data;
+            } else if (Array.isArray(response.data)) {
+                data = response.data;
+            } else if (response.data?.departments) {
+                data = response.data.departments;
+            }
 
-            const mockDepartments = [
-                {
-                    id: '1',
-                    nom: 'Direction des Systèmes d\'Information',
-                    description: 'DSI - Gestion des infrastructures et applications',
-                    responsable: 'Safaa EL KADOURI',
-                    nbStagiaires: 12,
-                    status: 'active',
-                    dateCreation: '2026-01-15',
-                },
-                {
-                    id: '2',
-                    nom: 'Direction Technique',
-                    description: 'Technique - Production et diffusion',
-                    responsable: 'Karim BENNANI',
-                    nbStagiaires: 8,
-                    status: 'active',
-                    dateCreation: '2026-02-01',
-                },
-                {
-                    id: '3',
-                    nom: 'Direction Marketing',
-                    description: 'Marketing - Communication et promotion',
-                    responsable: 'Fatima ALAOUI',
-                    nbStagiaires: 5,
-                    status: 'active',
-                    dateCreation: '2026-03-10',
-                },
-                {
-                    id: '4',
-                    nom: 'Direction des Ressources Humaines',
-                    description: 'DRH - Gestion du personnel',
-                    responsable: 'Mohamed CHERKAOUI',
-                    nbStagiaires: 3,
-                    status: 'inactive',
-                    dateCreation: '2026-02-15',
-                },
-            ];
-
-            setDepartments(mockDepartments);
-            setFilteredDepartments(mockDepartments);
-
+            const formattedData = data.map(dept => ({
+                id: dept._id || dept.id,
+                nom: dept.nom || dept.name || 'Sans nom',
+                description: dept.description || '',
+                responsable: dept.responsable?.nom || dept.responsable || 'Non assigné',
+                nbStagiaires: dept.nbStagiaires || 0,
+                status: dept.actif !== undefined ? (dept.actif ? 'active' : 'inactive') : 'active',
+                dateCreation: dept.createdAt || dept.dateCreation || new Date().toISOString(),
+            }));
+            
+            setDepartments(formattedData);
+            setFilteredDepartments(formattedData);
         } catch (error) {
-            console.error('Erreur chargement départements:', error);
+            console.error('Erreur chargement departements:', error);
+            setError('Erreur lors du chargement des departements');
+            setDepartments([]);
+            setFilteredDepartments([]);
         } finally {
             setLoading(false);
         }
@@ -181,6 +168,7 @@ const DepartmentsList = () => {
     };
 
     const getInitials = (nom) => {
+        if (!nom) return '?';
         return nom
             .split(' ')
             .map((word) => word[0])
@@ -196,10 +184,11 @@ const DepartmentsList = () => {
                 nom: dept.nom,
                 description: dept.description,
                 responsable: dept.responsable,
+                status: dept.status || 'active',
             });
         } else {
             setSelectedDept(null);
-            setFormData({ nom: '', description: '', responsable: '' });
+            setFormData({ nom: '', description: '', responsable: '', status: 'active' });
         }
         setDialogMode(mode);
         setOpenDialog(true);
@@ -210,28 +199,48 @@ const DepartmentsList = () => {
         setSelectedDept(null);
     };
 
-    const handleSaveDepartment = () => {
-        // TODO: Appel API POST /departments ou PUT /departments/:id
-        console.log('💾 Sauvegarde département:', formData);
-        handleCloseDialog();
+    const handleSaveDepartment = async () => {
+        try {
+            const payload = {
+                nom: formData.nom,
+                description: formData.description,
+                responsable: formData.responsable,
+                actif: formData.status === 'active',
+            };
+
+            if (dialogMode === 'add') {
+                await api.post('/departments', payload);
+            } else if (dialogMode === 'edit') {
+                await api.put(`/departments/${selectedDept.id}`, payload);
+            }
+            handleCloseDialog();
+            fetchDepartments();
+        } catch (error) {
+            console.error('Erreur sauvegarde:', error);
+            setError('Erreur lors de la sauvegarde du departement');
+        }
     };
 
-    const handleDeleteDepartment = () => {
-        // TODO: Appel API DELETE /departments/:id
-        console.log('🗑️ Suppression département:', selectedDept?.id);
-        setDepartments(departments.filter((d) => d.id !== selectedDept?.id));
-        handleCloseDialog();
+    const handleDeleteDepartment = async () => {
+        try {
+            await api.delete(`/departments/${selectedDept.id}`);
+            handleCloseDialog();
+            fetchDepartments();
+        } catch (error) {
+            console.error('Erreur suppression:', error);
+            setError('Erreur lors de la suppression du departement');
+        }
     };
 
-    const handleToggleStatus = (dept) => {
-        const newStatus = dept.status === 'active' ? 'inactive' : 'active';
-        // TODO: Appel API PUT /departments/:id/status
-        console.log('🔄 Changement statut:', dept.id, '→', newStatus);
-        setDepartments(
-            departments.map((d) =>
-                d.id === dept.id ? { ...d, status: newStatus } : d
-            )
-        );
+    const handleToggleStatus = async (dept) => {
+        const newStatus = dept.status === 'active' ? false : true;
+        try {
+            await api.put(`/departments/${dept.id}`, { actif: newStatus });
+            fetchDepartments();
+        } catch (error) {
+            console.error('Erreur changement statut:', error);
+            setError('Erreur lors du changement de statut');
+        }
     };
 
     return (
@@ -240,10 +249,10 @@ const DepartmentsList = () => {
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        🏢 Gestion des départements
+                        Gestion des departements
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {filteredDepartments.length} département(s) trouvé(s)
+                        {filteredDepartments.length} departement(s) trouvé(s)
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
@@ -267,10 +276,16 @@ const DepartmentsList = () => {
                         }}
                         onClick={() => handleOpenDialog(null, 'add')}
                     >
-                        Ajouter un département
+                        Ajouter un departement
                     </Button>
                 </Box>
             </PageHeader>
+
+            {error && (
+                <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>
+                    {error}
+                </Alert>
+            )}
 
             {/* ===== FILTRES ===== */}
             <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
@@ -345,7 +360,7 @@ const DepartmentsList = () => {
                 <Table>
                     <TableHead>
                         <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
-                            <StyledTableCell>Département</StyledTableCell>
+                            <StyledTableCell>Departement</StyledTableCell>
                             <StyledTableCell>Description</StyledTableCell>
                             <StyledTableCell>Responsable</StyledTableCell>
                             <StyledTableCell>Stagiaires</StyledTableCell>
@@ -364,7 +379,7 @@ const DepartmentsList = () => {
                             <TableRow>
                                 <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucun département trouvé
+                                        Aucun departement trouvé
                                     </Typography>
                                 </TableCell>
                             </TableRow>
@@ -392,15 +407,15 @@ const DepartmentsList = () => {
                                     </TableCell>
                                     <TableCell>
                                         <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 200 }}>
-                                            {dept.description}
+                                            {dept.description || '-'}
                                         </Typography>
                                     </TableCell>
                                     <TableCell>
-                                        <Typography variant="body2">{dept.responsable}</Typography>
+                                        <Typography variant="body2">{dept.responsable || '-'}</Typography>
                                     </TableCell>
                                     <TableCell>
                                         <Chip
-                                            label={dept.nbStagiaires}
+                                            label={dept.nbStagiaires || 0}
                                             size="small"
                                             sx={{
                                                 backgroundColor: '#e0e7ff',
@@ -422,7 +437,7 @@ const DepartmentsList = () => {
                                                 size="small"
                                                 onClick={() => handleOpenDialog(dept, 'view')}
                                             >
-                                                👁️
+                                                <Visibility sx={{ fontSize: 18, color: '#148aa0' }} />
                                             </IconButton>
                                         </Tooltip>
                                         <Tooltip title="Modifier">
@@ -472,15 +487,15 @@ const DepartmentsList = () => {
                 }}
             >
                 <DialogTitle>
-                    {dialogMode === 'view' && '🏢 Détails du département'}
-                    {dialogMode === 'add' && '➕ Ajouter un département'}
-                    {dialogMode === 'edit' && '✏️ Modifier le département'}
-                    {dialogMode === 'delete' && '🗑️ Supprimer le département'}
+                    {dialogMode === 'view' && 'Details du departement'}
+                    {dialogMode === 'add' && 'Ajouter un departement'}
+                    {dialogMode === 'edit' && 'Modifier le departement'}
+                    {dialogMode === 'delete' && 'Supprimer le departement'}
                 </DialogTitle>
                 <DialogContent>
                     {dialogMode === 'delete' ? (
                         <Typography>
-                            Êtes-vous sûr de vouloir supprimer le département{' '}
+                            Etes-vous sûr de vouloir supprimer le departement{' '}
                             <strong>{selectedDept?.nom}</strong> ?
                             Cette action est irréversible.
                         </Typography>
@@ -501,7 +516,7 @@ const DepartmentsList = () => {
                                             Description
                                         </Typography>
                                         <Typography variant="body2">
-                                            {selectedDept.description}
+                                            {selectedDept.description || '-'}
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={6}>
@@ -509,7 +524,7 @@ const DepartmentsList = () => {
                                             Responsable
                                         </Typography>
                                         <Typography variant="body2" fontWeight={500}>
-                                            {selectedDept.responsable}
+                                            {selectedDept.responsable || '-'}
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={6}>
@@ -517,7 +532,7 @@ const DepartmentsList = () => {
                                             Stagiaires
                                         </Typography>
                                         <Typography variant="body2" fontWeight={500}>
-                                            {selectedDept.nbStagiaires}
+                                            {selectedDept.nbStagiaires || 0}
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={12}>
@@ -535,10 +550,9 @@ const DepartmentsList = () => {
                             </Box>
                         )
                     ) : (
-                        // Formulaire add/edit
                         <Box sx={{ mt: 2 }}>
                             <TextField
-                                label="Nom du département"
+                                label="Nom du departement"
                                 value={formData.nom}
                                 onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
                                 fullWidth
@@ -572,7 +586,7 @@ const DepartmentsList = () => {
                             <FormControlLabel
                                 control={
                                     <Switch
-                                        checked={formData.status !== 'inactive'}
+                                        checked={formData.status === 'active'}
                                         onChange={(e) =>
                                             setFormData({
                                                 ...formData,
