@@ -55,19 +55,6 @@ const MenuButton = styled(IconButton)({
     },
 });
 
-const RhBadge = styled(Box)({
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: '20px',
-    padding: '4px 16px',
-    color: 'white',
-    fontSize: '13px',
-    fontWeight: 500,
-    fontFamily: '"Inter", sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-});
-
 const RhHeader = ({ toggleDrawer, user }) => {
     const navigate = useNavigate();
 
@@ -82,10 +69,6 @@ const RhHeader = ({ toggleDrawer, user }) => {
                     <MenuButton onClick={toggleDrawer}>
                         <MenuIcon sx={{ fontSize: 28 }} />
                     </MenuButton>
-                    <RhBadge>
-                        <i className="fa-solid fa-building" style={{ fontSize: 14 }}></i>
-                        Ressources Humaines
-                    </RhBadge>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar

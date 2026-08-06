@@ -1,4 +1,6 @@
 // src/components/rh/ApplicationsList.jsx
+// ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES - SANS BOUTON RÉINITIALISER
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -31,7 +33,6 @@ import { styled, alpha } from '@mui/material/styles';
 import {
     Search,
     Visibility,
-    Refresh,
     FilterList,
     CheckCircle,
     Cancel,
@@ -85,7 +86,6 @@ const StatusChip = styled(Chip)(({ status }) => {
     };
 });
 
-// ✅ Carte statistique avec état actif (comme dans ValidateOffers)
 const StatCard = styled(Card)(({ active, color }) => ({
     borderRadius: '10px',
     border: `1px solid ${active ? color : '#eef1f3'}`,
@@ -99,6 +99,15 @@ const StatCard = styled(Card)(({ active, color }) => ({
     },
 }));
 
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+    border: '1px solid #eef1f3',
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -108,12 +117,11 @@ const ApplicationsList = () => {
     const location = useLocation();
     const { user } = useAuth();
 
-    // ✅ Lire le statut depuis l'URL
     const queryParams = new URLSearchParams(location.search);
     const initialStatus = queryParams.get('statut') || 'all';
 
     const [loading, setLoading] = useState(true);
-    const [allApplications, setAllApplications] = useState([]); // ✅ TOUTES les candidatures
+    const [allApplications, setAllApplications] = useState([]);
     const [filteredApplications, setFilteredApplications] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -123,7 +131,6 @@ const ApplicationsList = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
 
-    // ✅ STATS FIXES (calculées une fois sur toutes les candidatures)
     const [stats, setStats] = useState({
         total: 0,
         enAttente: 0,
@@ -135,7 +142,6 @@ const ApplicationsList = () => {
 
     const limit = 10;
 
-    // ✅ Synchroniser statusFilter avec l'URL
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const statusFromUrl = params.get('statut') || 'all';
@@ -144,26 +150,21 @@ const ApplicationsList = () => {
         }
     }, [location.search]);
 
-    // ✅ Charger les candidatures
     useEffect(() => {
         fetchApplications();
     }, []);
 
-    // ✅ Filtrer quand le filtre ou la recherche change
     useEffect(() => {
         filterApplications();
     }, [allApplications, searchTerm, statusFilter]);
 
-    // ============================================
-    // ✅ CHARGEMENT DES CANDIDATURES - STATS FIXES
-    // ============================================
     const fetchApplications = async () => {
         setLoading(true);
         setError('');
         try {
             const params = {
                 page: 1,
-                limit: 1000, // ✅ Récupérer toutes les candidatures pour les stats
+                limit: 1000,
             };
 
             console.log('📤 [ApplicationsList] Chargement des candidatures...');
@@ -183,20 +184,18 @@ const ApplicationsList = () => {
                 pagination = response.data.pagination || {};
             }
 
-            // ✅ S'assurer que chaque application a un statut valide
             data = data.map(app => ({
                 ...app,
                 statut: app.statut || 'Soumise',
             }));
 
-            console.log(`📥 [ApplicationsList] ${data.length} candidatures chargées`);
+            console.log(`📥 [ApplicationsList] ${data.length} candidatures chargees`);
 
             setAllApplications(data);
             setFilteredApplications(data);
             setTotal(pagination.total || data.length || 0);
             setTotalPages(pagination.pages || Math.ceil((pagination.total || data.length) / limit) || 1);
 
-            // ✅ Calculer les stats UNE FOIS sur toutes les données
             setStats({
                 total: pagination.total || data.length || 0,
                 enAttente: data.filter(a => a.statut === 'Soumise' || a.statut === 'EnAnalyse').length,
@@ -226,18 +225,13 @@ const ApplicationsList = () => {
         }
     };
 
-    // ============================================
-    // ✅ FILTRER PAR RECHERCHE ET STATUT
-    // ============================================
     const filterApplications = () => {
         let filtered = [...allApplications];
 
-        // ✅ Filtrer par statut
         if (statusFilter !== 'all') {
             filtered = filtered.filter((a) => a.statut === statusFilter);
         }
 
-        // ✅ Filtrer par recherche
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(
@@ -249,11 +243,9 @@ const ApplicationsList = () => {
             );
         }
 
-        // ✅ Mettre à jour le total affiché
         setTotal(filtered.length);
         setFilteredApplications(filtered);
         
-        // ✅ Recalculer la pagination
         const totalPages = Math.ceil(filtered.length / limit) || 1;
         setTotalPages(totalPages);
         if (page > totalPages) {
@@ -261,14 +253,10 @@ const ApplicationsList = () => {
         }
     };
 
-    // ============================================
-    // ✅ CHANGER LE STATUT - MET À JOUR L'URL
-    // ============================================
     const handleStatusFilterChange = (newStatus) => {
         setStatusFilter(newStatus);
         setPage(1);
         
-        // ✅ Mettre à jour l'URL avec le nouveau paramètre
         const params = new URLSearchParams();
         if (newStatus !== 'all') {
             params.set('statut', newStatus);
@@ -276,30 +264,24 @@ const ApplicationsList = () => {
         navigate(`/rh/applications${params.toString() ? `?${params.toString()}` : ''}`, { replace: true });
     };
 
-    // ============================================
-    // ✅ CHANGER DE PAGE
-    // ============================================
     const handlePageChange = (event, value) => {
         setPage(value);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // ============================================
-    // ✅ UTILITAIRES
-    // ============================================
     const getStatusLabel = (status) => {
         const labels = {
             'Brouillon': 'Brouillon',
             'Soumise': 'Soumise',
             'EnAnalyse': 'En analyse',
             'Entretien': 'Entretien',
-            'Acceptee': 'Acceptée',
-            'Refusee': 'Refusée',
-            'EngagementEnvoye': 'Engagement envoyé',
-            'EngagementValide': 'Engagement validé',
-            'DemandeEnvoyee': 'Demande envoyée',
-            'ValideParDirecteur': 'Validé par Directeur',
-            'Cloturee': 'Clôturée',
+            'Acceptee': 'Acceptee',
+            'Refusee': 'Refusee',
+            'EngagementEnvoye': 'Engagement envoye',
+            'EngagementValide': 'Engagement valide',
+            'DemandeEnvoyee': 'Demande envoyee',
+            'ValideParDirecteur': 'Valide par Directeur',
+            'Cloturee': 'Cloturee',
         };
         return labels[status] || status;
     };
@@ -339,19 +321,17 @@ const ApplicationsList = () => {
         { value: 'Soumise', label: 'En attente' },
         { value: 'EnAnalyse', label: 'En analyse' },
         { value: 'Entretien', label: 'Entretien' },
-        { value: 'Acceptee', label: 'Acceptée' },
-        { value: 'Refusee', label: 'Refusée' },
-        { value: 'EngagementEnvoye', label: 'Engagement envoyé' },
-        { value: 'EngagementValide', label: 'Engagement validé' },
+        { value: 'Acceptee', label: 'Acceptee' },
+        { value: 'Refusee', label: 'Refusee' },
+        { value: 'EngagementEnvoye', label: 'Engagement envoye' },
+        { value: 'EngagementValide', label: 'Engagement valide' },
     ];
 
-    // ✅ Déterminer si une carte est active
     const isCardActive = (statutKey) => {
         if (statutKey === 'all') return statusFilter === 'all';
         return statusFilter === statutKey;
     };
 
-    // ✅ Obtenir les éléments paginés
     const getPaginatedData = () => {
         const start = (page - 1) * limit;
         const end = start + limit;
@@ -359,10 +339,6 @@ const ApplicationsList = () => {
     };
 
     const paginatedData = getPaginatedData();
-
-    // ============================================
-    // ✅ RENDER
-    // ============================================
 
     if (loading) {
         return (
@@ -374,40 +350,72 @@ const ApplicationsList = () => {
 
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
-            {/* ===== EN-TÊTE ===== */}
+            {/* ===== EN-TETE ===== */}
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
                         Gestion des candidatures
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {filteredApplications.length} candidature(s) trouvée(s)
-                        {statusFilter !== 'all' && ` • Filtré par : ${getStatusLabel(statusFilter)}`}
+                        {filteredApplications.length} candidature(s) trouvee(s)
+                        {statusFilter !== 'all' && ` • Filtre par : ${getStatusLabel(statusFilter)}`}
                     </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchApplications}
-                        disabled={loading}
-                        sx={{
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            borderColor: '#e0e4e8',
-                            color: '#20242b',
-                            '&:hover': { borderColor: '#2d3748', backgroundColor: alpha('#2d3748', 0.04) },
-                        }}
-                    >
-                        Rafraîchir
-                    </Button>
                 </Box>
             </PageHeader>
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
 
-            {/* ===== STATS RAPIDES AVEC ÉTAT ACTIF - STATS FIXES ===== */}
+            {/* ========================================== */}
+            {/* ✅ FILTRES - AU-DESSUS DES CARTES */}
+            {/* ========================================== */}
+            <FiltersContainer>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={7}>
+                        <TextField
+                            placeholder="Rechercher par nom, offre..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            size="small"
+                            fullWidth
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <Search sx={{ color: '#999', fontSize: 20 }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: '10px',
+                                    backgroundColor: '#fff',
+                                },
+                            }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={5}>
+                        <TextField
+                            select
+                            label="Statut"
+                            value={statusFilter}
+                            onChange={(e) => handleStatusFilterChange(e.target.value)}
+                            size="small"
+                            fullWidth
+                            sx={{
+                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
+                            }}
+                        >
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                </Grid>
+            </FiltersContainer>
+
+            {/* ===== STATS RAPIDES AVEC ETAT ACTIF ===== */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={6} sm={3}>
                     <StatCard 
@@ -440,7 +448,7 @@ const ApplicationsList = () => {
                         onClick={() => handleStatusFilterChange('Acceptee')}
                     >
                         <CardContent sx={{ py: 1.5, px: 2 }}>
-                            <Typography variant="caption" color="#065f46">Acceptées</Typography>
+                            <Typography variant="caption" color="#065f46">Acceptees</Typography>
                             <Typography variant="h6" fontWeight={700} color="#065f46">{stats.acceptees}</Typography>
                         </CardContent>
                     </StatCard>
@@ -452,80 +460,12 @@ const ApplicationsList = () => {
                         onClick={() => handleStatusFilterChange('Refusee')}
                     >
                         <CardContent sx={{ py: 1.5, px: 2 }}>
-                            <Typography variant="caption" color="#991b1b">Refusées</Typography>
+                            <Typography variant="caption" color="#991b1b">Refusees</Typography>
                             <Typography variant="h6" fontWeight={700} color="#991b1b">{stats.refusees}</Typography>
                         </CardContent>
                     </StatCard>
                 </Grid>
             </Grid>
-
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#fafbfc' }}>
-                <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            placeholder="Rechercher par nom, offre..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            size="small"
-                            fullWidth
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Search sx={{ color: '#999', fontSize: 20 }} />
-                                    </InputAdornment>
-                                ),
-                            }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: '10px',
-                                    backgroundColor: '#fff',
-                                },
-                            }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            select
-                            label="Statut"
-                            value={statusFilter}
-                            onChange={(e) => handleStatusFilterChange(e.target.value)}
-                            size="small"
-                            fullWidth
-                            sx={{
-                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
-                            }}
-                        >
-                            {statusOptions.map((option) => (
-                                <MenuItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </MenuItem>
-                            ))}
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<FilterList />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                handleStatusFilterChange('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                                '&:hover': { borderColor: '#2d3748', backgroundColor: alpha('#2d3748', 0.04) },
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
-                </Grid>
-            </Paper>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer
@@ -551,7 +491,9 @@ const ApplicationsList = () => {
                                     <Typography variant="body1" color="text.secondary">
                                         {statusFilter !== 'all' 
                                             ? `Aucune candidature avec le statut "${getStatusLabel(statusFilter)}"`
-                                            : 'Aucune candidature trouvée'}
+                                            : searchTerm
+                                                ? 'Aucune candidature ne correspond à votre recherche'
+                                                : 'Aucune candidature trouvee'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>
@@ -630,7 +572,7 @@ const ApplicationsList = () => {
                                         />
                                     </TableCell>
                                     <TableCell align="center">
-                                        <Tooltip title="Voir le détail">
+                                        <Tooltip title="Voir le detail">
                                             <IconButton
                                                 size="small"
                                                 onClick={() => handleViewApplication(app._id || app.id)}

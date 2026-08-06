@@ -1,4 +1,6 @@
 // src/components/rh/Interviews.jsx
+// ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -60,7 +62,7 @@ const PageHeader = styled(Box)({
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  marginBottom: "24px",
+  marginBottom: "16px",
   flexWrap: "wrap",
   gap: "16px",
 });
@@ -131,6 +133,15 @@ const StatCard = styled(Card)(({ active, color }) => ({
   },
 }));
 
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+  padding: "16px 20px",
+  marginBottom: "24px",
+  borderRadius: "12px",
+  backgroundColor: "#fafbfc",
+  border: "1px solid #eef1f3",
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -140,7 +151,6 @@ const Interviews = () => {
   const location = useLocation();
   const { user } = useAuth();
 
-  // ✅ Lire le statut depuis l'URL
   const queryParams = new URLSearchParams(location.search);
   const initialStatus = queryParams.get("statut") || "all";
 
@@ -156,7 +166,6 @@ const Interviews = () => {
   const [total, setTotal] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  // ✅ STATS FIXES (calculées une fois sur tous les entretiens)
   const [stats, setStats] = useState({
     total: 0,
     planifies: 0,
@@ -164,13 +173,10 @@ const Interviews = () => {
     annules: 0,
   });
 
-  // Dialog states
   const [openViewDialog, setOpenViewDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
-  // ❌ SUPPRIMÉ : openAddDialog
   const [selectedInterview, setSelectedInterview] = useState(null);
 
-  // Form states
   const [formData, setFormData] = useState({
     applicationId: "",
     date: "",
@@ -185,7 +191,6 @@ const Interviews = () => {
 
   const limit = 10;
 
-  // ✅ Synchroniser statusFilter avec l'URL
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const statusFromUrl = params.get("statut") || "all";
@@ -194,12 +199,10 @@ const Interviews = () => {
     }
   }, [location.search]);
 
-  // ✅ CHARGEMENT DES ENTRETIENS - STATS FIXES
   useEffect(() => {
     fetchInterviews();
   }, []);
 
-  // ✅ Filtrer quand le filtre ou la recherche change
   useEffect(() => {
     filterInterviews();
   }, [allInterviews, searchTerm, statusFilter]);
@@ -255,7 +258,7 @@ const Interviews = () => {
       setTotalPages(totalPages);
 
     } catch (error) {
-      console.error("❌ Erreur chargement entretiens:", error);
+      console.error("Erreur chargement entretiens:", error);
       setError(error.response?.data?.message || "Erreur de chargement");
       setAllInterviews([]);
       setFilteredInterviews([]);
@@ -299,24 +302,20 @@ const Interviews = () => {
     }
   };
 
-  // ============================================
-  // UTILITAIRES
-  // ============================================
-
   const getStatusLabel = (status) => {
     const labels = {
-      Planifie: "Planifié",
-      Realise: "Réalisé",
-      Annule: "Annulé",
+      Planifie: "Planifie",
+      Realise: "Realise",
+      Annule: "Annule",
     };
     return labels[status] || status;
   };
 
   const getTypeLabel = (type) => {
     const labels = {
-      presentiel: "Présentiel",
+      presentiel: "Presentiel",
       visio: "Visio",
-      telephonique: "Téléphonique",
+      telephonique: "Telephonique",
     };
     return labels[type] || type;
   };
@@ -344,11 +343,6 @@ const Interviews = () => {
     );
   };
 
-  // ============================================
-  // ACTIONS
-  // ============================================
-
-  // ✅ NOUVELLE FONCTION - Navigation vers la page d'ajout
   const handleAddInterview = () => {
     navigate('/rh/interviews/new');
   };
@@ -387,8 +381,6 @@ const Interviews = () => {
     setError("");
   };
 
-  // ❌ SUPPRIMÉ : handleOpenAdd, handleCloseAdd, handleSaveAdd
-
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
@@ -405,7 +397,7 @@ const Interviews = () => {
     setError("");
     try {
       await api.put(`/interviews/${selectedInterview._id}`, formData);
-      setSuccess("Entretien modifié avec succès");
+      setSuccess("Entretien modifie avec succes");
       setOpenEditDialog(false);
       fetchInterviews();
     } catch (error) {
@@ -422,7 +414,7 @@ const Interviews = () => {
     if (!window.confirm("Voulez-vous vraiment annuler cet entretien ?")) return;
     try {
       await api.put(`/interviews/${id}/cancel`);
-      setSuccess("Entretien annulé avec succès");
+      setSuccess("Entretien annule avec succes");
       fetchInterviews();
     } catch (error) {
       console.error("Erreur annulation:", error);
@@ -430,9 +422,6 @@ const Interviews = () => {
     }
   };
 
-  // ============================================
-  // GESTION DU STATUT - MET À JOUR L'URL
-  // ============================================
   const handleStatusFilterChange = (newStatus) => {
     setStatusFilter(newStatus);
     setPage(1);
@@ -465,32 +454,24 @@ const Interviews = () => {
 
   const paginatedData = getPaginatedData();
 
-  // ============================================
-  // OPTIONS
-  // ============================================
-
   const statusOptions = [
     { value: "all", label: "Tous les statuts" },
-    { value: "Planifie", label: "Planifié" },
-    { value: "Realise", label: "Réalisé" },
-    { value: "Annule", label: "Annulé" },
+    { value: "Planifie", label: "Planifie" },
+    { value: "Realise", label: "Realise" },
+    { value: "Annule", label: "Annule" },
   ];
 
   const typeOptions = [
-    { value: "presentiel", label: "Présentiel" },
+    { value: "presentiel", label: "Presentiel" },
     { value: "visio", label: "Visio" },
-    { value: "telephonique", label: "Téléphonique" },
+    { value: "telephonique", label: "Telephonique" },
   ];
 
   const resultatOptions = [
     { value: "EnAttente", label: "En attente" },
     { value: "Positive", label: "Positif" },
-    { value: "Negative", label: "Négatif" },
+    { value: "Negative", label: "Negatif" },
   ];
-
-  // ============================================
-  // RENDER
-  // ============================================
 
   if (loading && allInterviews.length === 0) {
     return (
@@ -509,38 +490,19 @@ const Interviews = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* ===== EN-TÊTE ===== */}
+      {/* ===== EN-TETE ===== */}
       <PageHeader>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: "#1a2332" }}>
             Gestion des entretiens
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {filteredInterviews.length} entretien(s) trouvé(s)
+            {filteredInterviews.length} entretien(s) trouve(s)
             {statusFilter !== "all" &&
-              ` • Filtré par : ${getStatusLabel(statusFilter)}`}
+              ` • Filtre par : ${getStatusLabel(statusFilter)}`}
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={fetchInterviews}
-            disabled={loading}
-            sx={{
-              borderRadius: "12px",
-              textTransform: "none",
-              borderColor: "#e0e4e8",
-              color: "#20242b",
-              "&:hover": {
-                borderColor: "#2d3748",
-                backgroundColor: alpha("#2d3748", 0.04),
-              },
-            }}
-          >
-            Rafraîchir
-          </Button>
-          {/* ✅ BOUTON MODIFIÉ AVEC LA NOUVELLE FONCTION */}
           <StyledButton startIcon={<Add />} onClick={handleAddInterview}>
             Planifier un entretien
           </StyledButton>
@@ -558,7 +520,59 @@ const Interviews = () => {
         </Alert>
       )}
 
-      {/* ===== STATS RAPIDES AVEC ÉTAT ACTIF ===== */}
+      {/* ========================================== */}
+      {/* ✅ FILTRES - AU-DESSUS DES CARTES */}
+      {/* ========================================== */}
+      <FiltersContainer>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={7}>
+            <TextField
+              placeholder="Rechercher par nom, offre..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: "#999", fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "10px",
+                  backgroundColor: "#fff",
+                },
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={5}>
+            <TextField
+              select
+              label="Statut"
+              value={statusFilter}
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
+              size="small"
+              fullWidth
+              sx={{
+                "& .MuiOutlinedInput-root": { 
+                  borderRadius: "10px", 
+                  backgroundColor: "#fff" 
+                },
+              }}
+            >
+              {statusOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+        </Grid>
+      </FiltersContainer>
+
+      {/* ===== STATS RAPIDES AVEC ETAT ACTIF ===== */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={3}>
           <StatCard
@@ -584,7 +598,7 @@ const Interviews = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#1d4ed8">
-                Planifiés
+                Planifies
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#1d4ed8">
                 {stats.planifies}
@@ -600,7 +614,7 @@ const Interviews = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#065f46">
-                Réalisés
+                Realises
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#065f46">
                 {stats.realises}
@@ -616,7 +630,7 @@ const Interviews = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#991b1b">
-                Annulés
+                Annules
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#991b1b">
                 {stats.annules}
@@ -625,57 +639,6 @@ const Interviews = () => {
           </StatCard>
         </Grid>
       </Grid>
-
-      {/* ===== FILTRES ===== */}
-      <Paper
-        sx={{ p: 2, mb: 3, borderRadius: "12px", backgroundColor: "#fafbfc" }}
-      >
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={8}>
-            <TextField
-              placeholder="Rechercher par nom, offre..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              size="small"
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search sx={{ color: "#999", fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
-                  backgroundColor: "#fff",
-                },
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<Refresh />}
-              onClick={() => setSearchTerm("")}
-              sx={{
-                borderRadius: "10px",
-                textTransform: "none",
-                borderColor: "#ddd",
-                color: "#666",
-                backgroundColor: "#fff",
-                "&:hover": {
-                  borderColor: "#2d3748",
-                  backgroundColor: alpha("#2d3748", 0.04),
-                },
-              }}
-            >
-              Réinitialiser
-            </Button>
-          </Grid>
-        </Grid>
-      </Paper>
 
       {/* ===== TABLEAU ===== */}
       <TableContainer
@@ -701,7 +664,7 @@ const Interviews = () => {
                   <Typography variant="body1" color="text.secondary">
                     {statusFilter !== "all"
                       ? `Aucun entretien avec le statut "${getStatusLabel(statusFilter)}"`
-                      : "Aucun entretien trouvé"}
+                      : "Aucun entretien trouve"}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -762,7 +725,7 @@ const Interviews = () => {
                           color="primary"
                           sx={{ cursor: "pointer" }}
                         >
-                          🔗 Lien
+                          Lien
                         </Typography>
                       </Tooltip>
                     ) : (
@@ -850,7 +813,7 @@ const Interviews = () => {
       >
         <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Event sx={{ color: "#2d3748" }} />
-          Détails de l'entretien
+          Details de l'entretien
         </DialogTitle>
         <DialogContent>
           {selectedInterview && (
@@ -891,7 +854,7 @@ const Interviews = () => {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary">
-                    Durée
+                    Duree
                   </Typography>
                   <Typography variant="body1">
                     {selectedInterview.duree} minutes
@@ -995,7 +958,7 @@ const Interviews = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Durée (minutes)"
+                label="Duree (minutes)"
                 type="number"
                 name="duree"
                 value={formData.duree}
@@ -1060,12 +1023,12 @@ const Interviews = () => {
             </Grid>
             <Grid item xs={12}>
               <FormControl fullWidth>
-                <InputLabel>Résultat</InputLabel>
+                <InputLabel>Resultat</InputLabel>
                 <Select
                   name="resultat"
                   value={formData.resultat}
                   onChange={handleFormChange}
-                  label="Résultat"
+                  label="Resultat"
                   sx={{ borderRadius: "10px" }}
                 >
                   {resultatOptions.map((option) => (
@@ -1104,11 +1067,6 @@ const Interviews = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ========================================== */}
-      {/* ❌ DIALOG PLANIFICATION - SUPPRIMÉ */}
-      {/* ========================================== */}
-
     </Container>
   );
 };

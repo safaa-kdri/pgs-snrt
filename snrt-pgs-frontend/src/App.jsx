@@ -75,10 +75,11 @@ import ApplicationsList from "./components/rh/ApplicationsList";
 import ApplicationDetail from "./components/rh/ApplicationDetail";
 import ValidateOffers from "./components/rh/ValidateOffers";
 import Interviews from "./components/rh/Interviews";
-// ✅ IMPORT DE LA NOUVELLE PAGE
 import InterviewAddPage from "./components/rh/InterviewAddPage";
 import GenerateConvention from "./components/rh/GenerateConvention";
 import RhLayout from "./components/rh/RhLayout";
+// ✅ IMPORT DE LA PAGE DÉTAILS OFFRE RH
+import OfferDetailPage from "./components/rh/OfferDetailPage";
 
 // ============================================
 // PROTECTION DES ROUTES - POUR NON-ADMIN
@@ -491,7 +492,7 @@ function App() {
           }
         />
 
-        {/* ✅ ROUTES DÉPARTEMENTS - ADD, DETAIL ET EDITION */}
+        {/* ROUTES DÉPARTEMENTS - ADD, DETAIL ET EDITION */}
         <Route
           path="/admin/departments"
           element={
@@ -525,7 +526,7 @@ function App() {
           }
         />
 
-        {/* ✅ ROUTES PERIODES - ADD, DETAIL ET EDITION */}
+        {/* ROUTES PERIODES - ADD, DETAIL ET EDITION */}
         <Route
           path="/admin/periods"
           element={
@@ -666,6 +667,16 @@ function App() {
           }
         />
         <Route
+          path="/rh/validate-offers/:id"
+          element={
+            <PrivateRoute allowedRoles={["RH", "Rh"]}>
+              <RhLayout>
+                <OfferDetailPage />
+              </RhLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
           path="/rh/interviews"
           element={
             <PrivateRoute allowedRoles={["RH", "Rh"]}>
@@ -675,7 +686,6 @@ function App() {
             </PrivateRoute>
           }
         />
-        {/* ✅ NOUVELLE ROUTE POUR LA PAGE DE PLANIFICATION */}
         <Route
           path="/rh/interviews/new"
           element={
@@ -757,7 +767,7 @@ function App() {
           }
         />
 
-        {/* ✅ Encadrants - ADD ET EDIT */}
+        {/* Encadrants - ADD ET EDIT */}
         <Route
           path="/department/encadrants"
           element={

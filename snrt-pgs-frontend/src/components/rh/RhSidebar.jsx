@@ -109,15 +109,7 @@ const LogoutButton = styled(Button)({
     '&:hover': { backgroundColor: '#c82333' },
 });
 
-const UserInfo = styled(Box)({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '8px 12px',
-    marginBottom: '8px',
-    borderRadius: '8px',
-    backgroundColor: 'rgba(0,0,0,0.03)',
-});
+// ❌ UserInfo SUPPRIMÉ
 
 const RhSidebar = ({ open, onClose, user }) => {
     const navigate = useNavigate();
@@ -166,28 +158,7 @@ const RhSidebar = ({ open, onClose, user }) => {
             variant={isMobile ? 'temporary' : 'persistent'}
         >
             <DrawerList>
-                <UserInfo>
-                    <Avatar
-                        sx={{
-                            width: 36,
-                            height: 36,
-                            backgroundColor: '#2d3748',
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: '#fff',
-                        }}
-                    >
-                        {user?.prenom?.[0]}{user?.nom?.[0]}
-                    </Avatar>
-                    <Box>
-                        <Typography variant="body2" fontWeight={600} color="#1a1a2e">
-                            {user?.prenom} {user?.nom}
-                        </Typography>
-                        <Typography variant="caption" color="#6d7884">
-                            Ressources Humaines
-                        </Typography>
-                    </Box>
-                </UserInfo>
+                {/* ❌ SUPPRIMÉ : <UserInfo> ... </UserInfo> */}
                 {menuItems.map((item) => {
                     if (item.divider) {
                         return <Divider key="divider" sx={{ my: 1, mx: 2, backgroundColor: '#d0d4d8' }} />;

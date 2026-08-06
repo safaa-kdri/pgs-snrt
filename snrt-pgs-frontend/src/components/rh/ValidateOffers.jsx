@@ -1,4 +1,6 @@
 // src/components/rh/ValidateOffers.jsx
+// ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES - SANS BOUTON RÉINITIALISER
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -27,6 +29,7 @@ import {
   Alert,
   Card,
   CardContent,
+  MenuItem,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import {
@@ -80,7 +83,6 @@ const StatusChip = styled(Chip)(({ status }) => {
   };
 });
 
-// ✅ Carte statistique avec état actif
 const StatCard = styled(Card)(({ active, color }) => ({
   borderRadius: "10px",
   border: `1px solid ${active ? color : "#eef1f3"}`,
@@ -94,6 +96,14 @@ const StatCard = styled(Card)(({ active, color }) => ({
   },
 }));
 
+const FiltersContainer = styled(Paper)({
+  padding: "16px 20px",
+  marginBottom: "24px",
+  borderRadius: "12px",
+  backgroundColor: "#fafbfc",
+  border: "1px solid #eef1f3",
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -103,7 +113,6 @@ const ValidateOffers = () => {
   const location = useLocation();
   const { user } = useAuth();
 
-  // ✅ Lire le statut depuis l'URL - Par défaut 'all' (Total sélectionné)
   const queryParams = new URLSearchParams(location.search);
   const initialStatus = queryParams.get("statut") || "all";
 
@@ -119,7 +128,6 @@ const ValidateOffers = () => {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   
-  // ✅ Stats fixes
   const [stats, setStats] = useState({
     total: 0,
     enAttente: 0,
@@ -127,10 +135,8 @@ const ValidateOffers = () => {
     refusees: 0,
   });
 
-  // ✅ Map des départements
   const [departementMap, setDepartementMap] = useState({});
 
-  // ✅ Synchroniser statusFilter avec l'URL
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const statusFromUrl = params.get("statut") || "all";
@@ -139,24 +145,20 @@ const ValidateOffers = () => {
     }
   }, [location.search]);
 
-  // ✅ Charger les offres et les départements
   useEffect(() => {
     fetchDepartements();
   }, []);
 
-  // ✅ Quand le map des départements change, charger les offres
   useEffect(() => {
     if (Object.keys(departementMap).length > 0) {
       fetchOffers();
     }
   }, [departementMap]);
 
-  // ✅ Filtrer les offres quand le filtre change
   useEffect(() => {
     filterOffers();
   }, [allOffers, searchTerm, statusFilter]);
 
-  // ✅ Récupérer la liste des départements
   const fetchDepartements = async () => {
     try {
       const response = await api.get('/departments');
@@ -177,7 +179,6 @@ const ValidateOffers = () => {
     }
   };
 
-  // ✅ Récupérer les offres
   const fetchOffers = async () => {
     setLoading(true);
     setError("");
@@ -193,7 +194,6 @@ const ValidateOffers = () => {
         data = response.data.data;
       }
 
-      // ✅ Ajouter le nom du département à chaque offre
       data = data.map((offer) => ({
         ...offer,
         statut: offer.statut || "EnAttente",
@@ -202,7 +202,6 @@ const ValidateOffers = () => {
 
       setAllOffers(data);
 
-      // ✅ Calculer les stats UNE FOIS
       const total = data.length;
       const enAttente = data.filter((o) => o.statut === "EnAttente").length;
       const publiees = data.filter((o) => o.statut === "Publiee").length;
@@ -228,12 +227,10 @@ const ValidateOffers = () => {
   const filterOffers = () => {
     let filtered = [...allOffers];
 
-    // ✅ Filtrer par statut
     if (statusFilter !== "all") {
       filtered = filtered.filter((o) => o.statut === statusFilter);
     }
 
-    // ✅ Filtrer par recherche
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -247,7 +244,6 @@ const ValidateOffers = () => {
     setFilteredOffers(filtered);
   };
 
-  // ✅ CHANGER LE STATUT - MET À JOUR L'URL
   const handleStatusFilterChange = (newStatus) => {
     setStatusFilter(newStatus);
 
@@ -264,10 +260,10 @@ const ValidateOffers = () => {
   const getStatusLabel = (status) => {
     const labels = {
       EnAttente: "En attente",
-      Publiee: "Publiée",
-      Refusee: "Refusée",
+      Publiee: "Publiee",
+      Refusee: "Refusee",
       Brouillon: "Brouillon",
-      Archivee: "Archivée",
+      Archivee: "Archivee",
     };
     return labels[status] || status;
   };
@@ -300,16 +296,15 @@ const ValidateOffers = () => {
         await api.put(`/offers/${selectedOffer._id}/validate`, {
           decision: "Publiee",
         });
-        setSuccess(`Offre "${selectedOffer.titre}" validée avec succès`);
+        setSuccess(`Offre "${selectedOffer.titre}" validee avec succes`);
       } else {
         await api.put(`/offers/${selectedOffer._id}/validate`, {
           decision: "Refusee",
-          motifRefus: comment || "Non spécifié",
+          motifRefus: comment || "Non specifie",
         });
-        setSuccess(`Offre "${selectedOffer.titre}" refusée`);
+        setSuccess(`Offre "${selectedOffer.titre}" refusee`);
       }
       handleCloseDialog();
-      // ✅ Recharger les offres après validation
       fetchOffers();
     } catch (error) {
       console.error("Erreur validation:", error);
@@ -317,15 +312,10 @@ const ValidateOffers = () => {
     }
   };
 
-  // ✅ Déterminer si une carte est active
   const isCardActive = (statutKey) => {
     if (statutKey === "all") return statusFilter === "all";
     return statusFilter === statutKey;
   };
-
-  // ============================================
-  // RENDER
-  // ============================================
 
   if (loading && allOffers.length === 0) {
     return (
@@ -344,36 +334,18 @@ const ValidateOffers = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* ===== EN-TÊTE ===== */}
+      {/* ===== EN-TETE ===== */}
       <PageHeader>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: "#1a2332" }}>
             Validation des offres
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {filteredOffers.length} offre(s) trouvée(s)
+            {filteredOffers.length} offre(s) trouvee(s)
             {statusFilter !== "all" &&
-              ` • Filtré par : ${getStatusLabel(statusFilter)}`}
+              ` • Filtre par : ${getStatusLabel(statusFilter)}`}
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<Refresh />}
-          onClick={fetchOffers}
-          disabled={loading}
-          sx={{
-            borderRadius: "12px",
-            textTransform: "none",
-            borderColor: "#e0e4e8",
-            color: "#20242b",
-            "&:hover": {
-              borderColor: "#2d3748",
-              backgroundColor: alpha("#2d3748", 0.04),
-            },
-          }}
-        >
-          Rafraîchir
-        </Button>
       </PageHeader>
 
       {error && (
@@ -387,7 +359,60 @@ const ValidateOffers = () => {
         </Alert>
       )}
 
-      {/* ===== STATS RAPIDES AVEC ÉTAT ACTIF - STATS FIXES ===== */}
+      {/* ========================================== */}
+      {/* ✅ FILTRES - AU-DESSUS DES CARTES */}
+      {/* ========================================== */}
+      <FiltersContainer>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={7}>
+            <TextField
+              placeholder="Rechercher par titre, departement..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: "#999", fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "10px",
+                  backgroundColor: "#fff",
+                },
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={5}>
+            <TextField
+              select
+              label="Statut"
+              value={statusFilter}
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
+              size="small"
+              fullWidth
+              sx={{
+                "& .MuiOutlinedInput-root": { 
+                  borderRadius: "10px", 
+                  backgroundColor: "#fff" 
+                },
+              }}
+            >
+              <MenuItem value="all">Tous les statuts</MenuItem>
+              <MenuItem value="EnAttente">En attente</MenuItem>
+              <MenuItem value="Publiee">Publiee</MenuItem>
+              <MenuItem value="Refusee">Refusee</MenuItem>
+              <MenuItem value="Brouillon">Brouillon</MenuItem>
+              <MenuItem value="Archivee">Archivee</MenuItem>
+            </TextField>
+          </Grid>
+        </Grid>
+      </FiltersContainer>
+
+      {/* ===== STATS RAPIDES AVEC ETAT ACTIF ===== */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={3}>
           <StatCard
@@ -429,7 +454,7 @@ const ValidateOffers = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#065f46">
-                Publiées
+                Publiees
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#065f46">
                 {stats.publiees}
@@ -445,7 +470,7 @@ const ValidateOffers = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#991b1b">
-                Refusées
+                Refusees
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#991b1b">
                 {stats.refusees}
@@ -454,60 +479,6 @@ const ValidateOffers = () => {
           </StatCard>
         </Grid>
       </Grid>
-
-      {/* ===== FILTRES ===== */}
-      <Paper
-        sx={{ p: 2, mb: 3, borderRadius: "12px", backgroundColor: "#fafbfc" }}
-      >
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={8}>
-            <TextField
-              placeholder="Rechercher par titre, département..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              size="small"
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search sx={{ color: "#999", fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
-                  backgroundColor: "#fff",
-                },
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<FilterList />}
-              onClick={() => {
-                setSearchTerm("");
-                handleStatusFilterChange("all");
-              }}
-              sx={{
-                borderRadius: "10px",
-                textTransform: "none",
-                borderColor: "#ddd",
-                color: "#666",
-                backgroundColor: "#fff",
-                "&:hover": {
-                  borderColor: "#2d3748",
-                  backgroundColor: alpha("#2d3748", 0.04),
-                },
-              }}
-            >
-              Réinitialiser
-            </Button>
-          </Grid>
-        </Grid>
-      </Paper>
 
       {/* ===== TABLEAU ===== */}
       <TableContainer
@@ -518,10 +489,10 @@ const ValidateOffers = () => {
           <TableHead>
             <TableRow sx={{ backgroundColor: "#f7f7f7" }}>
               <StyledTableCell>Offre</StyledTableCell>
-              <StyledTableCell>Département</StyledTableCell>
+              <StyledTableCell>Departement</StyledTableCell>
               <StyledTableCell>Type</StyledTableCell>
               <StyledTableCell>Postes</StyledTableCell>
-              <StyledTableCell>Créé le</StyledTableCell>
+              <StyledTableCell>Cree le</StyledTableCell>
               <StyledTableCell>Statut</StyledTableCell>
               <StyledTableCell align="center">Actions</StyledTableCell>
             </TableRow>
@@ -533,7 +504,9 @@ const ValidateOffers = () => {
                   <Typography variant="body1" color="text.secondary">
                     {statusFilter !== "all"
                       ? `Aucune offre avec le statut "${getStatusLabel(statusFilter)}"`
-                      : "Aucune offre trouvée"}
+                      : searchTerm
+                        ? "Aucune offre ne correspond à votre recherche"
+                        : "Aucune offre trouvee"}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -557,7 +530,7 @@ const ValidateOffers = () => {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={offer.departementNom || "Non assigné"}
+                      label={offer.departementNom || "Non assigne"}
                       size="small"
                       sx={{ backgroundColor: "#e0e7ff", color: "#4338ca" }}
                     />
@@ -587,11 +560,11 @@ const ValidateOffers = () => {
                     />
                   </TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Voir les détails">
+                    <Tooltip title="Voir les details">
                       <IconButton
                         size="small"
                         onClick={() =>
-                          navigate(`/admin/offres/view/${offer._id}`)
+                          navigate(`/rh/validate-offers/${offer._id}`)
                         }
                         sx={{ color: "#2d3748" }}
                       >
@@ -652,8 +625,8 @@ const ValidateOffers = () => {
         <DialogContent>
           <Typography variant="body1" sx={{ mb: 2 }}>
             {actionType === "valider"
-              ? `Êtes-vous sûr de vouloir valider l'offre "${selectedOffer?.titre}" ?`
-              : `Êtes-vous sûr de vouloir refuser l'offre "${selectedOffer?.titre}" ?`}
+              ? `Etes-vous sur de vouloir valider l'offre "${selectedOffer?.titre}" ?`
+              : `Etes-vous sur de vouloir refuser l'offre "${selectedOffer?.titre}" ?`}
           </Typography>
           {actionType === "refuser" && (
             <TextField

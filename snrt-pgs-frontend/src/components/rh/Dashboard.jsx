@@ -258,22 +258,21 @@ const RhDashboard = () => {
         } catch (err) {
             console.error('Erreur chargement dashboard RH:', err);
             setError(err.response?.data?.message || 'Erreur de chargement');
-            // Données mockées
             setStats({
                 offres: { total: 24, enAttente: 5, publiees: 15 },
                 candidatures: { total: 89, enAttente: 23, acceptees: 42, refusees: 24 },
                 stages: { total: 32, enCours: 15, termines: 17 },
                 entretiens: 8,
                 recentActivities: [
-                    { id: '1', title: 'Candidature acceptée', description: 'Youssef EL HASSANI', date: 'Il y a 2h' },
-                    { id: '2', title: 'Offre validée', description: 'Stage Cybersécurité', date: 'Il y a 4h' },
-                    { id: '3', title: 'Entretien planifié', description: 'Stage Communication', date: 'Il y a 1j' },
-                    { id: '4', title: 'Convention générée', description: 'Sofia BENNANI', date: 'Il y a 2j' },
+                    { id: '1', title: 'Candidature acceptee', description: 'Youssef EL HASSANI', date: 'Il y a 2h' },
+                    { id: '2', title: 'Offre validee', description: 'Stage CyberSecurite', date: 'Il y a 4h' },
+                    { id: '3', title: 'Entretien planifie', description: 'Stage Communication', date: 'Il y a 1j' },
+                    { id: '4', title: 'Convention generee', description: 'Sofia BENNANI', date: 'Il y a 2j' },
                 ],
                 applicationsList: [
-                    { id: '1', candidat: 'Youssef EL HASSANI', offre: 'Stage Développement Web', statut: 'EnAnalyse', date: new Date().toISOString() },
+                    { id: '1', candidat: 'Youssef EL HASSANI', offre: 'Stage Developpement Web', statut: 'EnAnalyse', date: new Date().toISOString() },
                     { id: '2', candidat: 'Fatima BENNANI', offre: 'Stage Data Science', statut: 'Entretien', date: new Date(Date.now() - 86400000).toISOString() },
-                    { id: '3', candidat: 'Ahmed ALAMI', offre: 'Stage Cybersécurité', statut: 'Soumise', date: new Date(Date.now() - 172800000).toISOString() },
+                    { id: '3', candidat: 'Ahmed ALAMI', offre: 'Stage CyberSecurite', statut: 'Soumise', date: new Date(Date.now() - 172800000).toISOString() },
                     { id: '4', candidat: 'Sofia CHERKAOUI', offre: 'Stage DevOps', statut: 'Acceptee', date: new Date(Date.now() - 259200000).toISOString() },
                 ],
                 progression: { traitees: 66, total: 93 },
@@ -289,13 +288,13 @@ const RhDashboard = () => {
             'Soumise': 'Soumise',
             'EnAnalyse': 'En analyse',
             'Entretien': 'Entretien',
-            'Acceptee': 'Acceptée',
-            'Refusee': 'Refusée',
-            'EngagementEnvoye': 'Engagement envoyé',
-            'EngagementValide': 'Engagement validé',
-            'DemandeEnvoyee': 'Demande envoyée',
-            'ValideParDirecteur': 'Validé par Directeur',
-            'Cloturee': 'Clôturée',
+            'Acceptee': 'Acceptee',
+            'Refusee': 'Refusee',
+            'EngagementEnvoye': 'Engagement envoye',
+            'EngagementValide': 'Engagement valide',
+            'DemandeEnvoyee': 'Demande envoyee',
+            'ValideParDirecteur': 'Valide par Directeur',
+            'Cloturee': 'Cloturee',
         };
         return labels[status] || status;
     };
@@ -322,14 +321,15 @@ const RhDashboard = () => {
     };
 
     const getActivityIcon = (title) => {
-        if (title.includes('acceptée')) return '✓';
-        if (title.includes('validée')) return '📋';
-        if (title.includes('planifié')) return '📅';
+        if (title.includes('acceptee')) return '✓';
+        if (title.includes('validee')) return '📋';
+        if (title.includes('planifie')) return '📅';
         if (title.includes('refus')) return '✗';
         if (title.includes('Convention')) return '📄';
         return '•';
     };
 
+    // ✅ 3 CARTES UNIQUEMENT
     const statCards = [
         {
             label: 'Candidatures à traiter',
@@ -350,34 +350,10 @@ const RhDashboard = () => {
         {
             label: 'Entretiens à venir',
             value: stats.entretiens || 0,
-            sub: 'Planifiés',
+            sub: 'Planifies',
             icon: <Event sx={{ fontSize: 20 }} />,
             color: '#2d3748',
             path: '/rh/interviews',
-        },
-        {
-            label: 'Stages actifs',
-            value: stats.stages.enCours || 0,
-            sub: `${stats.stages.total || 0} au total`,
-            icon: <People sx={{ fontSize: 20 }} />,
-            color: '#4f46e5',
-            path: '/rh/applications?statut=Acceptee',
-        },
-        {
-            label: 'Candidatures acceptées',
-            value: stats.candidatures.acceptees || 0,
-            sub: 'Validées',
-            icon: <CheckCircle sx={{ fontSize: 20 }} />,
-            color: '#22c55e',
-            path: '/rh/applications?statut=Acceptee',
-        },
-        {
-            label: 'Candidatures refusées',
-            value: stats.candidatures.refusees || 0,
-            sub: 'Rejetées',
-            icon: <Cancel sx={{ fontSize: 20 }} />,
-            color: '#ef4444',
-            path: '/rh/applications?statut=Refusee',
         },
     ];
 
@@ -403,7 +379,7 @@ const RhDashboard = () => {
                 </Alert>
             )}
 
-            {/* ===== EN-TÊTE AVEC SALUTATION ===== */}
+            {/* ===== EN-TETE AVEC SALUTATION ===== */}
             <HeaderSection>
                 <HeaderLeft>
                     <Greeting>
@@ -421,29 +397,9 @@ const RhDashboard = () => {
                         })}
                     </GreetingDate>
                 </HeaderLeft>
-                <Button
-                    variant="outlined"
-                    startIcon={<Refresh />}
-                    onClick={fetchDashboardData}
-                    sx={{
-                        borderRadius: '10px',
-                        textTransform: 'none',
-                        borderColor: '#e0e4e8',
-                        color: '#20242b',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        px: 3,
-                        '&:hover': {
-                            borderColor: '#2d3748',
-                            backgroundColor: alpha('#2d3748', 0.04),
-                        },
-                    }}
-                >
-                    Actualiser
-                </Button>
             </HeaderSection>
 
-            {/* ===== STATS ===== */}
+            {/* ===== 3 STATS ===== */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 {statCards.map((stat, idx) => (
                     <Grid item xs={12} sm={6} lg={4} key={idx}>
@@ -470,7 +426,7 @@ const RhDashboard = () => {
                         Traitement des candidatures
                     </Typography>
                     <Typography variant="body2" fontWeight={600} color="#1a2332">
-                        {stats.progression.traitees} / {stats.progression.total} traitées
+                        {stats.progression.traitees} / {stats.progression.total} traitees
                     </Typography>
                 </Box>
                 <LinearProgress
@@ -488,12 +444,12 @@ const RhDashboard = () => {
                 />
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
                     <Typography variant="caption" color="text.secondary">
-                        {progressPercent}% complété
+                        {progressPercent}% complete
                     </Typography>
                 </Box>
             </ProgressCard>
 
-            {/* ===== DERNIÈRES CANDIDATURES ===== */}
+            {/* ===== DERNIERES CANDIDATURES ===== */}
             <Paper
                 sx={{
                     borderRadius: '12px',
@@ -504,14 +460,14 @@ const RhDashboard = () => {
                 }}
             >
                 <Box sx={{ px: 3, pt: 2, pb: 1 }}>
-                    <SectionTitle>Dernières candidatures</SectionTitle>
+                    <SectionTitle>Dernieres candidatures</SectionTitle>
                 </Box>
 
                 <TableContainer>
                     <Table>
                         <TableHead>
                             <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
-                                <StyledTableCell>Étudiant</StyledTableCell>
+                                <StyledTableCell>Etudiant</StyledTableCell>
                                 <StyledTableCell>Offre</StyledTableCell>
                                 <StyledTableCell>Date</StyledTableCell>
                                 <StyledTableCell>Statut</StyledTableCell>
@@ -561,7 +517,7 @@ const RhDashboard = () => {
                                                 />
                                             </TableCell>
                                             <TableCell align="center">
-                                                <Tooltip title="Voir le détail">
+                                                <Tooltip title="Voir le detail">
                                                     <IconButton
                                                         size="small"
                                                         onClick={() => navigate(`/rh/application/${app.id}`)}
@@ -578,7 +534,7 @@ const RhDashboard = () => {
                                 <TableRow>
                                     <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                                         <Typography variant="body2" color="text.secondary">
-                                            Aucune candidature récente
+                                            Aucune candidature recente
                                         </Typography>
                                     </TableCell>
                                 </TableRow>
@@ -599,9 +555,9 @@ const RhDashboard = () => {
                 </Box>
             </Paper>
 
-            {/* ===== ACTIVITÉS RÉCENTES ===== */}
+            {/* ===== ACTIVITES RECENTES ===== */}
             <ActivityCard>
-                <SectionTitle>Activités récentes</SectionTitle>
+                <SectionTitle>Activites recentes</SectionTitle>
                 {stats.recentActivities.length > 0 ? (
                     <Box>
                         {stats.recentActivities.map((activity) => (
@@ -625,7 +581,7 @@ const RhDashboard = () => {
                     </Box>
                 ) : (
                     <Typography variant="body2" color="#687480" sx={{ textAlign: 'center', py: 3 }}>
-                        Aucune activité récente
+                        Aucune activite recente
                     </Typography>
                 )}
             </ActivityCard>
