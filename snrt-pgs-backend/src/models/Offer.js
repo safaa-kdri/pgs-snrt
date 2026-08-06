@@ -53,7 +53,6 @@ const offerSchema = new mongoose.Schema(
       type: [subjectSchema],
       validate: {
         validator: (arr) => Array.isArray(arr) && arr.length >= 1,
-
         message: 'Une offre doit comporter au moins un sujet (RG-010).',
       },
     },
@@ -64,9 +63,31 @@ const offerSchema = new mongoose.Schema(
 
     motifRefus: { type: String, default: null },
   },
-  { timestamps: true, collection: 'offers' }
+  { 
+    timestamps: true, 
+    collection: 'offers',
+    // ✅ Activer les virtuals pour qu'ils soient inclus dans les conversions JSON/objet
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
 
+// ============================================
+// ✅ AJOUT : Champ virtuel pour le nombre de candidatures
+// ============================================
+offerSchema.virtual('candidaturesCount', {
+  ref: 'Application',
+  localField: '_id',
+  foreignField: 'offreId',
+  count: true,
+  options: {
+    match: { isDeleted: { $ne: true } } // Exclure les candidatures supprimées
+  }
+});
+
+// ============================================
+// INDEX
+// ============================================
 offerSchema.index({ departementId: 1 });
 offerSchema.index({ periodeId: 1 });
 offerSchema.index({ statut: 1 });
@@ -75,9 +96,11 @@ offerSchema.index({ datePublication: -1 });
 
 offerSchema.index({ titre: 'text', description: 'text' });
 
+// ============================================
+// VALIDATION PRE-SAVE
+// ============================================
 offerSchema.pre('validate', function preValidate(next) {
   if (this.dateDebut && this.dateLimiteCandidature && this.dateDebut <= this.dateLimiteCandidature) {
- 
     return next(new Error('La date de debut de stage doit etre posterieure a la date limite de candidature (RG-012).'));
   }
   if (this.dateFin && this.dateDebut && this.dateFin <= this.dateDebut) {
@@ -86,10 +109,12 @@ offerSchema.pre('validate', function preValidate(next) {
   return next();
 });
 
+// ============================================
+// HOOKS DE SUPPRESSION
+// ============================================
 function blockDeleteIfPublished(next) {
   const statut = this.statut || this.getUpdate?.()?.statut;
   if (statut === OFFER_STATUS.PUBLIEE) {
- 
     return next(new Error('Une offre publiee ne peut pas etre supprimee (RG-014). Utilisez l\'archivage.'));
   }
   return next();
@@ -97,7 +122,9 @@ function blockDeleteIfPublished(next) {
 offerSchema.pre('deleteOne', { document: true, query: false }, blockDeleteIfPublished);
 offerSchema.pre('findOneAndDelete', blockDeleteIfPublished);
 
-
+// ============================================
+// STATIC METHODS
+// ============================================
 offerSchema.statics.archiveExpiredOffers = async function archiveExpiredOffers() {
   const result = await this.updateMany(
     { statut: OFFER_STATUS.PUBLIEE, dateDebut: { $lt: new Date() } },

@@ -1,4 +1,7 @@
 // src/components/department/OfferDetail.jsx
+// ✅ VERSION AVEC BOUTON RETOUR POSITIONNÉ COMME LE RH (AU-DESSUS)
+// ✅ CORRECTION : getStatusLabel avec les bons libellés
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -178,16 +181,14 @@ const ActionButton = styled(Button)({
     fontSize: '13px',
 });
 
+// ✅ BOUTON RETOUR STYLE RH - POSITIONNÉ AU-DESSUS
 const BackButton = styled(Button)({
-    borderRadius: '8px',
     textTransform: 'none',
-    fontWeight: 500,
-    padding: '6px 16px',
-    fontSize: '13px',
-    backgroundColor: '#2d3748',
-    color: '#ffffff',
+    color: '#666',
+    marginBottom: '16px',
     '&:hover': {
-        backgroundColor: '#1a2332',
+        backgroundColor: 'transparent',
+        color: '#1a2332',
     },
 });
 
@@ -204,12 +205,12 @@ const SubjectCard = styled(Paper)({
 
 const CompetenceChip = styled(Chip)(({ niveau }) => {
     const colors = {
-        'Débutant': { bg: '#e5e7eb', text: '#6b7280' },
-        'Intermédiaire': { bg: '#fef3c7', text: '#d97706' },
-        'Avancé': { bg: '#dbeafe', text: '#1d4ed8' },
+        'Debutant': { bg: '#e5e7eb', text: '#6b7280' },
+        'Intermediaire': { bg: '#fef3c7', text: '#d97706' },
+        'Avance': { bg: '#dbeafe', text: '#1d4ed8' },
         'Expert': { bg: '#d1fae5', text: '#065f46' },
     };
-    const color = colors[niveau] || colors['Débutant'];
+    const color = colors[niveau] || colors['Debutant'];
     return {
         backgroundColor: color.bg,
         color: color.text,
@@ -340,15 +341,28 @@ const OfferDetail = () => {
     // UTILITAIRES
     // ============================================
 
+    // ✅ CORRECTION : getStatusLabel avec les bons libellés
     const getStatusLabel = (status) => {
         const labels = {
-            'Brouillon': 'Brouillon',
-            'EnAttente': 'En attente',
-            'Publiee': 'Publiée',
-            'Refusee': 'Refusée',
+            'Brouillon': 'Brouillon (en cours)',
+            'EnAttente': 'En attente de validation RH',
+            'Publiee': 'Publiée ✓',
+            'Refusee': 'Refusée ✗',
             'Archivee': 'Archivée',
         };
         return labels[status] || status;
+    };
+
+    // ✅ CORRECTION : getStatusColor pour les badges
+    const getStatusColor = (status) => {
+        const colors = {
+            'Brouillon': '#6b7280',
+            'EnAttente': '#d97706',
+            'Publiee': '#065f46',
+            'Refusee': '#991b1b',
+            'Archivee': '#6b7280',
+        };
+        return colors[status] || '#6b7280';
     };
 
     const formatDate = (dateStr) => {
@@ -410,6 +424,14 @@ const OfferDetail = () => {
 
     return (
         <PageContainer maxWidth="lg">
+            {/* ===== BOUTON RETOUR - AU-DESSUS DU TITRE (COMME RH) ===== */}
+            <BackButton
+                startIcon={<ArrowBack />}
+                onClick={() => navigate('/department/my-offers')}
+            >
+                Retour à la liste
+            </BackButton>
+
             {/* ===== EN-TÊTE ===== */}
             <HeaderSection>
                 <HeaderLeft>
@@ -432,57 +454,7 @@ const OfferDetail = () => {
                     </Stack>
                 </HeaderLeft>
 
-                <Stack direction="row" spacing={1}>
-                    {canEdit() && (
-                        <ActionButton
-                            variant="outlined"
-                            startIcon={<Edit />}
-                            onClick={handleEdit}
-                            sx={{ borderColor: '#4f46e5', color: '#4f46e5' }}
-                        >
-                            Modifier
-                        </ActionButton>
-                    )}
-                    {canSubmit() && (
-                        <ActionButton
-                            variant="outlined"
-                            startIcon={<Send />}
-                            onClick={handleSubmit}
-                            disabled={submitting}
-                            sx={{ borderColor: '#22c55e', color: '#22c55e' }}
-                        >
-                            {submitting ? <CircularProgress size={16} /> : 'Soumettre'}
-                        </ActionButton>
-                    )}
-                    {offer.statut === 'EnAttente' && (
-                        <ActionButton variant="outlined" startIcon={<Pending />} disabled>
-                            En attente
-                        </ActionButton>
-                    )}
-                    {offer.statut === 'Publiee' && (
-                        <ActionButton
-                            variant="contained"
-                            startIcon={<Visibility />}
-                            onClick={handleViewCandidatures}
-                            sx={{ backgroundColor: '#148aa0', '&:hover': { backgroundColor: '#0b7890' } }}
-                        >
-                            Candidatures
-                        </ActionButton>
-                    )}
-                    {canDelete() && (
-                        <ActionButton
-                            variant="outlined"
-                            startIcon={<Delete />}
-                            onClick={handleDelete}
-                            sx={{ borderColor: '#ef4444', color: '#ef4444' }}
-                        >
-                            Supprimer
-                        </ActionButton>
-                    )}
-                    <BackButton startIcon={<ArrowBack />} onClick={() => navigate('/department/my-offers')}>
-                        Retour
-                    </BackButton>
-                </Stack>
+                
             </HeaderSection>
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }}>{error}</Alert>}

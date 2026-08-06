@@ -1,5 +1,5 @@
 // src/components/department/DepartmentHeader.jsx
-// ✅ Même structure que RhHeader
+// ✅ VERSION SANS LE MOTIF DÉPARTEMENT
 
 import React from 'react';
 import { Box, IconButton, Typography, Avatar } from '@mui/material';
@@ -57,22 +57,10 @@ const MenuButton = styled(IconButton)({
     },
 });
 
-const DepartmentBadge = styled(Box)({
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: '20px',
-    padding: '4px 16px',
-    color: 'white',
-    fontSize: '13px',
-    fontWeight: 500,
-    fontFamily: '"Inter", sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-});
+// ✅ SUPPRIMER DepartmentBadge - PLUS UTILISÉ
 
 const DepartmentHeader = ({ toggleDrawer, user }) => {
     const navigate = useNavigate();
-    const departmentName = user?.departementId?.nom || 'Département';
 
     return (
         <AppBar>
@@ -85,10 +73,7 @@ const DepartmentHeader = ({ toggleDrawer, user }) => {
                     <MenuButton onClick={toggleDrawer}>
                         <MenuIcon sx={{ fontSize: 28 }} />
                     </MenuButton>
-                    <DepartmentBadge>
-                        <i className="fa-solid fa-building" style={{ fontSize: 14 }}></i>
-                        {departmentName}
-                    </DepartmentBadge>
+                    {/* ✅ SUPPRESSION DU DepartmentBadge */}
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

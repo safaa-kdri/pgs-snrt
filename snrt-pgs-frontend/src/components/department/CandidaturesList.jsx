@@ -1,5 +1,5 @@
 // src/components/department/CandidaturesList.jsx
-// ✅ VERSION AVEC STATS FIXES ET TABLEAU FILTRABLE
+// ✅ VERSION SANS BOUTON RÉINITIALISER
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -96,6 +96,14 @@ const StatCard = styled(Card)(({ active, color }) => ({
     },
 }));
 
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -110,7 +118,7 @@ const CandidaturesList = () => {
     const initialStatus = queryParams.get('statut') || 'all';
 
     const [loading, setLoading] = useState(true);
-    const [allApplications, setAllApplications] = useState([]); // ✅ TOUTES les candidatures
+    const [allApplications, setAllApplications] = useState([]);
     const [filteredApplications, setFilteredApplications] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -370,27 +378,59 @@ const CandidaturesList = () => {
                         {statusFilter !== 'all' && ` • Filtré par : ${getStatusLabel(statusFilter)}`}
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchAllApplications}
-                        disabled={loading}
-                        sx={{
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            borderColor: '#e0e4e8',
-                            color: '#20242b',
-                            '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                        }}
-                    >
-                        Rafraîchir
-                    </Button>
-                </Box>
             </PageHeader>
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
+
+            {/* ========================================== */}
+            {/* ✅ FILTRES - SANS BOUTON RÉINITIALISER */}
+            {/* ========================================== */}
+            <FiltersContainer>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            placeholder="Rechercher par nom, offre..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            size="small"
+                            fullWidth
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <Search sx={{ color: '#999', fontSize: 20 }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: '10px',
+                                    backgroundColor: '#fff',
+                                },
+                            }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            select
+                            label="Statut"
+                            value={statusFilter}
+                            onChange={(e) => handleStatusFilterChange(e.target.value)}
+                            size="small"
+                            fullWidth
+                            sx={{
+                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
+                            }}
+                        >
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                </Grid>
+            </FiltersContainer>
 
             {/* ===== STATS RAPIDES AVEC ÉTAT ACTIF - STATS FIXES ===== */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -444,74 +484,6 @@ const CandidaturesList = () => {
                 </Grid>
             </Grid>
 
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#fafbfc' }}>
-                <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            placeholder="Rechercher par nom, offre..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            size="small"
-                            fullWidth
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Search sx={{ color: '#999', fontSize: 20 }} />
-                                    </InputAdornment>
-                                ),
-                            }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: '10px',
-                                    backgroundColor: '#fff',
-                                },
-                            }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            select
-                            label="Statut"
-                            value={statusFilter}
-                            onChange={(e) => handleStatusFilterChange(e.target.value)}
-                            size="small"
-                            fullWidth
-                            sx={{
-                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
-                            }}
-                        >
-                            {statusOptions.map((option) => (
-                                <MenuItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </MenuItem>
-                            ))}
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<FilterList />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                handleStatusFilterChange('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                                '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
-                </Grid>
-            </Paper>
-
             {/* ===== TABLEAU ===== */}
             <TableContainer
                 component={Paper}
@@ -536,7 +508,9 @@ const CandidaturesList = () => {
                                     <Typography variant="body1" color="text.secondary">
                                         {statusFilter !== 'all' 
                                             ? `Aucune candidature avec le statut "${getStatusLabel(statusFilter)}"`
-                                            : 'Aucune candidature trouvée'}
+                                            : searchTerm
+                                                ? 'Aucune candidature ne correspond à votre recherche'
+                                                : 'Aucune candidature trouvée'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>

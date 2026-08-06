@@ -1,5 +1,7 @@
-const mongoose = require('mongoose');
+// src/models/Subject.js
+// ✅ CORRECT - valeurs sans accents
 
+const mongoose = require('mongoose');
 
 const competenceRequiseSchema = new mongoose.Schema(
   {

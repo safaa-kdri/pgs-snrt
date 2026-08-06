@@ -1,5 +1,5 @@
 // src/components/admin/AdminHeader.jsx
-// ✅ MÊME STRUCTURE QUE DepartmentHeader
+// ✅ VERSION SANS LE BADGE ADMINISTRATION
 
 import React from 'react';
 import { Box, IconButton, Typography, Avatar } from '@mui/material';
@@ -57,18 +57,7 @@ const MenuButton = styled(IconButton)({
     },
 });
 
-const AdminBadge = styled(Box)({
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: '20px',
-    padding: '4px 16px',
-    color: 'white',
-    fontSize: '13px',
-    fontWeight: 500,
-    fontFamily: '"Inter", sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-});
+// ✅ SUPPRIMER AdminBadge - PLUS UTILISÉ
 
 const AdminHeader = ({ toggleDrawer, user }) => {
     const navigate = useNavigate();
@@ -76,7 +65,7 @@ const AdminHeader = ({ toggleDrawer, user }) => {
     return (
         <AppBar>
             <HeaderContent>
-                {/* PARTIE GAUCHE - Logo + Menu + Badge */}
+                {/* PARTIE GAUCHE - Logo + Menu */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Logo onClick={() => navigate('/admin')}>
                         <img src="/logo_snrt_final.png" alt="SNRT" />
@@ -85,13 +74,10 @@ const AdminHeader = ({ toggleDrawer, user }) => {
                     <MenuButton onClick={toggleDrawer}>
                         <MenuIcon sx={{ fontSize: 28 }} />
                     </MenuButton>
-                    <AdminBadge>
-                        <i className="fa-solid fa-user-shield" style={{ fontSize: 14 }}></i>
-                        Administration
-                    </AdminBadge>
+                    {/* ✅ SUPPRESSION DU AdminBadge */}
                 </Box>
 
-                {/* PARTIE DROITE - Avatar + Nom (comme DepartmentHeader) */}
+                {/* PARTIE DROITE - Avatar + Nom */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar
                         sx={{

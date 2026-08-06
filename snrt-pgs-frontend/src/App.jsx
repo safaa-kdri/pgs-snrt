@@ -1,4 +1,6 @@
 // src/App.jsx
+// ✅ CORRECTION : Import correct de OfferEditPage
+
 import React, { useEffect, useState, useRef } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Box, CircularProgress } from "@mui/material";
@@ -65,6 +67,7 @@ import ApplicationDetailStudent from "./components/student/ApplicationDetail";
 import CreateOffer from "./components/department/CreateOffer";
 import MyOffers from "./components/department/MyOffers";
 import OfferDetailDept from "./components/department/OfferDetail";
+import OfferEditPage from "./components/department/OfferEditPage";
 import CandidaturesList from "./components/department/CandidaturesList";
 import CandidatureDetail from "./components/department/CandidatureDetail";
 import InternsListDept from "./components/department/InternsList";
@@ -84,7 +87,7 @@ import GenerateConvention from "./components/rh/GenerateConvention";
 import OfferDetailPage from "./components/rh/OfferDetailPage";
 
 // ============================================
-// PROTECTION DES ROUTES - POUR NON-ADMIN
+// PROTECTION DES ROUTES
 // ============================================
 const PrivateRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, status, user } = useSelector((state) => state.auth);
@@ -452,7 +455,7 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* ROUTES ADMIN - AVEC AdminDashboard comme conteneur */}
+        {/* ROUTES ADMIN */}
         {/* ========================================== */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route
@@ -825,6 +828,16 @@ function App() {
             <PrivateRoute allowedRoles={["Departement", "Department"]}>
               <DepartmentLayout>
                 <MyOffers />
+              </DepartmentLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/department/offer/edit/:id"
+          element={
+            <PrivateRoute allowedRoles={["Departement", "Department"]}>
+              <DepartmentLayout>
+                <OfferEditPage />
               </DepartmentLayout>
             </PrivateRoute>
           }

@@ -1,4 +1,6 @@
 // src/components/admin/PeriodDetailPage.jsx
+// ✅ VERSION AVEC BOUTON RETOUR STYLE RH (AU-DESSUS)
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -89,16 +91,14 @@ const ActionButton = styled(Button)({
     fontSize: '13px',
 });
 
+// ✅ BOUTON RETOUR STYLE RH - POSITIONNÉ AU-DESSUS
 const BackButton = styled(Button)({
-    borderRadius: '8px',
     textTransform: 'none',
-    fontWeight: 500,
-    padding: '6px 16px',
-    fontSize: '13px',
-    backgroundColor: '#2d3748',
-    color: '#ffffff',
+    color: '#666',
+    marginBottom: '16px', // Espacement avant le titre
     '&:hover': {
-        backgroundColor: '#1a2332',
+        backgroundColor: 'transparent',
+        color: '#1a2332',
     },
 });
 
@@ -259,6 +259,14 @@ const PeriodDetailPage = () => {
 
     return (
         <PageContainer maxWidth="xl">
+            {/* ===== BOUTON RETOUR - AU-DESSUS DU TITRE (COMME RH) ===== */}
+            <BackButton
+                startIcon={<ArrowBack />}
+                onClick={handleBack}
+            >
+                Retour à la liste
+            </BackButton>
+
             {/* ===== EN-TÊTE ===== */}
             <HeaderSection>
                 <HeaderLeft>
@@ -279,25 +287,7 @@ const PeriodDetailPage = () => {
                     </Stack>
                 </HeaderLeft>
 
-                <Stack direction="row" spacing={1}>
-                    <ActionButton variant="outlined" startIcon={<Edit />} onClick={handleEdit}>
-                        Modifier
-                    </ActionButton>
-                    <ActionButton 
-                        variant="outlined" 
-                        startIcon={isActive ? <Archive /> : <Restore />} 
-                        onClick={handleToggleStatus}
-                        sx={{
-                            borderColor: isActive ? '#f59e0b' : '#22c55e',
-                            color: isActive ? '#f59e0b' : '#22c55e',
-                        }}
-                    >
-                        {isActive ? 'Archiver' : 'Restaurer'}
-                    </ActionButton>
-                    <BackButton startIcon={<ArrowBack />} onClick={handleBack}>
-                        Retour
-                    </BackButton>
-                </Stack>
+            
             </HeaderSection>
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }}>{error}</Alert>}

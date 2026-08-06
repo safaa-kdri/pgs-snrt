@@ -467,21 +467,7 @@ const DepartmentStats = () => {
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchStats}
-                        disabled={loading}
-                        sx={{
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            borderColor: '#e0e4e8',
-                            color: '#20242b',
-                            '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                        }}
-                    >
-                        Rafraîchir
-                    </Button>
+                    
                     <Button
                         variant="contained"
                         startIcon={<Download />}

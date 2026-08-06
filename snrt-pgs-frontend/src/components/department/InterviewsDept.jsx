@@ -1,5 +1,5 @@
 // src/components/department/InterviewsDept.jsx
-// ✅ VERSION AVEC STATS FIXES ET CARTES CLIQUABLES
+// ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES - SANS BOUTON RÉINITIALISER
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -105,7 +105,7 @@ const TypeChip = styled(Chip)(({ type }) => {
     };
 });
 
-// ✅ Carte statistique avec état actif (comme dans CandidaturesList)
+// ✅ Carte statistique avec état actif
 const StatCard = styled(Card)(({ active, color }) => ({
     borderRadius: '10px',
     border: `1px solid ${active ? color : '#eef1f3'}`,
@@ -118,6 +118,14 @@ const StatCard = styled(Card)(({ active, color }) => ({
         transform: 'translateY(-2px)',
     },
 }));
+
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+});
 
 // ============================================
 // COMPOSANT PRINCIPAL
@@ -133,7 +141,7 @@ const InterviewsDept = () => {
     const initialStatus = queryParams.get('statut') || 'all';
 
     const [loading, setLoading] = useState(true);
-    const [allInterviews, setAllInterviews] = useState([]); // ✅ TOUS les entretiens
+    const [allInterviews, setAllInterviews] = useState([]);
     const [filteredInterviews, setFilteredInterviews] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -144,7 +152,7 @@ const InterviewsDept = () => {
     const [total, setTotal] = useState(0);
     const [submitting, setSubmitting] = useState(false);
 
-    // ✅ STATS FIXES (calculées une fois sur tous les entretiens)
+    // ✅ STATS FIXES
     const [stats, setStats] = useState({
         total: 0,
         planifies: 0,
@@ -199,7 +207,7 @@ const InterviewsDept = () => {
         try {
             const params = {
                 page: 1,
-                limit: 1000, // ✅ Récupérer tous les entretiens pour les stats
+                limit: 1000,
             };
 
             console.log('📤 [InterviewsDept] Chargement de tous les entretiens...');
@@ -495,27 +503,59 @@ const InterviewsDept = () => {
                         {statusFilter !== 'all' && ` • Filtré par : ${getStatusLabel(statusFilter)}`}
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchAllInterviews}
-                        disabled={loading}
-                        sx={{
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            borderColor: '#e0e4e8',
-                            color: '#20242b',
-                            '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                        }}
-                    >
-                        Rafraîchir
-                    </Button>
-                </Box>
             </PageHeader>
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
+
+            {/* ========================================== */}
+            {/* ✅ FILTRES - AU-DESSUS DES CARTES */}
+            {/* ========================================== */}
+            <FiltersContainer>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            placeholder="Rechercher par nom, offre..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            size="small"
+                            fullWidth
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <Search sx={{ color: '#999', fontSize: 20 }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: '10px',
+                                    backgroundColor: '#fff',
+                                },
+                            }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            select
+                            label="Statut"
+                            value={statusFilter}
+                            onChange={(e) => handleStatusFilterChange(e.target.value)}
+                            size="small"
+                            fullWidth
+                            sx={{
+                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
+                            }}
+                        >
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Grid>
+                </Grid>
+            </FiltersContainer>
 
             {/* ===== STATS RAPIDES AVEC ÉTAT ACTIF - STATS FIXES ===== */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -568,74 +608,6 @@ const InterviewsDept = () => {
                     </StatCard>
                 </Grid>
             </Grid>
-
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#fafbfc' }}>
-                <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            placeholder="Rechercher par nom, offre..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            size="small"
-                            fullWidth
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Search sx={{ color: '#999', fontSize: 20 }} />
-                                    </InputAdornment>
-                                ),
-                            }}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: '10px',
-                                    backgroundColor: '#fff',
-                                },
-                            }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            select
-                            label="Statut"
-                            value={statusFilter}
-                            onChange={(e) => handleStatusFilterChange(e.target.value)}
-                            size="small"
-                            fullWidth
-                            sx={{
-                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
-                            }}
-                        >
-                            {statusOptions.map((option) => (
-                                <MenuItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </MenuItem>
-                            ))}
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<Refresh />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                handleStatusFilterChange('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                                '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
-                </Grid>
-            </Paper>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer

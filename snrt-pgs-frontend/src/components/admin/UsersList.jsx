@@ -653,24 +653,6 @@ const UsersList = () => {
                 {!showForm && (
                     <Box sx={{ display: 'flex', gap: 2 }}>
                         <Button
-                            variant="outlined"
-                            startIcon={<Refresh />}
-                            onClick={fetchUsers}
-                            disabled={loading}
-                            sx={{ 
-                                borderRadius: '12px', 
-                                textTransform: 'none',
-                                color: '#000000',
-                                borderColor: '#000000',
-                                '&:hover': {
-                                    borderColor: '#000000',
-                                    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-                                }
-                            }}
-                        >
-                            Rafraîchir
-                        </Button>
-                        <Button
                             variant="contained"
                             startIcon={<PersonAdd />}
                             sx={{

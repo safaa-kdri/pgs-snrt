@@ -1,4 +1,6 @@
 // src/components/department/InternDetail.jsx
+// ✅ VERSION AVEC BOUTON RETOUR STYLE RH (AU-DESSUS)
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -212,16 +214,14 @@ const ActionButton = styled(Button)({
     fontSize: '13px',
 });
 
+// ✅ BOUTON RETOUR STYLE RH - POSITIONNÉ AU-DESSUS
 const BackButton = styled(Button)({
-    borderRadius: '8px',
     textTransform: 'none',
-    fontWeight: 500,
-    padding: '6px 16px',
-    fontSize: '13px',
-    backgroundColor: '#2d3748',
-    color: '#ffffff',
+    color: '#666',
+    marginBottom: '16px', // Espacement avant l'avatar
     '&:hover': {
-        backgroundColor: '#1a2332',
+        backgroundColor: 'transparent',
+        color: '#1a2332',
     },
 });
 
@@ -548,6 +548,14 @@ const InternDetail = () => {
 
     return (
         <PageContainer maxWidth="lg">
+            {/* ===== BOUTON RETOUR - AU-DESSUS DE L'AVATAR (COMME RH) ===== */}
+            <BackButton
+                startIcon={<ArrowBack />}
+                onClick={() => navigate('/department/interns')}
+            >
+                Retour à la liste
+            </BackButton>
+
             {/* ===== EN-TÊTE ===== */}
             <HeaderSection>
                 <HeaderLeft>
@@ -575,6 +583,7 @@ const InternDetail = () => {
                     </Box>
                 </HeaderLeft>
 
+                {/* ===== BOUTONS D'ACTION - À DROITE ===== */}
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     {!isAssigned && (
                         <ActionButton
@@ -604,9 +613,6 @@ const InternDetail = () => {
                             Consulter le rapport
                         </ActionButton>
                     )}
-                    <BackButton startIcon={<ArrowBack />} onClick={() => navigate('/department/interns')}>
-                        Retour
-                    </BackButton>
                 </Box>
             </HeaderSection>
 
