@@ -36,15 +36,16 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
+// ✅ CORRIGÉ - Mapping des types de documents
 const mapDocumentType = (docId) => {
     const mapping = {
-        photo: 'Autre',
+        photo: 'Photo',                              // ✅ CORRIGÉ
         lettre_motivation: 'LettreMotivation',
         cv: 'CV',
         attestation_scolarite: 'Attestation',
-        lettre_recommandation: 'Autre',
-        cin: 'Autre',
-        assurance: 'Autre',
+        lettre_recommandation: 'LettreRecommandation',  // ✅ CORRIGÉ
+        cin: 'CIN',                                  // ✅ CORRIGÉ
+        assurance: 'Assurance',                      // ✅ CORRIGÉ
         fiche_engagement: 'Convention',
     };
     return mapping[docId] || 'Autre';
@@ -344,15 +345,11 @@ const ApplyPage = () => {
         );
     };
 
-    // ============================================
-    // ✅ handleSubmit CORRIGÉ - AVEC SOUMISSION
-    // ============================================
     const handleSubmit = async () => {
         setSubmitting(true);
         setError('');
 
         try {
-            // 1. Vérifier que tous les documents sont uploadés
             const missingDocs = REQUIRED_DOCUMENTS
                 .filter(doc => doc.required && !uploadedDocuments[doc.id])
                 .map(doc => doc.label);
@@ -363,19 +360,14 @@ const ApplyPage = () => {
                 return;
             }
 
-            // 2. Récupérer les IDs des documents
             const documentIds = Object.values(uploadedDocuments).map(doc => doc._id);
             console.log('📄 Documents IDs:', documentIds);
 
-            // 3. ✅ CRÉER LA CANDIDATURE EN BROUILLON
-            console.log('📝 Création de la candidature...');
             const createResponse = await api.post('/applications', {
                 offreId: offerId,
                 commentaire: commentaire,
                 documents: documentIds,
             });
-
-            console.log('✅ Candidature créée:', createResponse.data);
 
             const applicationId = createResponse.data.data?._id || createResponse.data?._id;
             
@@ -383,15 +375,10 @@ const ApplyPage = () => {
                 throw new Error('ID de candidature non trouvé');
             }
 
-            // 4. ✅ SOUMETTRE LA CANDIDATURE (Brouillon → Soumise)
-            console.log('📤 Soumission de la candidature...');
-            const submitResponse = await api.patch(`/applications/${applicationId}/submit`);
+            await api.patch(`/applications/${applicationId}/submit`);
             
-            console.log('✅ Candidature soumise:', submitResponse.data);
-
             setSuccess('✅ Candidature envoyée avec succès !');
             
-            // 5. Rediriger vers la liste des candidatures
             setTimeout(() => {
                 navigate('/dashboard/applications');
             }, 2000);
@@ -399,10 +386,8 @@ const ApplyPage = () => {
         } catch (err) {
             console.error('❌ Erreur:', err);
             
-            // ✅ Gérer le cas où la candidature existe déjà
             if (err.response?.status === 400 && err.response?.data?.message?.includes('existe déjà')) {
                 try {
-                    // Récupérer la candidature existante
                     const existingResponse = await api.get('/applications', {
                         params: { offreId: offerId, etudiantId: user?.id }
                     });
@@ -410,7 +395,6 @@ const ApplyPage = () => {
                     const existingApp = existingResponse.data?.data?.[0];
                     if (existingApp) {
                         if (existingApp.statut === 'Brouillon') {
-                            console.log('🔄 Candidature existante trouvée, soumission en cours...');
                             await api.patch(`/applications/${existingApp._id}/submit`);
                             setSuccess('✅ Candidature envoyée avec succès !');
                             setTimeout(() => navigate('/dashboard/applications'), 2000);
@@ -452,7 +436,6 @@ const ApplyPage = () => {
 
     return (
         <ApplyContainer>
-            {/* ===== EN-TÊTE ===== */}
             <PageHeader>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Button
@@ -480,7 +463,6 @@ const ApplyPage = () => {
                 </Alert>
             )}
 
-            {/* ===== SECTION 1 : FICHE D'ENGAGEMENT ===== */}
             <SectionCard>
                 <SectionHeader>
                     <SectionTitle>
@@ -517,7 +499,6 @@ const ApplyPage = () => {
                 )}
             </SectionCard>
 
-            {/* ===== SECTION 2 : DOCUMENTS REQUIS ===== */}
             <SectionCard>
                 <SectionHeader>
                     <SectionTitle>
@@ -598,7 +579,6 @@ const ApplyPage = () => {
                 </DocumentGrid>
             </SectionCard>
 
-            {/* ===== SECTION 3 : COMMENTAIRE ===== */}
             <SectionCard>
                 <SectionTitle>
                     <Description sx={{ color: '#148aa0' }} />
@@ -618,7 +598,6 @@ const ApplyPage = () => {
                 />
             </SectionCard>
 
-            {/* ===== SECTION 4 : SOUMISSION ===== */}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 1 }}>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button

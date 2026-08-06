@@ -21,8 +21,9 @@ import {
     InputLabel,
     Select,
     FormHelperText,
+    Stack,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled, alpha } from '@mui/material/styles';
 import {
     ArrowBack,
     Add,
@@ -34,25 +35,56 @@ import {
     Description,
     CheckCircle,
     Cancel,
-    AttachFile,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
 // ============================================
-// STYLES
+// STYLES - MODERNES ET PROFESSIONNELS
 // ============================================
 
+const PageContainer = styled(Container)({
+    paddingTop: '32px',
+    paddingBottom: '32px',
+});
+
+const HeaderSection = styled(Box)({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '32px',
+    flexWrap: 'wrap',
+    gap: '16px',
+});
+
+const HeaderLeft = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+});
+
+const HeaderTitle = styled(Typography)({
+    fontWeight: 700,
+    fontSize: '24px',
+    color: '#1a2332',
+});
+
+const HeaderSubtitle = styled(Typography)({
+    color: '#687480',
+    fontSize: '14px',
+});
+
 const CreateCard = styled(Paper)({
-    borderRadius: '16px',
+    borderRadius: '12px',
     padding: '32px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    border: '1px solid #eef1f3',
     maxWidth: '1000px',
     margin: '0 auto',
 });
 
 const SectionTitle = styled(Typography)({
-    fontSize: '18px',
+    fontSize: '14px',
     fontWeight: 600,
     color: '#1a2332',
     marginBottom: '16px',
@@ -61,19 +93,69 @@ const SectionTitle = styled(Typography)({
     gap: '8px',
 });
 
+const SectionIcon = styled(Box)(({ color }) => ({
+    width: '28px',
+    height: '28px',
+    borderRadius: '8px',
+    backgroundColor: alpha(color || '#148aa0', 0.12),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: color || '#148aa0',
+    fontSize: '16px',
+}));
+
 const StyledTextField = styled(TextField)({
     '& .MuiOutlinedInput-root': {
-        borderRadius: '10px',
+        borderRadius: '8px',
         backgroundColor: '#fff',
     },
 });
 
 const FormCard = styled(Card)({
-    borderRadius: '12px',
+    borderRadius: '8px',
     padding: '16px',
-    backgroundColor: '#f7f7f7',
+    backgroundColor: '#fafafa',
+    border: '1px solid #eef1f3',
     marginBottom: '12px',
+    '&:last-child': {
+        marginBottom: 0,
+    },
 });
+
+const ActionButton = styled(Button)({
+    borderRadius: '8px',
+    textTransform: 'none',
+    fontWeight: 500,
+    padding: '8px 24px',
+});
+
+const BackButton = styled(Button)({
+    borderRadius: '8px',
+    textTransform: 'none',
+    fontWeight: 500,
+    padding: '6px 16px',
+    fontSize: '13px',
+    backgroundColor: '#2d3748',
+    color: '#ffffff',
+    '&:hover': {
+        backgroundColor: '#1a2332',
+    },
+});
+
+const SubmitButton = styled(Button)({
+    borderRadius: '8px',
+    textTransform: 'none',
+    fontWeight: 600,
+    padding: '8px 32px',
+});
+
+// ============================================
+// CONSTANTES
+// ============================================
+
+const STAGE_TYPES = ['PFE', 'PFA', 'Initiation', 'Ete', 'Master', 'Licence', 'Technicien'];
+const COMPETENCE_LEVELS = ['Débutant', 'Intermédiaire', 'Avancé', 'Expert'];
 
 // ============================================
 // COMPOSANT PRINCIPAL
@@ -88,6 +170,7 @@ const CreateOffer = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
+    // ÉTAT DU FORMULAIRE
     const [form, setForm] = useState({
         titre: '',
         description: '',
@@ -97,7 +180,7 @@ const CreateOffer = () => {
         dateDebut: '',
         dateFin: '',
         dateLimiteCandidature: '',
-        documentsRequis: [],
+        departementId: '',
         sujets: [
             {
                 titre: '',
@@ -109,27 +192,46 @@ const CreateOffer = () => {
         ],
     });
 
+    // ÉTAT DES PÉRIODES
     const [periods, setPeriods] = useState([]);
+    const [periodsLoading, setPeriodsLoading] = useState(true);
 
     useEffect(() => {
         fetchPeriods();
     }, []);
 
     const fetchPeriods = async () => {
-        setLoading(true);
+        setPeriodsLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            setPeriods([
-                { id: '1', nom: 'Été 2026' },
-                { id: '2', nom: 'Hiver 2027' },
-                { id: '3', nom: 'Printemps 2026' },
-            ]);
+            const response = await api.get('/periods');
+            
+            let data = [];
+            if (response.data?.data) {
+                data = response.data.data;
+            } else if (Array.isArray(response.data)) {
+                data = response.data;
+            } else if (response.data?.periods) {
+                data = response.data.periods;
+            }
+
+            const activePeriods = data.filter(p => p.actif !== false && p.isDeleted !== true);
+            setPeriods(activePeriods);
+            
+            if (activePeriods.length > 0 && !form.periodeId) {
+                setForm(prev => ({ ...prev, periodeId: activePeriods[0]._id || activePeriods[0].id }));
+            }
         } catch (error) {
             console.error('Erreur chargement périodes:', error);
+            setError('Erreur lors du chargement des périodes');
+            setPeriods([]);
         } finally {
-            setLoading(false);
+            setPeriodsLoading(false);
         }
     };
+
+    // ============================================
+    // GESTION DU FORMULAIRE
+    // ============================================
 
     const handleChange = (field, value) => {
         setForm({ ...form, [field]: value });
@@ -154,6 +256,10 @@ const CreateOffer = () => {
         newSubjects[subjectIndex].competences[compIndex][field] = value;
         setForm({ ...form, sujets: newSubjects });
     };
+
+    // ============================================
+    // GESTION DES SUJETS
+    // ============================================
 
     const addSubject = () => {
         setForm({
@@ -207,23 +313,9 @@ const CreateOffer = () => {
         setForm({ ...form, sujets: newSubjects });
     };
 
-    const handleAddDocument = () => {
-        setForm({
-            ...form,
-            documentsRequis: [...form.documentsRequis, { type: '', obligatoire: true }],
-        });
-    };
-
-    const handleDocumentChange = (index, field, value) => {
-        const newDocs = [...form.documentsRequis];
-        newDocs[index][field] = value;
-        setForm({ ...form, documentsRequis: newDocs });
-    };
-
-    const handleRemoveDocument = (index) => {
-        const newDocs = form.documentsRequis.filter((_, i) => i !== index);
-        setForm({ ...form, documentsRequis: newDocs });
-    };
+    // ============================================
+    // VALIDATION ET SOUMISSION
+    // ============================================
 
     const validateForm = () => {
         const errors = [];
@@ -234,10 +326,12 @@ const CreateOffer = () => {
         if (!form.dateDebut) errors.push('La date de début est obligatoire');
         if (!form.dateFin) errors.push('La date de fin est obligatoire');
         if (!form.dateLimiteCandidature) errors.push('La date limite de candidature est obligatoire');
+        
         form.sujets.forEach((sujet, index) => {
             if (!sujet.titre) errors.push(`Le titre du sujet ${index + 1} est obligatoire`);
             if (!sujet.description) errors.push(`La description du sujet ${index + 1} est obligatoire`);
         });
+        
         return errors;
     };
 
@@ -255,48 +349,115 @@ const CreateOffer = () => {
         setSaving(true);
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log('📋 Offre créée:', form);
-            setSuccess('✅ Offre créée avec succès !');
-            setTimeout(() => navigate('/department/my-offers'), 1500);
+            const dataToSend = {
+                ...form,
+                departementId: user?.departementId || form.departementId,
+            };
+
+            const response = await api.post('/offers', dataToSend);
+
+            setSuccess('Offre créée avec succès !');
+            setTimeout(() => {
+                navigate('/department/my-offers');
+            }, 1500);
         } catch (error) {
             console.error('Erreur création offre:', error);
-            setError('❌ Erreur lors de la création de l\'offre');
+            setError(error.response?.data?.message || 'Erreur lors de la création de l\'offre');
         } finally {
             setSaving(false);
         }
     };
 
     const handleSaveDraft = async () => {
-        // Sauvegarde en brouillon
-        console.log('📝 Brouillon sauvegardé:', form);
-        setSuccess('✅ Brouillon sauvegardé avec succès !');
+        setError('');
+        setSuccess('');
+
+        if (!form.titre) {
+            setError('Le titre est obligatoire pour sauvegarder un brouillon');
+            return;
+        }
+
+        setSaving(true);
+
+        try {
+            const dataToSend = {
+                ...form,
+                statut: 'Brouillon',
+                departementId: user?.departementId || form.departementId,
+            };
+
+            await api.post('/offers', dataToSend);
+            setSuccess('Brouillon sauvegardé avec succès !');
+            setTimeout(() => {
+                navigate('/department/my-offers');
+            }, 1500);
+        } catch (error) {
+            console.error('Erreur sauvegarde brouillon:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la sauvegarde du brouillon');
+        } finally {
+            setSaving(false);
+        }
     };
 
+    if (periodsLoading) {
+        return (
+            <PageContainer maxWidth="lg">
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+                    <CircularProgress size={44} sx={{ color: '#2d3748' }} />
+                </Box>
+            </PageContainer>
+        );
+    }
+
     return (
-        <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Button
-                startIcon={<ArrowBack />}
-                onClick={() => navigate('/department')}
-                sx={{ mb: 3, textTransform: 'none', color: '#666' }}
-            >
-                Retour au tableau de bord
-            </Button>
+        <PageContainer maxWidth="lg">
+            {/* ===== EN-TÊTE ===== */}
+            <HeaderSection>
+                <HeaderLeft>
+                    <IconButton onClick={() => navigate('/department')} sx={{ color: '#666' }}>
+                        <ArrowBack />
+                    </IconButton>
+                    <Box>
+                        <HeaderTitle>Créer une offre de stage</HeaderTitle>
+                        <HeaderSubtitle>
+                            Remplissez les informations ci-dessous pour créer une nouvelle offre
+                        </HeaderSubtitle>
+                    </Box>
+                </HeaderLeft>
+                <Stack direction="row" spacing={1}>
+                    <ActionButton
+                        variant="outlined"
+                        startIcon={<Save />}
+                        onClick={handleSaveDraft}
+                        disabled={saving}
+                        sx={{ borderColor: '#e0e4e8', color: '#687480' }}
+                    >
+                        {saving ? 'Sauvegarde...' : 'Brouillon'}
+                    </ActionButton>
+                    <SubmitButton
+                        variant="contained"
+                        startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Send />}
+                        onClick={handleSubmit}
+                        disabled={saving}
+                        sx={{ backgroundColor: '#148aa0', '&:hover': { backgroundColor: '#0b7890' } }}
+                    >
+                        {saving ? 'Création...' : 'Publier l\'offre'}
+                    </SubmitButton>
+                </Stack>
+            </HeaderSection>
+
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '8px' }}>{success}</Alert>}
 
             <CreateCard>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332', mb: 1 }}>
-                    📋 Créer une offre de stage
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-                    Remplissez les informations ci-dessous pour créer une nouvelle offre de stage
-                </Typography>
-
-                {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
-                {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
-
                 <form onSubmit={handleSubmit}>
                     {/* ===== INFORMATIONS GÉNÉRALES ===== */}
-                    <SectionTitle><Work sx={{ color: '#148aa0' }} /> Informations générales</SectionTitle>
+                    <SectionTitle>
+                        <SectionIcon color="#148aa0">
+                            <Work sx={{ fontSize: 16 }} />
+                        </SectionIcon>
+                        Informations générales
+                    </SectionTitle>
                     <Grid container spacing={3}>
                         <Grid item xs={12}>
                             <StyledTextField
@@ -304,6 +465,7 @@ const CreateOffer = () => {
                                 value={form.titre}
                                 onChange={(e) => handleChange('titre', e.target.value)}
                                 fullWidth
+                                required
                             />
                         </Grid>
                         <Grid item xs={12}>
@@ -314,6 +476,7 @@ const CreateOffer = () => {
                                 fullWidth
                                 multiline
                                 rows={4}
+                                required
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -321,44 +484,50 @@ const CreateOffer = () => {
                                 label="Nombre de postes"
                                 type="number"
                                 value={form.nbPostes}
-                                onChange={(e) => handleChange('nbPostes', parseInt(e.target.value))}
+                                onChange={(e) => handleChange('nbPostes', parseInt(e.target.value) || 1)}
                                 fullWidth
+                                InputProps={{ inputProps: { min: 1 } }}
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
+                            <FormControl fullWidth required>
                                 <InputLabel>Type de stage *</InputLabel>
                                 <Select
                                     value={form.typeStage}
                                     onChange={(e) => handleChange('typeStage', e.target.value)}
                                     label="Type de stage *"
-                                    sx={{ borderRadius: '10px', backgroundColor: '#fff' }}
+                                    sx={{ borderRadius: '8px', backgroundColor: '#fff' }}
                                 >
-                                    <MenuItem value="PFE">PFE</MenuItem>
-                                    <MenuItem value="PFA">PFA</MenuItem>
-                                    <MenuItem value="Initiation">Initiation</MenuItem>
-                                    <MenuItem value="Ete">Été</MenuItem>
-                                    <MenuItem value="Master">Master</MenuItem>
-                                    <MenuItem value="Licence">Licence</MenuItem>
-                                    <MenuItem value="Technicien">Technicien</MenuItem>
+                                    {STAGE_TYPES.map((type) => (
+                                        <MenuItem key={type} value={type}>{type}</MenuItem>
+                                    ))}
                                 </Select>
                             </FormControl>
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
+                            <FormControl fullWidth required>
                                 <InputLabel>Période *</InputLabel>
                                 <Select
                                     value={form.periodeId}
                                     onChange={(e) => handleChange('periodeId', e.target.value)}
                                     label="Période *"
-                                    sx={{ borderRadius: '10px', backgroundColor: '#fff' }}
+                                    sx={{ borderRadius: '8px', backgroundColor: '#fff' }}
                                 >
-                                    {periods.map((period) => (
-                                        <MenuItem key={period.id} value={period.id}>
-                                            {period.nom}
-                                        </MenuItem>
-                                    ))}
+                                    {periods.length === 0 ? (
+                                        <MenuItem disabled value="">Aucune période disponible</MenuItem>
+                                    ) : (
+                                        periods.map((period) => (
+                                            <MenuItem key={period._id || period.id} value={period._id || period.id}>
+                                                {period.nom}
+                                            </MenuItem>
+                                        ))
+                                    )}
                                 </Select>
+                                {periods.length === 0 && (
+                                    <FormHelperText error>
+                                        ⚠️ Aucune période disponible. Veuillez en créer une dans l'administration.
+                                    </FormHelperText>
+                                )}
                             </FormControl>
                         </Grid>
                     </Grid>
@@ -366,7 +535,12 @@ const CreateOffer = () => {
                     <Divider sx={{ my: 4 }} />
 
                     {/* ===== DATES ===== */}
-                    <SectionTitle><School sx={{ color: '#f59e0b' }} /> Dates</SectionTitle>
+                    <SectionTitle>
+                        <SectionIcon color="#f59e0b">
+                            <School sx={{ fontSize: 16 }} />
+                        </SectionIcon>
+                        Dates
+                    </SectionTitle>
                     <Grid container spacing={3}>
                         <Grid item xs={12} sm={4}>
                             <StyledTextField
@@ -376,6 +550,7 @@ const CreateOffer = () => {
                                 onChange={(e) => handleChange('dateDebut', e.target.value)}
                                 fullWidth
                                 InputLabelProps={{ shrink: true }}
+                                required
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>
@@ -386,6 +561,7 @@ const CreateOffer = () => {
                                 onChange={(e) => handleChange('dateFin', e.target.value)}
                                 fullWidth
                                 InputLabelProps={{ shrink: true }}
+                                required
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>
@@ -396,6 +572,8 @@ const CreateOffer = () => {
                                 onChange={(e) => handleChange('dateLimiteCandidature', e.target.value)}
                                 fullWidth
                                 InputLabelProps={{ shrink: true }}
+                                required
+                                helperText="Doit être antérieure à la date de début"
                             />
                         </Grid>
                     </Grid>
@@ -404,12 +582,17 @@ const CreateOffer = () => {
 
                     {/* ===== SUJETS ===== */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <SectionTitle><Description sx={{ color: '#8b5cf6' }} /> Sujets de stage</SectionTitle>
+                        <SectionTitle>
+                            <SectionIcon color="#8b5cf6">
+                                <Description sx={{ fontSize: 16 }} />
+                            </SectionIcon>
+                            Sujets de stage
+                        </SectionTitle>
                         <Button
                             variant="outlined"
                             startIcon={<Add />}
                             onClick={addSubject}
-                            sx={{ borderRadius: '10px', textTransform: 'none' }}
+                            sx={{ borderRadius: '8px', textTransform: 'none' }}
                         >
                             Ajouter un sujet
                         </Button>
@@ -418,12 +601,12 @@ const CreateOffer = () => {
                     {form.sujets.map((sujet, subjectIndex) => (
                         <FormCard key={subjectIndex}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                <Typography variant="h6" fontWeight={600}>
+                                <Typography variant="subtitle2" fontWeight={600} color="#1a2332">
                                     Sujet {subjectIndex + 1}
                                 </Typography>
                                 {form.sujets.length > 1 && (
-                                    <IconButton onClick={() => removeSubject(subjectIndex)} color="error">
-                                        <Delete />
+                                    <IconButton onClick={() => removeSubject(subjectIndex)} color="error" size="small">
+                                        <Delete fontSize="small" />
                                     </IconButton>
                                 )}
                             </Box>
@@ -435,6 +618,7 @@ const CreateOffer = () => {
                                         value={sujet.titre}
                                         onChange={(e) => handleSubjectChange(subjectIndex, 'titre', e.target.value)}
                                         fullWidth
+                                        required
                                     />
                                 </Grid>
                                 <Grid item xs={12}>
@@ -445,6 +629,7 @@ const CreateOffer = () => {
                                         fullWidth
                                         multiline
                                         rows={3}
+                                        required
                                     />
                                 </Grid>
                                 <Grid item xs={12}>
@@ -459,7 +644,7 @@ const CreateOffer = () => {
 
                             {/* ===== MISSIONS ===== */}
                             <Box sx={{ mt: 2 }}>
-                                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                <Typography variant="caption" fontWeight={600} color="#1a2332" sx={{ display: 'block', mb: 1 }}>
                                     Missions
                                 </Typography>
                                 {sujet.missions.map((mission, missionIndex) => (
@@ -485,7 +670,7 @@ const CreateOffer = () => {
                                     size="small"
                                     startIcon={<Add />}
                                     onClick={() => addMission(subjectIndex)}
-                                    sx={{ textTransform: 'none', color: '#148aa0' }}
+                                    sx={{ textTransform: 'none', color: '#148aa0', fontSize: '12px' }}
                                 >
                                     Ajouter une mission
                                 </Button>
@@ -493,7 +678,7 @@ const CreateOffer = () => {
 
                             {/* ===== COMPÉTENCES ===== */}
                             <Box sx={{ mt: 3 }}>
-                                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                <Typography variant="caption" fontWeight={600} color="#1a2332" sx={{ display: 'block', mb: 1 }}>
                                     Compétences requises
                                 </Typography>
                                 {sujet.competences.map((comp, compIndex) => (
@@ -510,13 +695,12 @@ const CreateOffer = () => {
                                                 value={comp.niveau}
                                                 onChange={(e) => handleCompetenceChange(subjectIndex, compIndex, 'niveau', e.target.value)}
                                                 displayEmpty
-                                                sx={{ borderRadius: '10px', backgroundColor: '#fff' }}
+                                                sx={{ borderRadius: '8px', backgroundColor: '#fff' }}
                                             >
                                                 <MenuItem value="">Niveau</MenuItem>
-                                                <MenuItem value="Débutant">Débutant</MenuItem>
-                                                <MenuItem value="Intermédiaire">Intermédiaire</MenuItem>
-                                                <MenuItem value="Avancé">Avancé</MenuItem>
-                                                <MenuItem value="Expert">Expert</MenuItem>
+                                                {COMPETENCE_LEVELS.map((level) => (
+                                                    <MenuItem key={level} value={level}>{level}</MenuItem>
+                                                ))}
                                             </Select>
                                         </FormControl>
                                         <IconButton
@@ -533,7 +717,7 @@ const CreateOffer = () => {
                                     size="small"
                                     startIcon={<Add />}
                                     onClick={() => addCompetence(subjectIndex)}
-                                    sx={{ textTransform: 'none', color: '#148aa0' }}
+                                    sx={{ textTransform: 'none', color: '#148aa0', fontSize: '12px' }}
                                 >
                                     Ajouter une compétence
                                 </Button>
@@ -541,82 +725,30 @@ const CreateOffer = () => {
                         </FormCard>
                     ))}
 
-                    <Divider sx={{ my: 4 }} />
-
-                    {/* ===== DOCUMENTS REQUIS ===== */}
-                    <SectionTitle><AttachFile sx={{ color: '#22c55e' }} /> Documents requis</SectionTitle>
-                    {form.documentsRequis.map((doc, index) => (
-                        <Box key={index} sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center' }}>
-                            <FormControl fullWidth>
-                                <InputLabel>Type de document</InputLabel>
-                                <Select
-                                    value={doc.type}
-                                    onChange={(e) => handleDocumentChange(index, 'type', e.target.value)}
-                                    label="Type de document"
-                                    sx={{ borderRadius: '10px', backgroundColor: '#fff' }}
-                                >
-                                    <MenuItem value="CV">CV</MenuItem>
-                                    <MenuItem value="Lettre Motivation">Lettre de motivation</MenuItem>
-                                    <MenuItem value="Releve Notes">Relevé de notes</MenuItem>
-                                    <MenuItem value="Attestation Scolarite">Attestation de scolarité</MenuItem>
-                                    <MenuItem value="Autre">Autre</MenuItem>
-                                </Select>
-                            </FormControl>
-                            <FormControl>
-                                <Select
-                                    value={doc.obligatoire ? 'true' : 'false'}
-                                    onChange={(e) => handleDocumentChange(index, 'obligatoire', e.target.value === 'true')}
-                                    sx={{ borderRadius: '10px', backgroundColor: '#fff', minWidth: 120 }}
-                                >
-                                    <MenuItem value="true">Obligatoire</MenuItem>
-                                    <MenuItem value="false">Optionnel</MenuItem>
-                                </Select>
-                            </FormControl>
-                            <IconButton onClick={() => handleRemoveDocument(index)} sx={{ color: '#ef4444' }}>
-                                <Delete />
-                            </IconButton>
-                        </Box>
-                    ))}
-                    <Button
-                        variant="outlined"
-                        startIcon={<Add />}
-                        onClick={handleAddDocument}
-                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                    >
-                        Ajouter un document requis
-                    </Button>
-
-                    <Divider sx={{ my: 4 }} />
-
                     {/* ===== BOUTONS ===== */}
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                        <Button
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
+                        <ActionButton
                             variant="outlined"
                             startIcon={<Save />}
                             onClick={handleSaveDraft}
                             disabled={saving}
-                            sx={{ borderRadius: '10px', textTransform: 'none' }}
+                            sx={{ borderColor: '#e0e4e8', color: '#687480' }}
                         >
-                            Sauvegarder en brouillon
-                        </Button>
-                        <Button
-                            type="submit"
+                            {saving ? 'Sauvegarde...' : 'Brouillon'}
+                        </ActionButton>
+                        <SubmitButton
                             variant="contained"
                             startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Send />}
+                            onClick={handleSubmit}
                             disabled={saving}
-                            sx={{
-                                backgroundColor: '#148aa0',
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                '&:hover': { backgroundColor: '#0b7890' },
-                            }}
+                            sx={{ backgroundColor: '#148aa0', '&:hover': { backgroundColor: '#0b7890' } }}
                         >
-                            {saving ? 'Création...' : '📤 Soumettre pour validation'}
-                        </Button>
+                            {saving ? 'Création...' : 'Soumettre pour validation'}
+                        </SubmitButton>
                     </Box>
                 </form>
             </CreateCard>
-        </Container>
+        </PageContainer>
     );
 };
 

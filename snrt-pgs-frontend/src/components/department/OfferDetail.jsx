@@ -21,13 +21,13 @@ import {
     ListItemIcon,
     IconButton,
     Tooltip,
-    LinearProgress,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
+    Stack,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled, alpha } from '@mui/material/styles';
 import {
     ArrowBack,
     Edit,
@@ -35,7 +35,6 @@ import {
     Send,
     Work,
     School,
-    LocationOn,
     CalendarToday,
     People,
     Description,
@@ -43,59 +42,181 @@ import {
     Pending,
     Cancel,
     Visibility,
-    Download,
+    Business,
+    Person,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
 
 // ============================================
-// STYLES
+// STYLES - MODERNES ET PROFESSIONNELS
 // ============================================
+
+const PageContainer = styled(Container)({
+    paddingTop: '32px',
+    paddingBottom: '32px',
+});
+
+const HeaderSection = styled(Box)({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '32px',
+    flexWrap: 'wrap',
+    gap: '16px',
+});
+
+const HeaderLeft = styled(Box)({
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+});
+
+const HeaderTitle = styled(Typography)({
+    fontWeight: 700,
+    fontSize: '24px',
+    color: '#1a2332',
+});
+
+const HeaderSubtitle = styled(Typography)({
+    color: '#687480',
+    fontSize: '14px',
+});
 
 const DetailCard = styled(Paper)({
-    borderRadius: '16px',
-    padding: '24px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-    marginBottom: '24px',
+    borderRadius: '12px',
+    padding: '20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    border: '1px solid #eef1f3',
+    marginBottom: '20px',
 });
 
 const SectionTitle = styled(Typography)({
-    fontSize: '16px',
+    fontSize: '14px',
     fontWeight: 600,
     color: '#1a2332',
-    marginBottom: '16px',
+    marginBottom: '12px',
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
 });
 
-const StatusChip = styled(Chip)(({ status }) => {
+const SectionIcon = styled(Box)(({ color }) => ({
+    width: '28px',
+    height: '28px',
+    borderRadius: '8px',
+    backgroundColor: alpha(color || '#148aa0', 0.12),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: color || '#148aa0',
+    fontSize: '16px',
+}));
+
+const StatusBadge = styled(Chip)(({ status }) => {
     const colors = {
-        brouillon: { bg: '#e5e7eb', text: '#6b7280' },
-        en_attente: { bg: '#fef3c7', text: '#d97706' },
-        publiee: { bg: '#d1fae5', text: '#065f46' },
-        refuse: { bg: '#fee2e2', text: '#991b1b' },
-        archive: { bg: '#e0e7ff', text: '#4338ca' },
+        'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
+        'EnAttente': { bg: '#fef3c7', text: '#d97706' },
+        'Publiee': { bg: '#d1fae5', text: '#065f46' },
+        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
+        'Archivee': { bg: '#f3f4f6', text: '#6b7280' },
     };
-    const color = colors[status] || colors.brouillon;
+    const color = colors[status] || colors['Brouillon'];
     return {
         backgroundColor: color.bg,
         color: color.text,
         fontWeight: 600,
-        fontSize: '13px',
-        height: '32px',
-        padding: '0 16px',
+        fontSize: '12px',
+        height: '26px',
+        borderRadius: '20px',
     };
 });
 
-const InfoItem = styled(Box)({
+const InfoRow = styled(Box)({
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
     padding: '8px 0',
-    '& .MuiSvgIcon-root': {
-        color: '#148aa0',
-        fontSize: '20px',
+    borderBottom: '1px solid #f0f2f5',
+    '&:last-child': {
+        borderBottom: 'none',
     },
+});
+
+const InfoIcon = styled(Box)(({ color }) => ({
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    backgroundColor: alpha(color || '#148aa0', 0.08),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: color || '#148aa0',
+    flexShrink: 0,
+}));
+
+const InfoLabel = styled(Typography)({
+    fontSize: '12px',
+    color: '#9aa4ac',
+    fontWeight: 500,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    minWidth: '100px',
+});
+
+const InfoValue = styled(Typography)({
+    fontSize: '14px',
+    color: '#1a2332',
+    fontWeight: 500,
+});
+
+const ActionButton = styled(Button)({
+    borderRadius: '8px',
+    textTransform: 'none',
+    fontWeight: 500,
+    padding: '6px 16px',
+    fontSize: '13px',
+});
+
+const BackButton = styled(Button)({
+    borderRadius: '8px',
+    textTransform: 'none',
+    fontWeight: 500,
+    padding: '6px 16px',
+    fontSize: '13px',
+    backgroundColor: '#2d3748',
+    color: '#ffffff',
+    '&:hover': {
+        backgroundColor: '#1a2332',
+    },
+});
+
+const SubjectCard = styled(Paper)({
+    padding: '16px',
+    marginBottom: '12px',
+    backgroundColor: '#fafafa',
+    borderRadius: '8px',
+    border: '1px solid #eef1f3',
+    '&:last-child': {
+        marginBottom: 0,
+    },
+});
+
+const CompetenceChip = styled(Chip)(({ niveau }) => {
+    const colors = {
+        'Débutant': { bg: '#e5e7eb', text: '#6b7280' },
+        'Intermédiaire': { bg: '#fef3c7', text: '#d97706' },
+        'Avancé': { bg: '#dbeafe', text: '#1d4ed8' },
+        'Expert': { bg: '#d1fae5', text: '#065f46' },
+    };
+    const color = colors[niveau] || colors['Débutant'];
+    return {
+        backgroundColor: color.bg,
+        color: color.text,
+        fontWeight: 500,
+        fontSize: '11px',
+        height: '24px',
+    };
 });
 
 // ============================================
@@ -109,78 +230,123 @@ const OfferDetail = () => {
 
     const [loading, setLoading] = useState(true);
     const [offer, setOffer] = useState(null);
-    const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
-    const [success, setSuccess] = useState('');
+    const [departements, setDepartements] = useState([]);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
 
     useEffect(() => {
-        fetchOfferDetail();
+        if (id) {
+            fetchOfferDetail();
+            fetchDepartements();
+        }
     }, [id]);
+
+    const fetchDepartements = async () => {
+        try {
+            const response = await api.get('/departments');
+            const data = response.data?.data || response.data || [];
+            const map = {};
+            data.forEach(d => {
+                map[d._id || d.id] = d.nom;
+            });
+            setDepartements(map);
+        } catch (error) {
+            console.error('Erreur chargement départements:', error);
+        }
+    };
 
     const fetchOfferDetail = async () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
+            const response = await api.get(`/offers/${id}`);
+            let data = response.data?.offer || response.data?.data || response.data;
+            
+            if (!data) {
+                throw new Error('Offre non trouvée');
+            }
 
-            const mockOffer = {
-                id: id || '1',
-                titre: 'Stage Développement Web',
-                description: 'Développement d\'applications web avec React et Node.js. Le stagiaire participera à l\'ensemble du cycle de développement : analyse des besoins, conception, développement, tests et déploiement.',
-                typeStage: 'PFE',
-                nbPostes: 2,
-                statut: 'publiee',
-                datePublication: '2026-06-01',
-                dateDebut: '2026-06-15',
-                dateFin: '2026-09-15',
-                dateLimiteCandidature: '2026-07-15',
-                departement: 'DSI',
-                createur: 'Fatima ALAOUI',
-                validateur: 'Karim BENNANI',
-                candidatures: 12,
-                sujets: [
-                    {
-                        titre: 'Développement d\'une application de gestion',
-                        description: 'Créer une application web fullstack pour la gestion des projets',
-                        missions: [
-                            'Analyse des besoins fonctionnels',
-                            'Développement frontend avec React',
-                            'Développement backend avec Node.js',
-                            'Mise en place des tests unitaires',
-                            'Documentation technique',
-                        ],
-                        profilRecherche: 'Étudiant en Master informatique avec connaissances en JavaScript',
-                        competences: [
-                            { nom: 'JavaScript', niveau: 'Avancé' },
-                            { nom: 'React', niveau: 'Avancé' },
-                            { nom: 'Node.js', niveau: 'Intermédiaire' },
-                            { nom: 'MongoDB', niveau: 'Intermédiaire' },
-                        ],
-                    },
-                ],
-                documentsRequis: [
-                    { type: 'CV', obligatoire: true },
-                    { type: 'Lettre de motivation', obligatoire: true },
-                    { type: 'Relevé de notes', obligatoire: false },
-                ],
-            };
-
-            setOffer(mockOffer);
-
+            setOffer({
+                ...data,
+                _id: data._id || data.id || id,
+                statut: data.statut || 'Brouillon',
+                sujets: data.sujets || [],
+            });
         } catch (error) {
             console.error('Erreur chargement offre:', error);
-            setError('Erreur lors du chargement de l\'offre');
+            setError(error.response?.data?.message || 'Erreur lors du chargement de l\'offre');
+            setOffer(null);
         } finally {
             setLoading(false);
         }
     };
 
+    // ============================================
+    // ACTIONS
+    // ============================================
+
+    const handleEdit = () => {
+        navigate(`/department/offer/edit/${offer._id || offer.id}`);
+    };
+
+    const handleSubmit = async () => {
+        setSubmitting(true);
+        setError('');
+        try {
+            await api.put(`/offers/${offer._id || offer.id}/submit`);
+            setSuccess('Offre soumise pour validation');
+            fetchOfferDetail();
+        } catch (error) {
+            console.error('Erreur soumission:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la soumission');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDelete = () => {
+        setOpenDeleteDialog(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        setSubmitting(true);
+        setError('');
+        try {
+            await api.delete(`/offers/${offer._id || offer.id}`);
+            setSuccess('Offre supprimée avec succès');
+            setOpenDeleteDialog(false);
+            setTimeout(() => {
+                navigate('/department/my-offers');
+            }, 1000);
+        } catch (error) {
+            console.error('Erreur suppression:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la suppression');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleCloseDeleteDialog = () => {
+        setOpenDeleteDialog(false);
+    };
+
+    const handleViewCandidatures = () => {
+        navigate(`/department/candidatures?offreId=${offer._id || offer.id}`);
+    };
+
+    // ============================================
+    // UTILITAIRES
+    // ============================================
+
     const getStatusLabel = (status) => {
         const labels = {
-            brouillon: 'Brouillon',
-            en_attente: 'En attente',
-            publiee: 'Publiée',
-            refuse: 'Refusée',
-            archive: 'Archivée',
+            'Brouillon': 'Brouillon',
+            'EnAttente': 'En attente',
+            'Publiee': 'Publiée',
+            'Refusee': 'Refusée',
+            'Archivee': 'Archivée',
         };
         return labels[status] || status;
     };
@@ -194,351 +360,365 @@ const OfferDetail = () => {
         });
     };
 
-    const handleEdit = () => {
-        navigate(`/department/edit-offer/${offer.id}`);
+    const getInitials = (nom, prenom) => {
+        if (!nom && !prenom) return '?';
+        return `${(prenom || '')[0] || ''}${(nom || '')[0] || ''}`.toUpperCase() || '?';
     };
 
-    const handleSubmit = () => {
-        setOffer({ ...offer, statut: 'en_attente' });
-        setSuccess('✅ Offre soumise pour validation');
-        setTimeout(() => setSuccess(''), 3000);
+    const getDepartementNom = () => {
+        if (!offer) return '-';
+        const deptId = offer.departementId;
+        if (typeof deptId === 'object' && deptId?.nom) return deptId.nom;
+        if (departements[deptId]) return departements[deptId];
+        return offer.departement || '-';
     };
 
-    const handleDelete = () => {
-        setOpenDeleteDialog(true);
+    const canEdit = () => {
+        return offer?.statut === 'Brouillon' || offer?.statut === 'Refusee';
     };
 
-    const handleConfirmDelete = () => {
-        setOpenDeleteDialog(false);
-        navigate('/department/my-offers');
+    const canSubmit = () => {
+        return offer?.statut === 'Brouillon';
+    };
+
+    const canDelete = () => {
+        return offer?.statut === 'Brouillon' || offer?.statut === 'Refusee';
     };
 
     if (loading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={60} thickness={4} sx={{ color: '#148aa0' }} />
-            </Box>
+            <PageContainer maxWidth="lg">
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+                    <CircularProgress size={44} sx={{ color: '#2d3748' }} />
+                </Box>
+            </PageContainer>
         );
     }
 
     if (!offer) {
         return (
-            <Container maxWidth="lg" sx={{ py: 4 }}>
-                <Alert severity="error" sx={{ borderRadius: '12px' }}>
-                    Offre non trouvée
+            <PageContainer maxWidth="lg">
+                <Alert severity="error" sx={{ borderRadius: '8px' }}>
+                    {error || 'Offre non trouvée'}
                 </Alert>
-                <Button
-                    startIcon={<ArrowBack />}
-                    onClick={() => navigate('/department/my-offers')}
-                    sx={{ mt: 2 }}
-                >
+                <Button startIcon={<ArrowBack />} onClick={() => navigate('/department/my-offers')} sx={{ mt: 2 }}>
                     Retour à la liste
                 </Button>
-            </Container>
+            </PageContainer>
         );
     }
 
     return (
-        <Container maxWidth="lg" sx={{ py: 4 }}>
+        <PageContainer maxWidth="lg">
             {/* ===== EN-TÊTE ===== */}
-            <Box sx={{ mb: 3 }}>
-                <Button
-                    startIcon={<ArrowBack />}
-                    onClick={() => navigate('/department/my-offers')}
-                    sx={{ mb: 2, textTransform: 'none', color: '#666' }}
-                >
-                    Retour à la liste
-                </Button>
+            <HeaderSection>
+                <HeaderLeft>
+                    <HeaderTitle>{offer.titre || 'Offre sans titre'}</HeaderTitle>
+                    <HeaderSubtitle>
+                        {getDepartementNom()} • {offer.typeStage || 'Stage'}
+                    </HeaderSubtitle>
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                        <StatusBadge label={getStatusLabel(offer.statut)} status={offer.statut} />
+                        <Chip 
+                            label={`${offer.nbPostes || 0} poste(s)`} 
+                            size="small" 
+                            sx={{ backgroundColor: '#e0e7ff', color: '#4338ca' }} 
+                        />
+                        <Chip 
+                            label={`${offer.candidaturesCount || offer.nbCandidatures || 0} candidature(s)`} 
+                            size="small" 
+                            sx={{ backgroundColor: '#f3e8ff', color: '#6b21a8' }} 
+                        />
+                    </Stack>
+                </HeaderLeft>
 
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-                    <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                            📋 {offer.titre}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {offer.departement} - {offer.typeStage}
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                            <StatusChip label={getStatusLabel(offer.statut)} status={offer.statut} />
-                            <Chip label={`${offer.candidatures} candidatures`} size="small" sx={{ backgroundColor: '#e0e7ff', color: '#4338ca' }} />
-                        </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                        {(offer.statut === 'brouillon' || offer.statut === 'refuse') && (
-                            <>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<Edit />}
-                                    onClick={handleEdit}
-                                    sx={{ borderRadius: '12px', textTransform: 'none' }}
-                                >
-                                    Modifier
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<Send />}
-                                    onClick={handleSubmit}
-                                    sx={{ borderRadius: '12px', textTransform: 'none', borderColor: '#22c55e', color: '#22c55e' }}
-                                >
-                                    Soumettre
-                                </Button>
-                            </>
-                        )}
-                        {offer.statut === 'en_attente' && (
-                            <Button
-                                variant="outlined"
-                                startIcon={<Pending />}
-                                disabled
-                                sx={{ borderRadius: '12px', textTransform: 'none' }}
-                            >
-                                En attente de validation
-                            </Button>
-                        )}
-                        {(offer.statut === 'brouillon' || offer.statut === 'refuse') && (
-                            <Button
-                                variant="outlined"
-                                startIcon={<Delete />}
-                                onClick={handleDelete}
-                                sx={{ borderRadius: '12px', textTransform: 'none', borderColor: '#ef4444', color: '#ef4444' }}
-                            >
-                                Supprimer
-                            </Button>
-                        )}
-                        {offer.statut === 'publiee' && (
-                            <Button
-                                variant="contained"
-                                startIcon={<Visibility />}
-                                sx={{ backgroundColor: '#148aa0', borderRadius: '12px', textTransform: 'none' }}
-                            >
-                                Voir les candidatures
-                            </Button>
-                        )}
-                    </Box>
-                </Box>
-            </Box>
+                <Stack direction="row" spacing={1}>
+                    {canEdit() && (
+                        <ActionButton
+                            variant="outlined"
+                            startIcon={<Edit />}
+                            onClick={handleEdit}
+                            sx={{ borderColor: '#4f46e5', color: '#4f46e5' }}
+                        >
+                            Modifier
+                        </ActionButton>
+                    )}
+                    {canSubmit() && (
+                        <ActionButton
+                            variant="outlined"
+                            startIcon={<Send />}
+                            onClick={handleSubmit}
+                            disabled={submitting}
+                            sx={{ borderColor: '#22c55e', color: '#22c55e' }}
+                        >
+                            {submitting ? <CircularProgress size={16} /> : 'Soumettre'}
+                        </ActionButton>
+                    )}
+                    {offer.statut === 'EnAttente' && (
+                        <ActionButton variant="outlined" startIcon={<Pending />} disabled>
+                            En attente
+                        </ActionButton>
+                    )}
+                    {offer.statut === 'Publiee' && (
+                        <ActionButton
+                            variant="contained"
+                            startIcon={<Visibility />}
+                            onClick={handleViewCandidatures}
+                            sx={{ backgroundColor: '#148aa0', '&:hover': { backgroundColor: '#0b7890' } }}
+                        >
+                            Candidatures
+                        </ActionButton>
+                    )}
+                    {canDelete() && (
+                        <ActionButton
+                            variant="outlined"
+                            startIcon={<Delete />}
+                            onClick={handleDelete}
+                            sx={{ borderColor: '#ef4444', color: '#ef4444' }}
+                        >
+                            Supprimer
+                        </ActionButton>
+                    )}
+                    <BackButton startIcon={<ArrowBack />} onClick={() => navigate('/department/my-offers')}>
+                        Retour
+                    </BackButton>
+                </Stack>
+            </HeaderSection>
 
-            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
-            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '8px' }}>{success}</Alert>}
 
+            {/* ===== CONTENU PRINCIPAL ===== */}
             <Grid container spacing={3}>
-                {/* ===== GAUCHE ===== */}
+                {/* ===== COLONNE GAUCHE ===== */}
                 <Grid item xs={12} md={4}>
                     <DetailCard>
                         <SectionTitle>
-                            <Work sx={{ color: '#148aa0' }} />
-                            Informations générales
+                            <SectionIcon color="#148aa0">
+                                <Work sx={{ fontSize: 16 }} />
+                            </SectionIcon>
+                            Informations
                         </SectionTitle>
-                        <InfoItem>
-                            <People />
+                        <InfoRow>
+                            <InfoIcon color="#4f46e5">
+                                <People sx={{ fontSize: 16 }} />
+                            </InfoIcon>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Nombre de postes
-                                </Typography>
-                                <Typography variant="body2" fontWeight={500}>
-                                    {offer.nbPostes}
-                                </Typography>
+                                <InfoLabel>Postes</InfoLabel>
+                                <InfoValue>{offer.nbPostes || 0}</InfoValue>
                             </Box>
-                        </InfoItem>
-                        <InfoItem>
-                            <CalendarToday />
+                        </InfoRow>
+                        <InfoRow>
+                            <InfoIcon color="#8b5cf6">
+                                <School sx={{ fontSize: 16 }} />
+                            </InfoIcon>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Période
-                                </Typography>
-                                <Typography variant="body2" fontWeight={500}>
-                                    {formatDate(offer.dateDebut)} - {formatDate(offer.dateFin)}
-                                </Typography>
+                                <InfoLabel>Type</InfoLabel>
+                                <InfoValue>{offer.typeStage || '-'}</InfoValue>
                             </Box>
-                        </InfoItem>
-                        <InfoItem>
-                            <School />
+                        </InfoRow>
+                        <InfoRow>
+                            <InfoIcon color="#f59e0b">
+                                <CalendarToday sx={{ fontSize: 16 }} />
+                            </InfoIcon>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Type de stage
-                                </Typography>
-                                <Typography variant="body2" fontWeight={500}>
-                                    {offer.typeStage}
-                                </Typography>
+                                <InfoLabel>Début</InfoLabel>
+                                <InfoValue>{formatDate(offer.dateDebut)}</InfoValue>
                             </Box>
-                        </InfoItem>
-                        <InfoItem>
-                            <Pending />
+                        </InfoRow>
+                        <InfoRow>
+                            <InfoIcon color="#f59e0b">
+                                <CalendarToday sx={{ fontSize: 16 }} />
+                            </InfoIcon>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Date limite de candidature
-                                </Typography>
-                                <Typography variant="body2" fontWeight={500}>
-                                    {formatDate(offer.dateLimiteCandidature)}
-                                </Typography>
+                                <InfoLabel>Fin</InfoLabel>
+                                <InfoValue>{formatDate(offer.dateFin)}</InfoValue>
                             </Box>
-                        </InfoItem>
+                        </InfoRow>
+                        <InfoRow>
+                            <InfoIcon color="#d97706">
+                                <Pending sx={{ fontSize: 16 }} />
+                            </InfoIcon>
+                            <Box>
+                                <InfoLabel>Date limite</InfoLabel>
+                                <InfoValue>{formatDate(offer.dateLimiteCandidature)}</InfoValue>
+                            </Box>
+                        </InfoRow>
+                        <InfoRow>
+                            <InfoIcon color="#148aa0">
+                                <Business sx={{ fontSize: 16 }} />
+                            </InfoIcon>
+                            <Box>
+                                <InfoLabel>Département</InfoLabel>
+                                <InfoValue>{getDepartementNom()}</InfoValue>
+                            </Box>
+                        </InfoRow>
+                        {offer.motifRefus && (
+                            <InfoRow>
+                                <InfoIcon color="#ef4444">
+                                    <Cancel sx={{ fontSize: 16 }} />
+                                </InfoIcon>
+                                <Box>
+                                    <InfoLabel>Motif refus</InfoLabel>
+                                    <InfoValue sx={{ color: '#ef4444' }}>{offer.motifRefus}</InfoValue>
+                                </Box>
+                            </InfoRow>
+                        )}
                     </DetailCard>
 
+                    {/* Responsables */}
                     <DetailCard>
                         <SectionTitle>
-                            <Person sx={{ color: '#4f46e5' }} />
+                            <SectionIcon color="#4f46e5">
+                                <Person sx={{ fontSize: 16 }} />
+                            </SectionIcon>
                             Responsables
                         </SectionTitle>
-                        <InfoItem>
+                        <InfoRow>
                             <Avatar sx={{ width: 32, height: 32, bgcolor: '#4f46e5', fontSize: 14, color: '#fff' }}>
-                                FA
+                                {getInitials(offer.createurId?.nom || offer.createurNom, offer.createurId?.prenom || offer.createurPrenom)}
                             </Avatar>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Créé par
-                                </Typography>
-                                <Typography variant="body2" fontWeight={500}>
-                                    {offer.createur}
-                                </Typography>
+                                <InfoLabel>Créé par</InfoLabel>
+                                <InfoValue>
+                                    {offer.createurId?.prenom || offer.createurPrenom || ''} {offer.createurId?.nom || offer.createurNom || ''}
+                                </InfoValue>
                             </Box>
-                        </InfoItem>
-                        {offer.validateur && (
-                            <InfoItem>
+                        </InfoRow>
+                        {offer.validateurId && (
+                            <InfoRow>
                                 <Avatar sx={{ width: 32, height: 32, bgcolor: '#22c55e', fontSize: 14, color: '#fff' }}>
-                                    KB
+                                    {getInitials(offer.validateurId?.nom, offer.validateurId?.prenom)}
                                 </Avatar>
                                 <Box>
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                        Validé par
-                                    </Typography>
-                                    <Typography variant="body2" fontWeight={500}>
-                                        {offer.validateur}
-                                    </Typography>
+                                    <InfoLabel>Validé par</InfoLabel>
+                                    <InfoValue>
+                                        {offer.validateurId?.prenom || ''} {offer.validateurId?.nom || ''}
+                                    </InfoValue>
                                 </Box>
-                            </InfoItem>
+                            </InfoRow>
                         )}
                     </DetailCard>
                 </Grid>
 
-                {/* ===== DROITE ===== */}
+                {/* ===== COLONNE DROITE ===== */}
                 <Grid item xs={12} md={8}>
+                    {/* Description */}
                     <DetailCard>
                         <SectionTitle>
-                            <Description sx={{ color: '#8b5cf6' }} />
+                            <SectionIcon color="#8b5cf6">
+                                <Description sx={{ fontSize: 16 }} />
+                            </SectionIcon>
                             Description
                         </SectionTitle>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                            {offer.description}
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, color: '#4a5568' }}>
+                            {offer.description || 'Aucune description'}
                         </Typography>
                     </DetailCard>
 
-                    <DetailCard>
-                        <SectionTitle>
-                            <Work sx={{ color: '#f59e0b' }} />
-                            Sujets de stage
-                        </SectionTitle>
-                        {offer.sujets.map((sujet, idx) => (
-                            <Card key={idx} sx={{ mb: 2, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
-                                <CardContent>
-                                    <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
-                                        {sujet.titre}
+                    {/* Sujets */}
+                    {offer.sujets && offer.sujets.length > 0 && (
+                        <DetailCard>
+                            <SectionTitle>
+                                <SectionIcon color="#f59e0b">
+                                    <Work sx={{ fontSize: 16 }} />
+                                </SectionIcon>
+                                Sujets ({offer.sujets.length})
+                            </SectionTitle>
+                            {offer.sujets.map((sujet, idx) => (
+                                <SubjectCard key={idx}>
+                                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5, color: '#1a2332' }}>
+                                        {sujet.titre || `Sujet ${idx + 1}`}
                                     </Typography>
-                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                        {sujet.description}
+                                    <Typography variant="body2" color="#4a5568" sx={{ mb: 1 }}>
+                                        {sujet.description || 'Aucune description'}
                                     </Typography>
-                                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                                        Missions :
-                                    </Typography>
-                                    <List dense>
-                                        {sujet.missions.map((mission, i) => (
-                                            <ListItem key={i} sx={{ py: 0.5 }}>
-                                                <ListItemIcon sx={{ minWidth: 24 }}>
-                                                    <CheckCircle sx={{ color: '#22c55e', fontSize: 14 }} />
-                                                </ListItemIcon>
-                                                <ListItemText primary={mission} primaryTypographyProps={{ variant: 'body2' }} />
-                                            </ListItem>
-                                        ))}
-                                    </List>
-                                    <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>
-                                        Profil recherché :
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                        {sujet.profilRecherche}
-                                    </Typography>
-                                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                                        Compétences :
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                        {sujet.competences.map((comp, i) => (
-                                            <Chip
-                                                key={i}
-                                                label={`${comp.nom} - ${comp.niveau}`}
-                                                size="small"
-                                                sx={{ backgroundColor: '#e0e7ff', color: '#4338ca' }}
-                                            />
-                                        ))}
-                                    </Box>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </DetailCard>
-
-                    <DetailCard>
-                        <SectionTitle>
-                            <Description sx={{ color: '#22c55e' }} />
-                            Documents requis
-                        </SectionTitle>
-                        <List dense>
-                            {offer.documentsRequis.map((doc, idx) => (
-                                <ListItem key={idx}>
-                                    <ListItemIcon>
-                                        {doc.obligatoire ? (
-                                            <CheckCircle sx={{ color: '#22c55e', fontSize: 18 }} />
-                                        ) : (
-                                            <Pending sx={{ color: '#f59e0b', fontSize: 18 }} />
-                                        )}
-                                    </ListItemIcon>
-                                    <ListItemText
-                                        primary={doc.type}
-                                        secondary={doc.obligatoire ? 'Obligatoire' : 'Optionnel'}
-                                    />
-                                </ListItem>
+                                    
+                                    {sujet.missions && sujet.missions.length > 0 && (
+                                        <>
+                                            <Typography variant="caption" fontWeight={600} color="#1a2332" sx={{ display: 'block', mb: 0.5 }}>
+                                                Missions :
+                                            </Typography>
+                                            <Box component="ul" sx={{ pl: 2, m: 0, mb: 1 }}>
+                                                {sujet.missions.map((mission, i) => (
+                                                    <Typography component="li" key={i} variant="body2" color="#4a5568" sx={{ mb: 0.5 }}>
+                                                        {mission}
+                                                    </Typography>
+                                                ))}
+                                            </Box>
+                                        </>
+                                    )}
+                                    
+                                    {sujet.profilRecherche && (
+                                        <>
+                                            <Typography variant="caption" fontWeight={600} color="#1a2332" sx={{ display: 'block', mb: 0.5 }}>
+                                                Profil recherché :
+                                            </Typography>
+                                            <Typography variant="body2" color="#4a5568" sx={{ mb: 1 }}>
+                                                {sujet.profilRecherche}
+                                            </Typography>
+                                        </>
+                                    )}
+                                    
+                                    {sujet.competences && sujet.competences.length > 0 && (
+                                        <>
+                                            <Typography variant="caption" fontWeight={600} color="#1a2332" sx={{ display: 'block', mb: 0.5 }}>
+                                                Compétences :
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                                {sujet.competences.map((comp, i) => (
+                                                    <CompetenceChip
+                                                        key={i}
+                                                        label={`${comp.nom} - ${comp.niveau}`}
+                                                        niveau={comp.niveau}
+                                                        size="small"
+                                                    />
+                                                ))}
+                                            </Box>
+                                        </>
+                                    )}
+                                </SubjectCard>
                             ))}
-                        </List>
-                    </DetailCard>
+                        </DetailCard>
+                    )}
                 </Grid>
             </Grid>
 
-            {/* ===== DIALOG DE CONFIRMATION ===== */}
+            {/* ===== DIALOG DE CONFIRMATION SUPPRESSION ===== */}
             <Dialog
                 open={openDeleteDialog}
-                onClose={() => setOpenDeleteDialog(false)}
+                onClose={handleCloseDeleteDialog}
                 maxWidth="sm"
                 fullWidth
                 PaperProps={{
-                    sx: { borderRadius: '16px', padding: '8px' },
+                    sx: { borderRadius: '12px', padding: '8px' },
                 }}
             >
-                <DialogTitle>🗑️ Supprimer l'offre</DialogTitle>
+                <DialogTitle>Supprimer l'offre</DialogTitle>
                 <DialogContent>
                     <Typography>
                         Êtes-vous sûr de vouloir supprimer l'offre{' '}
-                        <strong>{offer.titre}</strong> ?
+                        <strong>{offer?.titre}</strong> ?
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                         Cette action est irréversible.
                     </Typography>
                 </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button
-                        onClick={() => setOpenDeleteDialog(false)}
-                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                    >
+                <DialogActions>
+                    <Button onClick={handleCloseDeleteDialog} disabled={submitting}>
                         Annuler
                     </Button>
                     <Button
                         variant="contained"
                         onClick={handleConfirmDelete}
-                        sx={{
-                            backgroundColor: '#ef4444',
-                            borderRadius: '10px',
-                            textTransform: 'none',
-                            '&:hover': { backgroundColor: '#dc2626' },
-                        }}
+                        disabled={submitting}
+                        sx={{ backgroundColor: '#ef4444', '&:hover': { backgroundColor: '#dc2626' } }}
                     >
-                        Supprimer
+                        {submitting ? <CircularProgress size={20} color="inherit" /> : 'Supprimer'}
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Container>
+        </PageContainer>
     );
 };
 

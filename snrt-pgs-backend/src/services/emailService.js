@@ -1,7 +1,7 @@
+// src/services/emailService.js
 const nodemailer = require('nodemailer');
 const { CONFIG } = require('../config/constants');
 const logger = require('../utils/logger');
-
 
 let transporterPromise = null;
 
@@ -34,7 +34,6 @@ function buildTransporter() {
 function getTransporter() {
   if (!transporterPromise) {
     transporterPromise = buildTransporter().catch((err) => {
-
       logger.error(`[Email] Echec de creation du transporteur SMTP: ${err.message}`);
       transporterPromise = null;
       throw err;
@@ -46,11 +45,11 @@ function getTransporter() {
 async function sendMail({ to, subject, html, text, attachments }) {
   try {
     const transporter = await getTransporter();
-    const info = await transporter.sendMail({ 
-      from: CONFIG.smtp.from, 
-      to, 
-      subject, 
-      text, 
+    const info = await transporter.sendMail({
+      from: CONFIG.smtp.from,
+      to,
+      subject,
+      text,
       html,
       attachments: attachments || []
     });
@@ -80,6 +79,10 @@ function baseTemplate(title, bodyHtml) {
   `;
 }
 
+// ============================================
+// AUTHENTIFICATION
+// ============================================
+
 async function sendTwoFactorCodeEmail(to, code) {
   const html = baseTemplate(
     'Code de verification',
@@ -87,7 +90,12 @@ async function sendTwoFactorCodeEmail(to, code) {
      <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px;">${code}</p>
      <p>Ce code est valable ${CONFIG.twoFactor.ttlMinutes} minutes. Si vous n'etes pas a l'origine de cette demande, ignorez cet email.</p>`
   );
-  await sendMail({ to, subject: 'Votre code de verification PGS', html, text: `Votre code de verification est : ${code}` });
+  await sendMail({
+    to,
+    subject: 'Votre code de verification PGS',
+    html,
+    text: `Votre code de verification est : ${code}`
+  });
 }
 
 async function sendPasswordResetEmail(to, resetUrl) {
@@ -111,27 +119,17 @@ async function sendWelcomeEmail(to, prenom) {
     `<p>Bonjour ${prenom},</p>
      <p>Votre compte candidat a bien ete cree. Vous pouvez desormais consulter les offres de stage et postuler en ligne.</p>`
   );
-  await sendMail({ to, subject: 'Bienvenue sur la Plateforme de Gestion des Stages', html, text: `Bonjour ${prenom}, votre compte a bien ete cree.` });
-}
-
-// Signature conservee (to, {date, heure, type, lieu, lienVisio}) : c'est
-// celle appelee par interviewController.notifyStudentInterviewScheduled.
-async function sendInterviewScheduledEmail(to, { date, heure, type, lieu, lienVisio }) {
-  const lieuLigne = type === 'Visio' ? `Lien : ${lienVisio}` : `Lieu : ${lieu || 'a confirmer'}`;
-  const html = baseTemplate(
-    'Entretien planifie',
-    `<p>Un entretien a ete planifie dans le cadre de votre candidature :</p>
-     <p><strong>Date :</strong> ${new Date(date).toLocaleDateString('fr-FR')} a ${heure}<br/>
-     <strong>Type :</strong> ${type}<br/>${lieuLigne}</p>`
-  );
   await sendMail({
     to,
-    subject: 'Entretien planifie - PGS',
+    subject: 'Bienvenue sur la Plateforme de Gestion des Stages',
     html,
-    text: `Un entretien a ete planifie le ${new Date(date).toLocaleDateString('fr-FR')} a ${heure} (${type}).`,
+    text: `Bonjour ${prenom}, votre compte a bien ete cree.`
   });
 }
 
+// ============================================
+// CANDIDATURES
+// ============================================
 
 async function sendApplicationSubmittedEmail({ to, studentName, offerTitle }) {
   const html = baseTemplate(
@@ -178,7 +176,27 @@ async function sendDocumentRejectedEmail({ to, studentName, documentName, reason
 }
 
 // ============================================
-// ✅ NOUVELLES FONCTIONS
+// ENTRETIENS
+// ============================================
+
+async function sendInterviewScheduledEmail(to, { date, heure, type, lieu, lienVisio }) {
+  const lieuLigne = type === 'Visio' ? `Lien : ${lienVisio}` : `Lieu : ${lieu || 'a confirmer'}`;
+  const html = baseTemplate(
+    'Entretien planifie',
+    `<p>Un entretien a ete planifie dans le cadre de votre candidature :</p>
+     <p><strong>Date :</strong> ${new Date(date).toLocaleDateString('fr-FR')} a ${heure}<br/>
+     <strong>Type :</strong> ${type}<br/>${lieuLigne}</p>`
+  );
+  await sendMail({
+    to,
+    subject: 'Entretien planifie - PGS',
+    html,
+    text: `Un entretien a ete planifie le ${new Date(date).toLocaleDateString('fr-FR')} a ${heure} (${type}).`,
+  });
+}
+
+// ============================================
+// ✅ DOCUMENTS DE STAGE - NOUVELLES FONCTIONS
 // ============================================
 
 // ============================================
@@ -190,7 +208,9 @@ async function sendEngagementConfidentialiteEmail({ to, studentName, pdfPath }) 
         `<p>Bonjour ${studentName},</p>
          <p>Suite à l'acceptation de votre candidature, veuillez trouver ci-joint le document <strong>PSRH-PR01-EN10-A - Engagement de Confidentialité</strong>.</p>
          <p>Veuillez imprimer ce document, le signer, puis le déposer sur la plateforme dans la section prévue à cet effet.</p>
-         <p>Ce document est obligatoire pour la poursuite de votre processus d'intégration.</p>`
+         <p>Ce document est obligatoire pour la poursuite de votre processus d'intégration.</p>
+         <p>Cordialement,</p>
+         <p>Direction des Ressources Humaines</p>`
     );
 
     await sendMail({
@@ -300,14 +320,20 @@ async function sendAttestationStage({ to, studentName, pdfPath }) {
 // EXPORTS
 // ============================================
 module.exports = {
+  // Authentification
   sendTwoFactorCodeEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
-  sendInterviewScheduledEmail,
+
+  // Candidatures
   sendApplicationSubmittedEmail,
   sendApplicationStatusChangedEmail,
   sendDocumentRejectedEmail,
-  // ✅ NOUVELLES FONCTIONS
+
+  // Entretiens
+  sendInterviewScheduledEmail,
+
+  // ✅ Documents de stage
   sendEngagementConfidentialiteEmail,
   sendDemandeDirecteurEmail,
   sendFicheSigneeEtudiant,

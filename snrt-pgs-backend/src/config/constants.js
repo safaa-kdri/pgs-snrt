@@ -48,6 +48,15 @@ const APPLICATION_STATUS = Object.freeze({
   REFUSEE: 'Refusee',
 });
 
+// ✅ AJOUT : MOTIFS DE REFUS
+const REFUSAL_REASONS = Object.freeze([
+  'Profil non adapté',
+  'Plus de places disponibles',
+  'Dossier insuffisant',
+  'Dates incompatibles',
+  'Autre',
+]);
+
 const PASSWORD_MIN_LENGTH = Object.freeze({
   externe: 16,
   interne: 20,
@@ -129,6 +138,7 @@ module.exports = {
   SKILL_CATEGORIES,
   CONCOURS_DOCUMENT_TYPES,
   APPLICATION_STATUS,
+  REFUSAL_REASONS,  // ✅ EXPORT DE LA NOUVELLE CONSTANTE
   PASSWORD_MIN_LENGTH,
   CONFIG,
   assertRequiredEnv,

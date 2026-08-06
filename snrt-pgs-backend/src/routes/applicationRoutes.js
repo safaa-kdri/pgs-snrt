@@ -4,7 +4,8 @@ const router = express.Router();
 
 const applicationController = require('../controllers/applicationController');
 const validate = require('../middlewares/validation');
-const { authenticate } = require('../middlewares/auth');
+const { authenticate, authorize } = require('../middlewares/auth');
+const { ROLES } = require('../config/constants');
 const {
   createApplicationSchema,
   updateApplicationSchema,
@@ -13,6 +14,13 @@ const {
 } = require('../utils/validators');
 
 router.use(authenticate());
+
+// ✅ ROUTE POUR LE DÉPARTEMENT - Ses candidatures
+router.get(
+  '/department',
+  authorize(ROLES.DEPARTEMENT),
+  applicationController.getDepartmentApplications
+);
 
 router.post('/', validate(createApplicationSchema), applicationController.createApplication);
 router.get('/', applicationController.getAllApplications);

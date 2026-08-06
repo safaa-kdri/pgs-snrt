@@ -39,19 +39,13 @@ const StyledCard = styled(Paper)({
     width: '100%',
 });
 
-const CardIcon = styled(Box)({
-    width: '56px',
-    height: '56px',
-    borderRadius: '50%',
-    backgroundColor: '#ffffff',
+const Logo = styled(Box)({
     display: 'flex',
-    alignItems: 'center',
     justifyContent: 'center',
-    margin: '0 auto 10px',
-    border: '2px solid #ffffff',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    alignItems: 'center',
+    marginBottom: '16px',
     '& img': {
-        width: '36px',
+        width: '80px',
         height: 'auto',
         objectFit: 'contain',
     },
@@ -437,9 +431,9 @@ const Verify2FAInterne = () => {
     return (
         <PageContainer>
             <StyledCard>
-                <CardIcon>
+                <Logo>
                     <img src="/logo_snrt_final.png" alt="SNRT" />
-                </CardIcon>
+                </Logo>
 
                 <Title>Verification à deux facteurs</Title>
                 <Subtitle>

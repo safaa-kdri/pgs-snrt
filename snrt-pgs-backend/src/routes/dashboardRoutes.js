@@ -1,3 +1,4 @@
+// src/routes/dashboardRoutes.js
 const express = require('express');
 const dashboardController = require('../controllers/dashboardController');
 const statsController = require('../controllers/statsController');
@@ -8,15 +9,17 @@ const router = express.Router();
 
 router.use(authenticate());
 
-
+// Dashboard principal (dépend du rôle)
 router.get('/', dashboardController.getDashboard);
 
+// Dashboards spécifiques
 router.get('/student', authorize(ROLES.ETUDIANT), dashboardController.getStudentDashboard);
 router.get('/admin', authorize(ROLES.ADMIN), dashboardController.getAdminDashboard);
 router.get('/rh', authorize(ROLES.RH), dashboardController.getRhDashboard);
 router.get('/supervisor', authorize(ROLES.ENCADRANT), dashboardController.getSupervisorDashboard);
 router.get('/department', authorize(ROLES.DEPARTEMENT), dashboardController.getDepartmentDashboard);
 
+// Statistiques globales
 router.get('/stats/global', statsController.getGlobalStats);
 router.get('/stats/export', statsController.exportOfferStats);
 

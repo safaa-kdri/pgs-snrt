@@ -1,6 +1,6 @@
 // src/components/admin/PeriodsList.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -16,32 +16,27 @@ import {
     TextField,
     Chip,
     IconButton,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Alert,
     CircularProgress,
     InputAdornment,
     Tooltip,
     Grid,
-    Switch,
-    FormControlLabel,
     MenuItem,
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import {
     Search,
     Add,
     Edit,
-    Delete,
     Event,
     Refresh,
     FilterList,
     CheckCircle,
     Block,
     Visibility,
+    Archive,
+    Restore,
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import api from '../../services/api';
@@ -87,6 +82,12 @@ const StatusChip = styled(Chip)(({ status }) => {
 
 const PeriodsList = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // ✅ Détection des pages
+    const isViewPage = location.pathname.startsWith('/admin/periods/view/');
+    const isEditPage = location.pathname.startsWith('/admin/periods/edit/');
+    const isAddPage = location.pathname === '/admin/periods/add';
 
     const [loading, setLoading] = useState(true);
     const [periods, setPeriods] = useState([]);
@@ -95,22 +96,11 @@ const PeriodsList = () => {
     const [statusFilter, setStatusFilter] = useState('all');
     const [error, setError] = useState('');
 
-    // Dialog states
-    const [openDialog, setOpenDialog] = useState(false);
-    const [selectedPeriod, setSelectedPeriod] = useState(null);
-    const [dialogMode, setDialogMode] = useState('view');
-    const [formData, setFormData] = useState({
-        nom: '',
-        dateDebut: '',
-        dateFin: '',
-        dateOuvertureCandidatures: '',
-        dateFermetureCandidatures: '',
-        actif: true,
-    });
-
     useEffect(() => {
-        fetchPeriods();
-    }, []);
+        if (!isViewPage && !isEditPage && !isAddPage) {
+            fetchPeriods();
+        }
+    }, [isViewPage, isEditPage, isAddPage]);
 
     useEffect(() => {
         filterPeriods();
@@ -140,7 +130,7 @@ const PeriodsList = () => {
                 dateOuvertureCandidatures: period.dateOuvertureCandidatures || '',
                 dateFermetureCandidatures: period.dateFermetureCandidatures || '',
                 actif: period.actif !== undefined ? period.actif : true,
-                status: period.status || getStatusFromDates(period),
+                status: getStatusFromDates(period),
             }));
             
             setPeriods(formattedData);
@@ -192,77 +182,21 @@ const PeriodsList = () => {
         return 'active';
     };
 
-    const handleOpenDialog = (period, mode) => {
-        if (period) {
-            setSelectedPeriod(period);
-            setFormData({
-                nom: period.nom || '',
-                dateDebut: period.dateDebut || '',
-                dateFin: period.dateFin || '',
-                dateOuvertureCandidatures: period.dateOuvertureCandidatures || '',
-                dateFermetureCandidatures: period.dateFermetureCandidatures || '',
-                actif: period.actif !== undefined ? period.actif : true,
-            });
-        } else {
-            setSelectedPeriod(null);
-            setFormData({
-                nom: '',
-                dateDebut: '',
-                dateFin: '',
-                dateOuvertureCandidatures: '',
-                dateFermetureCandidatures: '',
-                actif: true,
-            });
-        }
-        setDialogMode(mode);
-        setOpenDialog(true);
+    const getStatusLabel = (status) => {
+        const labels = {
+            active: 'Actif',
+            upcoming: 'À venir',
+            past: 'Passé',
+            inactive: 'Inactif',
+        };
+        return labels[status] || status;
     };
 
-    const handleCloseDialog = () => {
-        setOpenDialog(false);
-        setSelectedPeriod(null);
-    };
-
-    // ✅ SAUVEGARDER VERS L'API
-    const handleSavePeriod = async () => {
-        try {
-            const payload = {
-                nom: formData.nom,
-                dateDebut: formData.dateDebut,
-                dateFin: formData.dateFin,
-                dateOuvertureCandidatures: formData.dateOuvertureCandidatures,
-                dateFermetureCandidatures: formData.dateFermetureCandidatures,
-                actif: formData.actif,
-            };
-
-            if (dialogMode === 'add') {
-                await api.post('/periods', payload);
-            } else if (dialogMode === 'edit') {
-                await api.put(`/periods/${selectedPeriod.id}`, payload);
-            }
-            handleCloseDialog();
-            fetchPeriods();
-        } catch (error) {
-            console.error('Erreur sauvegarde:', error);
-            setError('Erreur lors de la sauvegarde de la periode');
-        }
-    };
-
-    // ✅ SUPPRIMER VERS L'API
-    const handleDeletePeriod = async () => {
-        try {
-            await api.delete(`/periods/${selectedPeriod.id}`);
-            handleCloseDialog();
-            fetchPeriods();
-        } catch (error) {
-            console.error('Erreur suppression:', error);
-            setError('Erreur lors de la suppression de la periode');
-        }
-    };
-
-    // ✅ CHANGER STATUT VERS L'API
     const handleToggleStatus = async (period) => {
         const newStatus = period.actif ? false : true;
+        const action = newStatus ? 'restaurer' : 'archiver';
+        if (!window.confirm(`Voulez-vous vraiment ${action} cette période ?`)) return;
+        
         try {
             await api.put(`/periods/${period.id}`, { actif: newStatus });
             fetchPeriods();
@@ -272,12 +206,31 @@ const PeriodsList = () => {
         }
     };
 
-    const getStatusLabel = (period) => {
-        if (period.status === 'active') return 'Actif';
-        if (period.status === 'upcoming') return 'A venir';
-        if (period.status === 'past') return 'Passe';
-        return 'Inactif';
-    };
+    // ============================================
+    // RENDU DES PAGES
+    // ============================================
+
+    // ✅ Si c'est la page de détail
+    if (isViewPage) {
+        const PeriodDetailPage = require('./PeriodDetailPage').default;
+        return <PeriodDetailPage />;
+    }
+
+    // ✅ Si c'est la page de modification
+    if (isEditPage) {
+        const PeriodEditPage = require('./PeriodEditPage').default;
+        return <PeriodEditPage />;
+    }
+
+    // ✅ Si c'est la page d'ajout
+    if (isAddPage) {
+        const PeriodAddPage = require('./PeriodAddPage').default;
+        return <PeriodAddPage />;
+    }
+
+    // ============================================
+    // AFFICHAGE : LISTE DES PERIODES
+    // ============================================
 
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -285,10 +238,10 @@ const PeriodsList = () => {
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        Gestion des periodes de stage
+                        Gestion des périodes de stage
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {filteredPeriods.length} periode(s) trouvee(s)
+                        {filteredPeriods.length} période(s) trouvée(s)
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
@@ -299,20 +252,21 @@ const PeriodsList = () => {
                         disabled={loading}
                         sx={{ borderRadius: '12px', textTransform: 'none' }}
                     >
-                        Rafraichir
+                        Rafraîchir
                     </Button>
                     <Button
                         variant="contained"
                         startIcon={<Add />}
                         sx={{
-                            backgroundColor: '#148aa0',
+                            backgroundColor: '#2d3748',
                             borderRadius: '12px',
                             textTransform: 'none',
-                            '&:hover': { backgroundColor: '#0b7890' },
+                            color: '#ffffff',
+                            '&:hover': { backgroundColor: '#1a2332' },
                         }}
-                        onClick={() => handleOpenDialog(null, 'add')}
+                        onClick={() => navigate('/admin/periods/add')}
                     >
-                        Ajouter une periode
+                        Ajouter une période
                     </Button>
                 </Box>
             </PageHeader>
@@ -362,8 +316,8 @@ const PeriodsList = () => {
                         >
                             <MenuItem value="all">Tous les statuts</MenuItem>
                             <MenuItem value="active">Actif</MenuItem>
-                            <MenuItem value="upcoming">A venir</MenuItem>
-                            <MenuItem value="past">Passe</MenuItem>
+                            <MenuItem value="upcoming">À venir</MenuItem>
+                            <MenuItem value="past">Passé</MenuItem>
                             <MenuItem value="inactive">Inactif</MenuItem>
                         </TextField>
                     </Grid>
@@ -384,7 +338,7 @@ const PeriodsList = () => {
                                 backgroundColor: '#fff',
                             }}
                         >
-                            Reinitialiser
+                            Réinitialiser
                         </Button>
                     </Grid>
                 </Grid>
@@ -398,8 +352,8 @@ const PeriodsList = () => {
                 <Table>
                     <TableHead>
                         <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
-                            <StyledTableCell>Periode</StyledTableCell>
-                            <StyledTableCell>Debut</StyledTableCell>
+                            <StyledTableCell>Période</StyledTableCell>
+                            <StyledTableCell>Début</StyledTableCell>
                             <StyledTableCell>Fin</StyledTableCell>
                             <StyledTableCell>Ouverture candidatures</StyledTableCell>
                             <StyledTableCell>Fermeture candidatures</StyledTableCell>
@@ -418,7 +372,7 @@ const PeriodsList = () => {
                             <TableRow>
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucune periode trouvee
+                                        Aucune période trouvée
                                     </Typography>
                                 </TableCell>
                             </TableRow>
@@ -455,7 +409,7 @@ const PeriodsList = () => {
                                     </TableCell>
                                     <TableCell>
                                         <StatusChip
-                                            label={getStatusLabel(period)}
+                                            label={getStatusLabel(period.status)}
                                             status={period.status}
                                             size="small"
                                         />
@@ -464,7 +418,7 @@ const PeriodsList = () => {
                                         <Tooltip title="Voir">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleOpenDialog(period, 'view')}
+                                                onClick={() => navigate(`/admin/periods/view/${period.id}`)}
                                             >
                                                 <Visibility sx={{ fontSize: 18, color: '#148aa0' }} />
                                             </IconButton>
@@ -472,29 +426,21 @@ const PeriodsList = () => {
                                         <Tooltip title="Modifier">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleOpenDialog(period, 'edit')}
+                                                onClick={() => navigate(`/admin/periods/edit/${period.id}`)}
                                             >
                                                 <Edit sx={{ fontSize: 18, color: '#4f46e5' }} />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title={period.actif ? 'Desactiver' : 'Activer'}>
+                                        <Tooltip title={period.actif ? 'Archiver' : 'Restaurer'}>
                                             <IconButton
                                                 size="small"
                                                 onClick={() => handleToggleStatus(period)}
                                             >
                                                 {period.actif ? (
-                                                    <Block sx={{ fontSize: 18, color: '#f59e0b' }} />
+                                                    <Archive sx={{ fontSize: 18, color: '#f59e0b' }} />
                                                 ) : (
-                                                    <CheckCircle sx={{ fontSize: 18, color: '#22c55e' }} />
+                                                    <Restore sx={{ fontSize: 18, color: '#22c55e' }} />
                                                 )}
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Supprimer">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleOpenDialog(period, 'delete')}
-                                            >
-                                                <Delete sx={{ fontSize: 18, color: '#ef4444' }} />
                                             </IconButton>
                                         </Tooltip>
                                     </TableCell>
@@ -504,213 +450,6 @@ const PeriodsList = () => {
                     </TableBody>
                 </Table>
             </TableContainer>
-
-            {/* ===== DIALOG ===== */}
-            <Dialog
-                open={openDialog}
-                onClose={handleCloseDialog}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: '16px', padding: '8px' },
-                }}
-            >
-                <DialogTitle>
-                    {dialogMode === 'view' && 'Details de la periode'}
-                    {dialogMode === 'add' && 'Ajouter une periode'}
-                    {dialogMode === 'edit' && 'Modifier la periode'}
-                    {dialogMode === 'delete' && 'Supprimer la periode'}
-                </DialogTitle>
-                <DialogContent>
-                    {dialogMode === 'delete' ? (
-                        <Typography>
-                            Etes-vous sur de vouloir supprimer la periode{' '}
-                            <strong>{selectedPeriod?.nom}</strong> ?
-                            Cette action est irreversible.
-                        </Typography>
-                    ) : dialogMode === 'view' ? (
-                        selectedPeriod && (
-                            <Box sx={{ mt: 2 }}>
-                                <Grid container spacing={2}>
-                                    <Grid item xs={12}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Nom
-                                        </Typography>
-                                        <Typography variant="body1" fontWeight={600}>
-                                            {selectedPeriod.nom}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Date de debut
-                                        </Typography>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {formatDate(selectedPeriod.dateDebut)}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Date de fin
-                                        </Typography>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {formatDate(selectedPeriod.dateFin)}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Ouverture candidatures
-                                        </Typography>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {formatDate(selectedPeriod.dateOuvertureCandidatures)}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Fermeture candidatures
-                                        </Typography>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {formatDate(selectedPeriod.dateFermetureCandidatures)}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Statut
-                                        </Typography>
-                                        <StatusChip
-                                            label={getStatusLabel(selectedPeriod)}
-                                            status={selectedPeriod.status}
-                                            size="small"
-                                            sx={{ mt: 0.5 }}
-                                        />
-                                    </Grid>
-                                </Grid>
-                            </Box>
-                        )
-                    ) : (
-                        <Box sx={{ mt: 2 }}>
-                            <TextField
-                                label="Nom de la periode"
-                                value={formData.nom}
-                                onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-                                fullWidth
-                                margin="normal"
-                                sx={{
-                                    '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                }}
-                            />
-                            <Grid container spacing={2}>
-                                <Grid item xs={12} sm={6}>
-                                    <TextField
-                                        label="Date de debut"
-                                        type="date"
-                                        value={formData.dateDebut}
-                                        onChange={(e) => setFormData({ ...formData, dateDebut: e.target.value })}
-                                        fullWidth
-                                        margin="normal"
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <TextField
-                                        label="Date de fin"
-                                        type="date"
-                                        value={formData.dateFin}
-                                        onChange={(e) => setFormData({ ...formData, dateFin: e.target.value })}
-                                        fullWidth
-                                        margin="normal"
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <TextField
-                                        label="Ouverture candidatures"
-                                        type="date"
-                                        value={formData.dateOuvertureCandidatures}
-                                        onChange={(e) => setFormData({ ...formData, dateOuvertureCandidatures: e.target.value })}
-                                        fullWidth
-                                        margin="normal"
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <TextField
-                                        label="Fermeture candidatures"
-                                        type="date"
-                                        value={formData.dateFermetureCandidatures}
-                                        onChange={(e) => setFormData({ ...formData, dateFermetureCandidatures: e.target.value })}
-                                        fullWidth
-                                        margin="normal"
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                        }}
-                                    />
-                                </Grid>
-                            </Grid>
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        checked={formData.actif}
-                                        onChange={(e) =>
-                                            setFormData({
-                                                ...formData,
-                                                actif: e.target.checked,
-                                            })
-                                        }
-                                    />
-                                }
-                                label={formData.actif ? 'Actif' : 'Inactif'}
-                                sx={{ mt: 2 }}
-                            />
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button
-                        onClick={handleCloseDialog}
-                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                    >
-                        {dialogMode === 'delete' ? 'Annuler' : 'Fermer'}
-                    </Button>
-                    {dialogMode === 'delete' && (
-                        <Button
-                            variant="contained"
-                            onClick={handleDeletePeriod}
-                            sx={{
-                                backgroundColor: '#ef4444',
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                '&:hover': { backgroundColor: '#dc2626' },
-                            }}
-                        >
-                            Supprimer
-                        </Button>
-                    )}
-                    {(dialogMode === 'add' || dialogMode === 'edit') && (
-                        <Button
-                            variant="contained"
-                            onClick={handleSavePeriod}
-                            sx={{
-                                backgroundColor: '#148aa0',
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                '&:hover': { backgroundColor: '#0b7890' },
-                            }}
-                        >
-                            {dialogMode === 'add' ? 'Ajouter' : 'Enregistrer'}
-                        </Button>
-                    )}
-                </DialogActions>
-            </Dialog>
         </Container>
     );
 };

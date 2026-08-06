@@ -1,6 +1,6 @@
 // src/components/rh/ApplicationsList.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -15,18 +15,19 @@ import {
     Button,
     TextField,
     Chip,
+    Avatar,
     IconButton,
     Grid,
     CircularProgress,
     InputAdornment,
     Tooltip,
     MenuItem,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Alert,
+    Pagination,
+    Card,
+    CardContent,
 } from '@mui/material';
+import { styled, alpha } from '@mui/material/styles';
 import {
     Search,
     Visibility,
@@ -37,10 +38,9 @@ import {
     Pending,
     Event,
     Description,
-    Send,
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
 import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
 
 // ============================================
 // STYLES
@@ -58,17 +58,24 @@ const PageHeader = styled(Box)({
 const StyledTableCell = styled(TableCell)({
     fontWeight: 600,
     color: '#1a2332',
+    fontSize: '13px',
 });
 
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        soumise: { bg: '#dbeafe', text: '#1d4ed8' },
-        en_analyse: { bg: '#fef3c7', text: '#d97706' },
-        entretien: { bg: '#f3e8ff', text: '#6b21a8' },
-        acceptee: { bg: '#d1fae5', text: '#065f46' },
-        refuse: { bg: '#fee2e2', text: '#991b1b' },
+        'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
+        'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EnAnalyse': { bg: '#fef3c7', text: '#d97706' },
+        'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
+        'Acceptee': { bg: '#d1fae5', text: '#065f46' },
+        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
+        'EngagementEnvoye': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EngagementValide': { bg: '#d1fae5', text: '#065f46' },
+        'DemandeEnvoyee': { bg: '#fef3c7', text: '#d97706' },
+        'ValideParDirecteur': { bg: '#d1fae5', text: '#065f46' },
+        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
     };
-    const color = colors[status] || colors.soumise;
+    const color = colors[status] || colors['Soumise'];
     return {
         backgroundColor: color.bg,
         color: color.text,
@@ -78,181 +85,292 @@ const StatusChip = styled(Chip)(({ status }) => {
     };
 });
 
+// ✅ Carte statistique avec état actif (comme dans ValidateOffers)
+const StatCard = styled(Card)(({ active, color }) => ({
+    borderRadius: '10px',
+    border: `1px solid ${active ? color : '#eef1f3'}`,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    backgroundColor: active ? alpha(color, 0.05) : '#ffffff',
+    boxShadow: active ? `0 4px 12px ${alpha(color, 0.15)}` : 'none',
+    '&:hover': {
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        transform: 'translateY(-2px)',
+    },
+}));
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
 const ApplicationsList = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
 
+    // ✅ Lire le statut depuis l'URL
+    const queryParams = new URLSearchParams(location.search);
+    const initialStatus = queryParams.get('statut') || 'all';
+
     const [loading, setLoading] = useState(true);
-    const [applications, setApplications] = useState([]);
+    const [allApplications, setAllApplications] = useState([]); // ✅ TOUTES les candidatures
     const [filteredApplications, setFilteredApplications] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [openDialog, setOpenDialog] = useState(false);
-    const [selectedApp, setSelectedApp] = useState(null);
-    const [actionType, setActionType] = useState('');
-    const [comment, setComment] = useState('');
-    const [success, setSuccess] = useState('');
+    const [statusFilter, setStatusFilter] = useState(initialStatus);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
 
+    // ✅ STATS FIXES (calculées une fois sur toutes les candidatures)
+    const [stats, setStats] = useState({
+        total: 0,
+        enAttente: 0,
+        acceptees: 0,
+        refusees: 0,
+        entretien: 0,
+        engagement: 0,
+    });
+
+    const limit = 10;
+
+    // ✅ Synchroniser statusFilter avec l'URL
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const statusFromUrl = params.get('statut') || 'all';
+        if (statusFromUrl !== statusFilter) {
+            setStatusFilter(statusFromUrl);
+        }
+    }, [location.search]);
+
+    // ✅ Charger les candidatures
     useEffect(() => {
         fetchApplications();
     }, []);
 
+    // ✅ Filtrer quand le filtre ou la recherche change
     useEffect(() => {
         filterApplications();
-    }, [applications, searchTerm, statusFilter]);
+    }, [allApplications, searchTerm, statusFilter]);
 
+    // ============================================
+    // ✅ CHARGEMENT DES CANDIDATURES - STATS FIXES
+    // ============================================
     const fetchApplications = async () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
+            const params = {
+                page: 1,
+                limit: 1000, // ✅ Récupérer toutes les candidatures pour les stats
+            };
 
-            const mockApplications = [
-                {
-                    id: '1',
-                    offre: 'Stage Développement Web',
-                    candidat: 'Youssef EL HASSANI',
-                    email: 'youssef@test.ma',
-                    dateSoumission: '2026-07-15',
-                    statut: 'en_analyse',
-                    typeStage: 'PFE',
-                    departement: 'DSI',
-                },
-                {
-                    id: '2',
-                    offre: 'Stage Data Science',
-                    candidat: 'Fatima BENNANI',
-                    email: 'fatima@test.ma',
-                    dateSoumission: '2026-07-12',
-                    statut: 'entretien',
-                    typeStage: 'Master',
-                    departement: 'DSI',
-                },
-                {
-                    id: '3',
-                    offre: 'Stage Cybersécurité',
-                    candidat: 'Ahmed ALAMI',
-                    email: 'ahmed@test.ma',
-                    dateSoumission: '2026-07-10',
-                    statut: 'soumise',
-                    typeStage: 'PFE',
-                    departement: 'DSI',
-                },
-                {
-                    id: '4',
-                    offre: 'Stage Marketing Digital',
-                    candidat: 'Khadija ALAOUI',
-                    email: 'khadija@test.ma',
-                    dateSoumission: '2026-06-28',
-                    statut: 'acceptee',
-                    typeStage: 'Licence',
-                    departement: 'Marketing',
-                },
-                {
-                    id: '5',
-                    offre: 'Stage DevOps',
-                    candidat: 'Mohamed CHERKAOUI',
-                    email: 'mohamed@test.ma',
-                    dateSoumission: '2026-06-20',
-                    statut: 'refuse',
-                    typeStage: 'PFA',
-                    departement: 'DSI',
-                },
-            ];
+            console.log('📤 [ApplicationsList] Chargement des candidatures...');
 
-            setApplications(mockApplications);
-            setFilteredApplications(mockApplications);
+            const response = await api.get('/applications', { params });
+            
+            let data = [];
+            let pagination = {};
+            
+            if (response.data?.data) {
+                data = response.data.data;
+                pagination = response.data.pagination || {};
+            } else if (Array.isArray(response.data)) {
+                data = response.data;
+            } else if (response.data?.applications) {
+                data = response.data.applications;
+                pagination = response.data.pagination || {};
+            }
+
+            // ✅ S'assurer que chaque application a un statut valide
+            data = data.map(app => ({
+                ...app,
+                statut: app.statut || 'Soumise',
+            }));
+
+            console.log(`📥 [ApplicationsList] ${data.length} candidatures chargées`);
+
+            setAllApplications(data);
+            setFilteredApplications(data);
+            setTotal(pagination.total || data.length || 0);
+            setTotalPages(pagination.pages || Math.ceil((pagination.total || data.length) / limit) || 1);
+
+            // ✅ Calculer les stats UNE FOIS sur toutes les données
+            setStats({
+                total: pagination.total || data.length || 0,
+                enAttente: data.filter(a => a.statut === 'Soumise' || a.statut === 'EnAnalyse').length,
+                acceptees: data.filter(a => a.statut === 'Acceptee').length,
+                refusees: data.filter(a => a.statut === 'Refusee').length,
+                entretien: data.filter(a => a.statut === 'Entretien').length,
+                engagement: data.filter(a => a.statut === 'EngagementEnvoye' || a.statut === 'EngagementValide').length,
+            });
 
         } catch (error) {
-            console.error('Erreur chargement candidatures:', error);
+            console.error('❌ Erreur chargement candidatures:', error);
+            setError(error.response?.data?.message || 'Erreur de chargement');
+            setAllApplications([]);
+            setFilteredApplications([]);
+            setTotal(0);
+            setTotalPages(1);
+            setStats({
+                total: 0,
+                enAttente: 0,
+                acceptees: 0,
+                refusees: 0,
+                entretien: 0,
+                engagement: 0,
+            });
         } finally {
             setLoading(false);
         }
     };
 
+    // ============================================
+    // ✅ FILTRER PAR RECHERCHE ET STATUT
+    // ============================================
     const filterApplications = () => {
-        let filtered = [...applications];
+        let filtered = [...allApplications];
 
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(
-                (a) =>
-                    a.offre.toLowerCase().includes(term) ||
-                    a.candidat.toLowerCase().includes(term) ||
-                    a.departement.toLowerCase().includes(term)
-            );
-        }
-
+        // ✅ Filtrer par statut
         if (statusFilter !== 'all') {
             filtered = filtered.filter((a) => a.statut === statusFilter);
         }
 
+        // ✅ Filtrer par recherche
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            filtered = filtered.filter(
+                (a) =>
+                    (a.etudiantId?.nom || a.candidat?.nom || '').toLowerCase().includes(term) ||
+                    (a.etudiantId?.prenom || a.candidat?.prenom || '').toLowerCase().includes(term) ||
+                    (a.etudiantId?.email || a.candidat?.email || '').toLowerCase().includes(term) ||
+                    (a.offreId?.titre || a.offre || '').toLowerCase().includes(term)
+            );
+        }
+
+        // ✅ Mettre à jour le total affiché
+        setTotal(filtered.length);
         setFilteredApplications(filtered);
+        
+        // ✅ Recalculer la pagination
+        const totalPages = Math.ceil(filtered.length / limit) || 1;
+        setTotalPages(totalPages);
+        if (page > totalPages) {
+            setPage(1);
+        }
     };
 
+    // ============================================
+    // ✅ CHANGER LE STATUT - MET À JOUR L'URL
+    // ============================================
+    const handleStatusFilterChange = (newStatus) => {
+        setStatusFilter(newStatus);
+        setPage(1);
+        
+        // ✅ Mettre à jour l'URL avec le nouveau paramètre
+        const params = new URLSearchParams();
+        if (newStatus !== 'all') {
+            params.set('statut', newStatus);
+        }
+        navigate(`/rh/applications${params.toString() ? `?${params.toString()}` : ''}`, { replace: true });
+    };
+
+    // ============================================
+    // ✅ CHANGER DE PAGE
+    // ============================================
+    const handlePageChange = (event, value) => {
+        setPage(value);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // ============================================
+    // ✅ UTILITAIRES
+    // ============================================
     const getStatusLabel = (status) => {
         const labels = {
-            soumise: 'Soumise',
-            en_analyse: 'En analyse',
-            entretien: 'Entretien',
-            acceptee: 'Acceptée',
-            refuse: 'Refusée',
+            'Brouillon': 'Brouillon',
+            'Soumise': 'Soumise',
+            'EnAnalyse': 'En analyse',
+            'Entretien': 'Entretien',
+            'Acceptee': 'Acceptée',
+            'Refusee': 'Refusée',
+            'EngagementEnvoye': 'Engagement envoyé',
+            'EngagementValide': 'Engagement validé',
+            'DemandeEnvoyee': 'Demande envoyée',
+            'ValideParDirecteur': 'Validé par Directeur',
+            'Cloturee': 'Clôturée',
         };
         return labels[status] || status;
     };
 
-    const handleOpenDialog = (app, action) => {
-        setSelectedApp(app);
-        setActionType(action);
-        setComment('');
-        setOpenDialog(true);
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
     };
 
-    const handleCloseDialog = () => {
-        setOpenDialog(false);
-        setSelectedApp(null);
-        setComment('');
+    const getInitials = (nom, prenom) => {
+        if (!nom && !prenom) return '?';
+        return `${(prenom || '')[0] || ''}${(nom || '')[0] || ''}`.toUpperCase() || '?';
     };
 
-    const handleConfirmAction = () => {
-        if (actionType === 'accepter') {
-            setApplications(
-                applications.map((a) =>
-                    a.id === selectedApp.id ? { ...a, statut: 'acceptee' } : a
-                )
-            );
-            setSuccess(`✅ Candidature de ${selectedApp.candidat} acceptée !`);
-        } else if (actionType === 'refuser') {
-            setApplications(
-                applications.map((a) =>
-                    a.id === selectedApp.id ? { ...a, statut: 'refuse' } : a
-                )
-            );
-            setSuccess(`❌ Candidature de ${selectedApp.candidat} refusée`);
-        } else if (actionType === 'entretien') {
-            setApplications(
-                applications.map((a) =>
-                    a.id === selectedApp.id ? { ...a, statut: 'entretien' } : a
-                )
-            );
-            setSuccess(`📅 Entretien programmé pour ${selectedApp.candidat}`);
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'Acceptee': return <CheckCircle sx={{ fontSize: 14 }} />;
+            case 'Refusee': return <Cancel sx={{ fontSize: 14 }} />;
+            case 'Entretien': return <Event sx={{ fontSize: 14 }} />;
+            case 'EnAnalyse': return <Pending sx={{ fontSize: 14 }} />;
+            case 'EngagementEnvoye':
+            case 'EngagementValide': return <Description sx={{ fontSize: 14 }} />;
+            default: return <Pending sx={{ fontSize: 14 }} />;
         }
-        handleCloseDialog();
-        setTimeout(() => setSuccess(''), 3000);
+    };
+
+    const handleViewApplication = (id) => {
+        navigate(`/rh/application/${id}`);
     };
 
     const statusOptions = [
         { value: 'all', label: 'Tous les statuts' },
-        { value: 'soumise', label: 'Soumise' },
-        { value: 'en_analyse', label: 'En analyse' },
-        { value: 'entretien', label: 'Entretien' },
-        { value: 'acceptee', label: 'Acceptée' },
-        { value: 'refuse', label: 'Refusée' },
+        { value: 'Soumise', label: 'En attente' },
+        { value: 'EnAnalyse', label: 'En analyse' },
+        { value: 'Entretien', label: 'Entretien' },
+        { value: 'Acceptee', label: 'Acceptée' },
+        { value: 'Refusee', label: 'Refusée' },
+        { value: 'EngagementEnvoye', label: 'Engagement envoyé' },
+        { value: 'EngagementValide', label: 'Engagement validé' },
     ];
+
+    // ✅ Déterminer si une carte est active
+    const isCardActive = (statutKey) => {
+        if (statutKey === 'all') return statusFilter === 'all';
+        return statusFilter === statutKey;
+    };
+
+    // ✅ Obtenir les éléments paginés
+    const getPaginatedData = () => {
+        const start = (page - 1) * limit;
+        const end = start + limit;
+        return filteredApplications.slice(start, end);
+    };
+
+    const paginatedData = getPaginatedData();
+
+    // ============================================
+    // ✅ RENDER
+    // ============================================
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+                <CircularProgress size={44} sx={{ color: '#2d3748' }} />
+            </Box>
+        );
+    }
 
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -260,10 +378,11 @@ const ApplicationsList = () => {
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        📋 Gestion des candidatures
+                        Gestion des candidatures
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         {filteredApplications.length} candidature(s) trouvée(s)
+                        {statusFilter !== 'all' && ` • Filtré par : ${getStatusLabel(statusFilter)}`}
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
@@ -272,22 +391,80 @@ const ApplicationsList = () => {
                         startIcon={<Refresh />}
                         onClick={fetchApplications}
                         disabled={loading}
-                        sx={{ borderRadius: '12px', textTransform: 'none' }}
+                        sx={{
+                            borderRadius: '12px',
+                            textTransform: 'none',
+                            borderColor: '#e0e4e8',
+                            color: '#20242b',
+                            '&:hover': { borderColor: '#2d3748', backgroundColor: alpha('#2d3748', 0.04) },
+                        }}
                     >
                         Rafraîchir
                     </Button>
                 </Box>
             </PageHeader>
 
-            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
+
+            {/* ===== STATS RAPIDES AVEC ÉTAT ACTIF - STATS FIXES ===== */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} sm={3}>
+                    <StatCard 
+                        active={isCardActive('all')}
+                        color="#2d3748"
+                        onClick={() => handleStatusFilterChange('all')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="text.secondary">Total</Typography>
+                            <Typography variant="h6" fontWeight={700}>{stats.total}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <StatCard 
+                        active={isCardActive('Soumise')}
+                        color="#d97706"
+                        onClick={() => handleStatusFilterChange('Soumise')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="#d97706">En attente</Typography>
+                            <Typography variant="h6" fontWeight={700} color="#d97706">{stats.enAttente}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <StatCard 
+                        active={isCardActive('Acceptee')}
+                        color="#065f46"
+                        onClick={() => handleStatusFilterChange('Acceptee')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="#065f46">Acceptées</Typography>
+                            <Typography variant="h6" fontWeight={700} color="#065f46">{stats.acceptees}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <StatCard 
+                        active={isCardActive('Refusee')}
+                        color="#991b1b"
+                        onClick={() => handleStatusFilterChange('Refusee')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="#991b1b">Refusées</Typography>
+                            <Typography variant="h6" fontWeight={700} color="#991b1b">{stats.refusees}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+            </Grid>
 
             {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
+            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#fafbfc' }}>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={5}>
+                    <Grid item xs={12} sm={4}>
                         <TextField
-                            placeholder="Rechercher..."
+                            placeholder="Rechercher par nom, offre..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -312,7 +489,7 @@ const ApplicationsList = () => {
                             select
                             label="Statut"
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
+                            onChange={(e) => handleStatusFilterChange(e.target.value)}
                             size="small"
                             fullWidth
                             sx={{
@@ -326,14 +503,14 @@ const ApplicationsList = () => {
                             ))}
                         </TextField>
                     </Grid>
-                    <Grid item xs={12} sm={3}>
+                    <Grid item xs={12} sm={4}>
                         <Button
                             fullWidth
                             variant="outlined"
                             startIcon={<FilterList />}
                             onClick={() => {
                                 setSearchTerm('');
-                                setStatusFilter('all');
+                                handleStatusFilterChange('all');
                             }}
                             sx={{
                                 borderRadius: '10px',
@@ -341,6 +518,7 @@ const ApplicationsList = () => {
                                 borderColor: '#ddd',
                                 color: '#666',
                                 backgroundColor: '#fff',
+                                '&:hover': { borderColor: '#2d3748', backgroundColor: alpha('#2d3748', 0.04) },
                             }}
                         >
                             Réinitialiser
@@ -359,47 +537,63 @@ const ApplicationsList = () => {
                         <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
                             <StyledTableCell>Candidat</StyledTableCell>
                             <StyledTableCell>Offre</StyledTableCell>
-                            <StyledTableCell>Département</StyledTableCell>
                             <StyledTableCell>Type</StyledTableCell>
                             <StyledTableCell>Date</StyledTableCell>
+                            <StyledTableCell>Documents</StyledTableCell>
                             <StyledTableCell>Statut</StyledTableCell>
                             <StyledTableCell align="center">Actions</StyledTableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                                    <CircularProgress size={40} sx={{ color: '#148aa0' }} />
-                                </TableCell>
-                            </TableRow>
-                        ) : filteredApplications.length === 0 ? (
+                        {paginatedData.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucune candidature trouvée
+                                        {statusFilter !== 'all' 
+                                            ? `Aucune candidature avec le statut "${getStatusLabel(statusFilter)}"`
+                                            : 'Aucune candidature trouvée'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredApplications.map((app) => (
-                                <TableRow key={app.id} hover>
+                            paginatedData.map((app) => (
+                                <TableRow key={app._id || app.id} hover>
                                     <TableCell>
-                                        <Box>
-                                            <Typography variant="body2" fontWeight={600}>
-                                                {app.candidat}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {app.email}
-                                            </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <Avatar
+                                                sx={{
+                                                    backgroundColor: '#2d3748',
+                                                    width: 36,
+                                                    height: 36,
+                                                    fontSize: 14,
+                                                    fontWeight: 600,
+                                                    color: '#fff',
+                                                }}
+                                            >
+                                                {getInitials(
+                                                    app.etudiantId?.nom || app.candidat?.nom || app.nom,
+                                                    app.etudiantId?.prenom || app.candidat?.prenom || app.prenom
+                                                )}
+                                            </Avatar>
+                                            <Box>
+                                                <Typography variant="body2" fontWeight={600}>
+                                                    {app.etudiantId?.prenom || app.candidat?.prenom || app.prenom || ''} 
+                                                    {app.etudiantId?.nom || app.candidat?.nom || app.nom || ''}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block">
+                                                    {app.etudiantId?.email || app.candidat?.email || ''}
+                                                </Typography>
+                                            </Box>
                                         </Box>
                                     </TableCell>
                                     <TableCell>
-                                        <Typography variant="body2">{app.offre}</Typography>
+                                        <Typography variant="body2">
+                                            {app.offreId?.titre || app.offre || 'Offre sans titre'}
+                                        </Typography>
                                     </TableCell>
                                     <TableCell>
                                         <Chip
-                                            label={app.departement}
+                                            label={app.offreId?.typeStage || app.typeStage || 'Stage'}
                                             size="small"
                                             sx={{
                                                 backgroundColor: '#e0e7ff',
@@ -409,92 +603,42 @@ const ApplicationsList = () => {
                                         />
                                     </TableCell>
                                     <TableCell>
-                                        <Chip
-                                            label={app.typeStage}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: '#f3e8ff',
-                                                color: '#6b21a8',
-                                                fontWeight: 500,
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
                                         <Typography variant="body2" color="text.secondary">
-                                            {new Date(app.dateSoumission).toLocaleDateString('fr-FR')}
+                                            {formatDate(app.createdAt || app.dateSoumission)}
                                         </Typography>
                                     </TableCell>
                                     <TableCell>
+                                        <Tooltip title={`${app.documents?.length || 0} document(s)`}>
+                                            <Chip
+                                                label={app.documents?.length || 0}
+                                                size="small"
+                                                icon={<Description sx={{ fontSize: 14 }} />}
+                                                sx={{
+                                                    backgroundColor: '#f3e8ff',
+                                                    color: '#6b21a8',
+                                                    fontWeight: 500,
+                                                }}
+                                            />
+                                        </Tooltip>
+                                    </TableCell>
+                                    <TableCell>
                                         <StatusChip
+                                            icon={getStatusIcon(app.statut)}
                                             label={getStatusLabel(app.statut)}
                                             status={app.statut}
                                             size="small"
                                         />
                                     </TableCell>
                                     <TableCell align="center">
-                                        <Tooltip title="Voir les détails">
+                                        <Tooltip title="Voir le détail">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => navigate(`/rh/application/${app.id}`)}
-                                                sx={{ color: '#148aa0' }}
+                                                onClick={() => handleViewApplication(app._id || app.id)}
+                                                sx={{ color: '#2d3748' }}
                                             >
                                                 <Visibility fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
-                                        {app.statut === 'soumise' && (
-                                            <>
-                                                <Tooltip title="Passer en analyse">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleOpenDialog(app, 'analyse')}
-                                                        sx={{ color: '#f59e0b' }}
-                                                    >
-                                                        <Pending fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </>
-                                        )}
-                                        {(app.statut === 'en_analyse' || app.statut === 'soumise') && (
-                                            <>
-                                                <Tooltip title="Programmer entretien">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleOpenDialog(app, 'entretien')}
-                                                        sx={{ color: '#8b5cf6' }}
-                                                    >
-                                                        <Event fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title="Accepter">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleOpenDialog(app, 'accepter')}
-                                                        sx={{ color: '#22c55e' }}
-                                                    >
-                                                        <CheckCircle fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title="Refuser">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleOpenDialog(app, 'refuser')}
-                                                        sx={{ color: '#ef4444' }}
-                                                    >
-                                                        <Cancel fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </>
-                                        )}
-                                        {app.statut === 'acceptee' && (
-                                            <Tooltip title="Générer convention">
-                                                <IconButton
-                                                    size="small"
-                                                    sx={{ color: '#22c55e' }}
-                                                >
-                                                    <Description fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -503,91 +647,22 @@ const ApplicationsList = () => {
                 </Table>
             </TableContainer>
 
-            {/* ===== DIALOG DE CONFIRMATION ===== */}
-            <Dialog
-                open={openDialog}
-                onClose={handleCloseDialog}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: '16px', padding: '8px' },
-                }}
-            >
-                <DialogTitle>
-                    {actionType === 'accepter' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <CheckCircle sx={{ color: '#22c55e' }} /> Accepter la candidature
-                        </Box>
-                    )}
-                    {actionType === 'refuser' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Cancel sx={{ color: '#ef4444' }} /> Refuser la candidature
-                        </Box>
-                    )}
-                    {actionType === 'entretien' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Event sx={{ color: '#8b5cf6' }} /> Programmer un entretien
-                        </Box>
-                    )}
-                    {actionType === 'analyse' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Pending sx={{ color: '#f59e0b' }} /> Passer en analyse
-                        </Box>
-                    )}
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body1" sx={{ mb: 2 }}>
-                        {actionType === 'accepter' && `Êtes-vous sûr de vouloir accepter la candidature de ${selectedApp?.candidat} ?`}
-                        {actionType === 'refuser' && `Êtes-vous sûr de vouloir refuser la candidature de ${selectedApp?.candidat} ?`}
-                        {actionType === 'entretien' && `Voulez-vous programmer un entretien avec ${selectedApp?.candidat} ?`}
-                        {actionType === 'analyse' && `Voulez-vous passer la candidature de ${selectedApp?.candidat} en analyse ?`}
-                    </Typography>
-                    {(actionType === 'refuser' || actionType === 'entretien') && (
-                        <TextField
-                            label={actionType === 'refuser' ? "Motif du refus" : "Commentaires"}
-                            value={comment}
-                            onChange={(e) => setComment(e.target.value)}
-                            fullWidth
-                            multiline
-                            rows={3}
-                            placeholder={actionType === 'refuser' ? "Expliquez la raison du refus..." : "Ajoutez des commentaires..."}
-                            sx={{
-                                '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                            }}
-                        />
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button
-                        onClick={handleCloseDialog}
-                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                    >
-                        Annuler
-                    </Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleConfirmAction}
+            {/* ===== PAGINATION ===== */}
+            {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                    <Pagination
+                        count={totalPages}
+                        page={page}
+                        onChange={handlePageChange}
                         sx={{
-                            backgroundColor:
-                                actionType === 'accepter' ? '#22c55e' :
-                                actionType === 'refuser' ? '#ef4444' :
-                                actionType === 'entretien' ? '#8b5cf6' : '#f59e0b',
-                            borderRadius: '10px',
-                            textTransform: 'none',
-                            '&:hover': {
-                                backgroundColor:
-                                    actionType === 'accepter' ? '#16a34a' :
-                                    actionType === 'refuser' ? '#dc2626' :
-                                    actionType === 'entretien' ? '#7c3aed' : '#d97706',
+                            '& .MuiPaginationItem-root.Mui-selected': {
+                                backgroundColor: '#2d3748',
+                                color: '#ffffff',
                             },
                         }}
-                    >
-                        {actionType === 'accepter' ? 'Accepter' :
-                         actionType === 'refuser' ? 'Refuser' :
-                         actionType === 'entretien' ? 'Programmer' : 'Analyser'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                    />
+                </Box>
+            )}
         </Container>
     );
 };

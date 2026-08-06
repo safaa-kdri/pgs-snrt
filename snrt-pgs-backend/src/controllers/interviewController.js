@@ -1,3 +1,4 @@
+// src/controllers/interviewController.js
 const Interview = require('../models/Interview');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -10,7 +11,6 @@ const { ROLES, APPLICATION_STATUS, STAFF_TREATMENT_ROLES } = require('../config/
 
 async function notifyStudentInterviewScheduled(application, interview) {
   try {
-    // services/emailService.js (Mohammed) - notification non bloquante.
     const { sendInterviewScheduledEmail } = require('../services/emailService');
     if (application?.etudiantEmail) {
       await sendInterviewScheduledEmail(application.etudiantEmail, interview);
@@ -48,7 +48,6 @@ const createInterview = asyncHandler(async (req, res) => {
 
   const application = await Application.findById(req.body.applicationId);
   if (!application) throw ApiError.notFound('Candidature introuvable.');
-
 
   await assertDepartmentOwnsOffer(req, application.offreId);
 
@@ -93,9 +92,7 @@ const listInterviews = asyncHandler(async (req, res) => {
     if (to) filter.date.$lte = new Date(to);
   }
 
-
   if (applicationId) {
- 
     const Application = getModelSafe('Application');
     if (Application) {
       const application = await Application.findById(applicationId).select('offreId');
@@ -128,6 +125,90 @@ const listInterviews = asyncHandler(async (req, res) => {
   return res.status(200).json({
     success: true,
     interviews,
+    pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+  });
+});
+
+// ============================================
+// ✅ NOUVEAU : RÉCUPÉRER LES ENTRETIENS DU DÉPARTEMENT
+// ============================================
+const listDepartmentInterviews = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20, statut } = req.query;
+  
+  // Récupérer l'ID du département de l'utilisateur
+  const { departementId } = req.user;
+  
+  if (!departementId) {
+    throw ApiError.forbidden("Votre compte n'est rattaché à aucun département.");
+  }
+
+  const Offer = getModelSafe('Offer');
+  if (!Offer) {
+    throw ApiError.internal("Le module Offres n'est pas disponible.");
+  }
+
+  // Récupérer toutes les offres du département
+  const offerIds = await Offer.find({ departementId }).distinct('_id');
+  
+  if (offerIds.length === 0) {
+    return res.status(200).json({
+      success: true,
+      interviews: [],
+      pagination: { page: 1, limit, total: 0, pages: 0 }
+    });
+  }
+
+  // Récupérer les candidatures liées aux offres du département
+  const Application = getModelSafe('Application');
+  if (!Application) {
+    return res.status(200).json({
+      success: true,
+      interviews: [],
+      pagination: { page: 1, limit, total: 0, pages: 0 }
+    });
+  }
+
+  const applications = await Application.find({ offreId: { $in: offerIds } }).select('_id');
+  const applicationIds = applications.map(a => a._id);
+
+  if (applicationIds.length === 0) {
+    return res.status(200).json({
+      success: true,
+      interviews: [],
+      pagination: { page: 1, limit, total: 0, pages: 0 }
+    });
+  }
+
+  // Construire le filtre
+  const filter = { applicationId: { $in: applicationIds } };
+  if (statut) filter.statut = statut;
+
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+
+  const [interviews, total] = await Promise.all([
+    Interview.find(filter)
+      .sort({ date: 1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum),
+    Interview.countDocuments(filter),
+  ]);
+
+  // Populer les données supplémentaires
+  const populatedInterviews = await Promise.all(interviews.map(async (interview) => {
+    const app = await Application.findById(interview.applicationId)
+      .populate('etudiantId', 'nom prenom email')
+      .populate('offreId', 'titre typeStage');
+    return {
+      ...interview.toObject(),
+      candidat: app?.etudiantId || null,
+      offre: app?.offreId || null,
+    };
+  }));
+
+  return res.status(200).json({
+    success: true,
+    interviews: populatedInterviews,
     pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
   });
 });
@@ -185,9 +266,13 @@ const cancelInterview = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Entretien annule.', interview });
 });
 
+// ============================================
+// ✅ EXPORTATION AVEC LA NOUVELLE FONCTION
+// ============================================
 module.exports = {
   createInterview,
   listInterviews,
+  listDepartmentInterviews,
   getInterviewById,
   updateInterview,
   cancelInterview,

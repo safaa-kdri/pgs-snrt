@@ -1,0 +1,218 @@
+// src/components/rh/RhSidebar.jsx
+import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+    Box,
+    Drawer,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText,
+    Divider,
+    Button,
+    Typography,
+    Avatar,
+    useMediaQuery,
+    useTheme,
+} from '@mui/material';
+import { styled } from '@mui/material/styles';
+import {
+    Dashboard,
+    Assignment,
+    Work,
+    Event,
+    Description,
+    Logout,
+    Help,
+    ContactMail,
+    Settings,
+    CheckCircle,
+    Cancel,
+    Pending,
+    People,
+} from '@mui/icons-material';
+import { useDispatch } from 'react-redux';
+import { logout } from '../../store/slices/authSlice';
+
+const drawerWidth = 280;
+
+const DrawerStyled = styled(Drawer)({
+    flexShrink: 0,
+    '& .MuiDrawer-paper': {
+        width: drawerWidth,
+        backgroundColor: '#e8ecf0',
+        border: 'none',
+        boxShadow: '2px 0 12px rgba(0,0,0,0.08)',
+        marginTop: '74px',
+        height: 'calc(100vh - 74px)',
+        position: 'fixed',
+        zIndex: 1100,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+});
+
+const DrawerList = styled(List)({
+    flex: 1,
+    paddingTop: '8px',
+    overflowY: 'auto',
+    '&::-webkit-scrollbar': {
+        width: '4px',
+    },
+    '&::-webkit-scrollbar-thumb': {
+        backgroundColor: '#c0c4c8',
+        borderRadius: '4px',
+    },
+});
+
+const DrawerFooter = styled(Box)({
+    padding: '12px 16px',
+    borderTop: '1px solid #d0d4d8',
+    flexShrink: 0,
+});
+
+const DrawerItem = styled(ListItem)(({ active }) => ({
+    borderRadius: '8px',
+    margin: '2px 8px',
+    padding: '8px 12px',
+    backgroundColor: active ? '#d0d4d8' : 'transparent',
+    color: '#1a1a2e',
+    cursor: 'pointer',
+    '&:hover': {
+        backgroundColor: active ? '#d0d4d8' : '#e0e4e8',
+    },
+    '& .MuiListItemIcon-root': {
+        color: '#1a1a2e',
+        minWidth: '32px',
+    },
+    '& .MuiListItemIcon-root svg': {
+        fontSize: '20px',
+    },
+    '& .MuiListItemText-root .MuiTypography-root': {
+        fontSize: '13px',
+        fontWeight: active ? 600 : 400,
+        fontFamily: 'Inter, sans-serif',
+        color: '#1a1a2e',
+    },
+}));
+
+const LogoutButton = styled(Button)({
+    width: '100%',
+    backgroundColor: '#dc3545',
+    borderRadius: '8px',
+    textTransform: 'none',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '13px',
+    padding: '8px',
+    color: '#fff',
+    '&:hover': { backgroundColor: '#c82333' },
+});
+
+const UserInfo = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '8px 12px',
+    marginBottom: '8px',
+    borderRadius: '8px',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+});
+
+const RhSidebar = ({ open, onClose, user }) => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const dispatch = useDispatch();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+    const handleNavigate = (path) => {
+        navigate(path);
+        if (isMobile) onClose();
+    };
+
+    const isActive = (path) => {
+        if (path.includes('?')) {
+            const [basePath, query] = path.split('?');
+            return location.pathname === basePath && location.search === `?${query}`;
+        }
+        return location.pathname === path || location.pathname.startsWith(path + '/');
+    };
+
+    const handleLogout = () => {
+        dispatch(logout());
+        localStorage.removeItem('user');
+        localStorage.removeItem('2faEmail');
+        localStorage.removeItem('2faUserId');
+        navigate('/');
+    };
+
+    const menuItems = [
+        { text: 'Tableau de bord', icon: <Dashboard />, path: '/rh', key: 'dashboard' },
+        { text: 'Candidatures', icon: <Assignment />, path: '/rh/applications', key: 'applications' },
+        { text: 'Offres à valider', icon: <Work />, path: '/rh/validate-offers', key: 'validate-offers' },
+        { text: 'Entretiens', icon: <Event />, path: '/rh/interviews', key: 'interviews' },
+        { text: 'Générer convention', icon: <Description />, path: '/rh/generate-convention', key: 'generate-convention' },
+        { divider: true },
+        { text: 'FAQ', icon: <Help />, path: '/faq', key: 'faq' },
+        { text: 'Contact', icon: <ContactMail />, path: '/contact', key: 'contact' },
+    ];
+
+    return (
+        <DrawerStyled
+            anchor="left"
+            open={open}
+            onClose={onClose}
+            variant={isMobile ? 'temporary' : 'persistent'}
+        >
+            <DrawerList>
+                <UserInfo>
+                    <Avatar
+                        sx={{
+                            width: 36,
+                            height: 36,
+                            backgroundColor: '#2d3748',
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: '#fff',
+                        }}
+                    >
+                        {user?.prenom?.[0]}{user?.nom?.[0]}
+                    </Avatar>
+                    <Box>
+                        <Typography variant="body2" fontWeight={600} color="#1a1a2e">
+                            {user?.prenom} {user?.nom}
+                        </Typography>
+                        <Typography variant="caption" color="#6d7884">
+                            Ressources Humaines
+                        </Typography>
+                    </Box>
+                </UserInfo>
+                {menuItems.map((item) => {
+                    if (item.divider) {
+                        return <Divider key="divider" sx={{ my: 1, mx: 2, backgroundColor: '#d0d4d8' }} />;
+                    }
+                    return (
+                        <DrawerItem
+                            key={item.key}
+                            active={isActive(item.path)}
+                            onClick={() => handleNavigate(item.path)}
+                        >
+                            <ListItemIcon>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.text} />
+                        </DrawerItem>
+                    );
+                })}
+            </DrawerList>
+
+            <DrawerFooter>
+                <LogoutButton onClick={handleLogout}>
+                    <i className="fa-solid fa-sign-out-alt" style={{ marginRight: '8px' }}></i>
+                    Se déconnecter
+                </LogoutButton>
+            </DrawerFooter>
+        </DrawerStyled>
+    );
+};
+
+export default RhSidebar;

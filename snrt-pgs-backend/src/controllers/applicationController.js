@@ -596,3 +596,99 @@ exports.addDocumentToApplication = async (req, res) => {
         });
     }
 };
+
+// ============================================
+// ✅ NOUVEAU : RÉCUPÉRER LES CANDIDATURES DU DÉPARTEMENT
+// ============================================
+exports.getDepartmentApplications = async (req, res) => {
+    try {
+        const { statut, search, page = 1, limit = 20 } = req.query;
+        const { departementId } = req.user;
+
+        if (!departementId) {
+            return res.status(403).json({
+                success: false,
+                message: "Votre compte n'est rattaché à aucun département."
+            });
+        }
+
+        // ✅ Récupérer les IDs des offres du département
+        const offreIds = await Offer.find({ departementId }).distinct('_id');
+
+        if (offreIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                count: 0,
+                data: [],
+                pagination: { page: 1, limit, total: 0, pages: 0 }
+            });
+        }
+
+        // ✅ Construire le filtre
+        const filter = { offreId: { $in: offreIds } };
+        if (statut) filter.statut = statut;
+
+        // ✅ Recherche par nom du candidat
+        let searchFilter = {};
+        if (search) {
+            const students = await UtilisateurExterne.find({
+                $or: [
+                    { nom: { $regex: search, $options: 'i' } },
+                    { prenom: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } }
+                ]
+            }).select('_id');
+            const studentIds = students.map(s => s._id);
+            if (studentIds.length > 0) {
+                searchFilter.etudiantId = { $in: studentIds };
+            } else {
+                // Aucun étudiant trouvé → retourner 0 résultat
+                return res.status(200).json({
+                    success: true,
+                    count: 0,
+                    data: [],
+                    pagination: { page: 1, limit, total: 0, pages: 0 }
+                });
+            }
+        }
+
+        Object.assign(filter, searchFilter);
+
+        // ✅ Pagination
+        const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+        const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+        const skip = (pageNum - 1) * limitNum;
+
+        // ✅ Récupérer les candidatures
+        const [applications, total] = await Promise.all([
+            Application.find(filter)
+                .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
+                .populate('offreId', 'titre typeStage departementId')
+                .populate('documents')
+                .populate('traiteurId', 'nom prenom email')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum),
+            Application.countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            count: applications.length,
+            data: applications,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                pages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (error) {
+        console.error('❌ Erreur getDepartmentApplications:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération des candidatures',
+            error: error.message
+        });
+    }
+};

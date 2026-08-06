@@ -1,6 +1,8 @@
 // src/components/admin/AdminOffres.jsx
+// ✅ CORRECTION : Utilisation de useState pour garantir le bon ordre + IDs pour les TextField
+
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -14,10 +16,6 @@ import {
     TableRow,
     Button,
     TextField,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Chip,
     IconButton,
     Alert,
@@ -38,8 +36,11 @@ import {
     Visibility,
     Search,
     Refresh,
+    ArrowBack,
+    Archive,
 } from '@mui/icons-material';
 import api from '../../services/api';
+import OfferDetailPage from './OfferDetailPage';
 
 // ============================================
 // STYLES
@@ -61,13 +62,13 @@ const StyledTableCell = styled(TableCell)({
 
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        'Publiée': { bg: '#d1fae5', text: '#065f46' },
-        'En attente': { bg: '#fef3c7', text: '#d97706' },
+        'Publiee': { bg: '#d1fae5', text: '#065f46' },
+        'EnAttente': { bg: '#fef3c7', text: '#d97706' },
         'Brouillon': { bg: '#e0e7ff', text: '#4338ca' },
-        'Archivée': { bg: '#f3f4f6', text: '#6b7280' },
-        'Refusée': { bg: '#fee2e2', text: '#991b1b' },
+        'Archivee': { bg: '#f3f4f6', text: '#6b7280' },
+        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
     };
-    const color = colors[status] || colors['En attente'];
+    const color = colors[status] || colors['EnAttente'];
     return {
         backgroundColor: color.bg,
         color: color.text,
@@ -77,12 +78,28 @@ const StatusChip = styled(Chip)(({ status }) => {
     };
 });
 
+const StyledButton = styled(Button)({
+    backgroundColor: '#2d3748',
+    color: '#ffffff',
+    borderRadius: '12px',
+    textTransform: 'none',
+    padding: '8px 24px',
+    '&:hover': {
+        backgroundColor: '#333333',
+    },
+    '&:disabled': {
+        backgroundColor: '#999999',
+        color: '#ffffff',
+    },
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
 const AdminOffres = () => {
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [loading, setLoading] = useState(true);
     const [offres, setOffres] = useState([]);
@@ -90,56 +107,126 @@ const AdminOffres = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [departements, setDepartements] = useState([]);
+    const [departementMap, setDepartementMap] = useState({});
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
-    // Dialog states
-    const [openDialog, setOpenDialog] = useState(false);
-    const [dialogMode, setDialogMode] = useState('add');
-    const [selectedOffre, setSelectedOffre] = useState(null);
-    const [formData, setFormData] = useState({
-        titre: '',
-        description: '',
-        typeStage: '',
-        nbPostes: 1,
-        departementId: '',
-        dateLimiteCandidature: '',
-        dateDebut: '',
-        dateFin: '',
-        statut: 'Brouillon',
-    });
+    const isCreatePage = location.pathname === '/admin/offres/add';
+    const isEditPage = location.pathname.startsWith('/admin/offres/edit/');
+    const isViewPage = location.pathname.startsWith('/admin/offres/view/');
 
+    // ✅ CHARGER LES DÉPARTEMENTS AU MONTAGE
     useEffect(() => {
-        fetchOffres();
-        fetchDepartements();
-    }, []);
+        if (!isCreatePage && !isEditPage && !isViewPage) {
+            fetchDepartements();
+        }
+    }, [isCreatePage, isEditPage, isViewPage]);
+
+    // ✅ CHARGER LES OFFRES QUAND departementMap EST REMPLI
+    useEffect(() => {
+        if (!isCreatePage && !isEditPage && !isViewPage && Object.keys(departementMap).length > 0) {
+            fetchOffres();
+        }
+    }, [departementMap, isCreatePage, isEditPage, isViewPage]);
 
     useEffect(() => {
         filterOffres();
     }, [offres, searchTerm, statusFilter]);
 
-    const fetchOffres = async () => {
+    // ============================================
+    // ✅ CHARGER LES DÉPARTEMENTS
+    // ============================================
+    const fetchDepartements = async () => {
         setLoading(true);
+        setError('');
         try {
-            const response = await api.get('/offers');
+            const response = await api.get('/departments');
+            let depts = [];
             if (response.data?.data) {
-                setOffres(response.data.data);
-                setFilteredOffres(response.data.data);
+                depts = response.data.data;
+            } else if (Array.isArray(response.data)) {
+                depts = response.data;
             }
+            setDepartements(depts);
+            
+            // ✅ Créer le map des départements
+            const map = {};
+            depts.forEach(d => {
+                map[d._id || d.id] = d.nom;
+            });
+            setDepartementMap(map);
+            
+        } catch (error) {
+            console.error('Erreur chargement departements:', error);
+            setError('Erreur lors du chargement des départements');
+            setLoading(false);
+        }
+    };
+
+    // ============================================
+    // ✅ CHARGER LES OFFRES (utilise departementMap du state)
+    // ============================================
+    const fetchOffres = async () => {
+        setError('');
+        try {
+            const response = await api.get('/offers', {
+                params: { limit: 100 }
+            });
+            
+            let data = [];
+            
+            if (response.data?.offers) {
+                data = response.data.offers;
+            } else if (response.data?.data) {
+                data = response.data.data;
+            } else if (Array.isArray(response.data)) {
+                data = response.data;
+            } else if (response.data?.results) {
+                data = response.data.results;
+            } else {
+                for (const key in response.data) {
+                    if (Array.isArray(response.data[key])) {
+                        data = response.data[key];
+                        break;
+                    }
+                }
+            }
+            
+            // ✅ Utiliser departementMap du state (maintenant rempli)
+            const currentMap = departementMap;
+            
+            data = data.map(offer => {
+                const deptId = offer.departementId;
+                const deptNom = currentMap[deptId] || 'Non assigné';
+                return {
+                    ...offer,
+                    departementNom: deptNom
+                };
+            });
+            
+            setOffres(data);
+            setFilteredOffres(data);
+            
         } catch (error) {
             console.error('Erreur chargement offres:', error);
+            setError(error.response?.data?.message || 'Erreur lors du chargement des offres');
+            setOffres([]);
+            setFilteredOffres([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const fetchDepartements = async () => {
-        try {
-            const response = await api.get('/departments');
-            if (response.data?.data) {
-                setDepartements(response.data.data);
-            }
-        } catch (error) {
-            console.error('Erreur chargement departements:', error);
-        }
+    // ============================================
+    // ✅ REINITIALISER LE CHARGEMENT (pour rafraîchir)
+    // ============================================
+    const refreshData = async () => {
+        setLoading(true);
+        // ✅ Réinitialiser le map pour forcer le rechargement
+        setDepartementMap({});
+        // ✅ Recharger les départements
+        await fetchDepartements();
+        // ✅ Les offres se chargeront automatiquement via le useEffect
     };
 
     const filterOffres = () => {
@@ -150,7 +237,8 @@ const AdminOffres = () => {
             filtered = filtered.filter(
                 (o) =>
                     o.titre?.toLowerCase().includes(term) ||
-                    o.description?.toLowerCase().includes(term)
+                    o.description?.toLowerCase().includes(term) ||
+                    (o.departementNom || '').toLowerCase().includes(term)
             );
         }
 
@@ -161,90 +249,113 @@ const AdminOffres = () => {
         setFilteredOffres(filtered);
     };
 
-    const handleOpenDialog = (offre = null, mode = 'add') => {
-        if (offre) {
-            setSelectedOffre(offre);
-            setFormData({
-                titre: offre.titre || '',
-                description: offre.description || '',
-                typeStage: offre.typeStage || '',
-                nbPostes: offre.nbPostes || 1,
-                departementId: offre.departementId?._id || offre.departementId || '',
-                dateLimiteCandidature: offre.dateLimiteCandidature?.split('T')[0] || '',
-                dateDebut: offre.dateDebut?.split('T')[0] || '',
-                dateFin: offre.dateFin?.split('T')[0] || '',
-                statut: offre.statut || 'Brouillon',
-            });
-        } else {
-            setSelectedOffre(null);
-            setFormData({
-                titre: '',
-                description: '',
-                typeStage: '',
-                nbPostes: 1,
-                departementId: '',
-                dateLimiteCandidature: '',
-                dateDebut: '',
-                dateFin: '',
-                statut: 'Brouillon',
-            });
-        }
-        setDialogMode(mode);
-        setOpenDialog(true);
+    // ============================================
+    // OUVRIR LA PAGE DE CREATION
+    // ============================================
+    const handleNewOffer = () => {
+        navigate('/admin/offres/add');
     };
 
-    const handleCloseDialog = () => {
-        setOpenDialog(false);
-        setSelectedOffre(null);
+    // ============================================
+    // RETOUR A LA LISTE
+    // ============================================
+    const handleBackToList = () => {
+        navigate('/admin/offres');
+        refreshData();
     };
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData({ ...formData, [name]: value });
+    // ============================================
+    // ✅ VOIR LE DETAIL
+    // ============================================
+    const handleViewOffer = (offre) => {
+        navigate(`/admin/offres/view/${offre._id || offre.id}`);
     };
 
-    const handleSubmit = async () => {
-        try {
-            if (dialogMode === 'add') {
-                await api.post('/offers', formData);
-            } else if (dialogMode === 'edit') {
-                await api.put(`/offers/${selectedOffre._id}`, formData);
-            }
-            handleCloseDialog();
-            fetchOffres();
-        } catch (error) {
-            console.error('Erreur sauvegarde:', error);
-        }
+    // ============================================
+    // MODIFIER
+    // ============================================
+    const handleEditOffer = (offre) => {
+        navigate(`/admin/offres/edit/${offre._id || offre.id}`);
     };
 
+    // ============================================
+    // SUPPRIMER
+    // ============================================
     const handleDelete = async (id) => {
         if (window.confirm('Voulez-vous vraiment supprimer cette offre ?')) {
             try {
+                const offer = offres.find(o => o._id === id);
+                if (offer && offer.statut !== 'Brouillon' && offer.statut !== 'Refusee') {
+                    setError('Seules les offres en brouillon ou refusees peuvent etre supprimees. Utilisez l\'archivage pour les autres.');
+                    return;
+                }
+                
                 await api.delete(`/offers/${id}`);
-                fetchOffres();
+                setSuccess('Offre supprimee avec succes');
+                refreshData();
             } catch (error) {
                 console.error('Erreur suppression:', error);
+                if (error.response?.data?.message?.includes('brouillon')) {
+                    setError('Seules les offres en brouillon peuvent etre supprimees. Utilisez l\'archivage pour les autres.');
+                } else {
+                    setError(error.response?.data?.message || 'Erreur lors de la suppression');
+                }
             }
         }
     };
 
-    const handleStatusChange = async (id, newStatus) => {
+    // ============================================
+    // ARCHIVER
+    // ============================================
+    const handleArchive = async (offer) => {
+        if (!window.confirm(`Voulez-vous vraiment archiver l'offre "${offer.titre}" ?`)) return;
+        
         try {
-            await api.put(`/offers/${id}/status`, { statut: newStatus });
-            fetchOffres();
+            await api.put(`/offers/${offer._id || offer.id}/archive`);
+            setSuccess('Offre archivee avec succes');
+            refreshData();
         } catch (error) {
-            console.error('Erreur changement statut:', error);
+            console.error('Erreur archivage:', error);
+            setError(error.response?.data?.message || 'Erreur lors de l\'archivage');
         }
     };
 
     const getStatusLabel = (status) => {
-        return status || 'Brouillon';
+        const labels = {
+            'Brouillon': 'Brouillon',
+            'EnAttente': 'En attente',
+            'Publiee': 'Publiee',
+            'Archivee': 'Archivee',
+            'Refusee': 'Refusee',
+        };
+        return labels[status] || status || 'Brouillon';
     };
 
-    const typesStage = [
-        'PFE', 'PFA', 'Initiation', 'Ete', 'Master', 'Licence', 'Technicien'
-    ];
+    // ============================================
+    // AFFICHAGE : PAGE DE CREATION
+    // ============================================
+    if (isCreatePage) {
+        return <CreateOfferPage onBack={handleBackToList} />;
+    }
 
+    // ============================================
+    // AFFICHAGE : PAGE DE MODIFICATION
+    // ============================================
+    if (isEditPage) {
+        const offerId = location.pathname.split('/').pop();
+        return <EditOfferPage offerId={offerId} onBack={handleBackToList} />;
+    }
+
+    // ============================================
+    // ✅ AFFICHAGE : PAGE DE DETAIL
+    // ============================================
+    if (isViewPage) {
+        return <OfferDetailPage />;
+    }
+
+    // ============================================
+    // AFFICHAGE : LISTE DES OFFRES
+    // ============================================
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
             
@@ -258,26 +369,31 @@ const AdminOffres = () => {
                         {filteredOffres.length} offre(s) trouvee(s)
                     </Typography>
                 </Box>
-                <Button
-                    variant="contained"
+                <StyledButton
                     startIcon={<Add />}
-                    sx={{
-                        backgroundColor: '#148aa0',
-                        borderRadius: '12px',
-                        textTransform: 'none',
-                        '&:hover': { backgroundColor: '#0b7890' },
-                    }}
-                    onClick={() => handleOpenDialog(null, 'add')}
+                    onClick={handleNewOffer}
                 >
                     Nouvelle offre
-                </Button>
+                </StyledButton>
             </PageHeader>
+
+            {error && (
+                <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>
+                    {error}
+                </Alert>
+            )}
+            {success && (
+                <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>
+                    {success}
+                </Alert>
+            )}
 
             {/* ===== FILTRES ===== */}
             <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
                 <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} sm={5}>
                         <TextField
+                            id="search-offers"
                             placeholder="Rechercher..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -300,6 +416,7 @@ const AdminOffres = () => {
                     </Grid>
                     <Grid item xs={12} sm={4}>
                         <TextField
+                            id="filter-status"
                             select
                             label="Statut"
                             value={statusFilter}
@@ -311,11 +428,11 @@ const AdminOffres = () => {
                             }}
                         >
                             <MenuItem value="all">Tous les statuts</MenuItem>
-                            <MenuItem value="Publiée">Publiee</MenuItem>
-                            <MenuItem value="En attente">En attente</MenuItem>
+                            <MenuItem value="Publiee">Publiee</MenuItem>
+                            <MenuItem value="EnAttente">En attente</MenuItem>
                             <MenuItem value="Brouillon">Brouillon</MenuItem>
-                            <MenuItem value="Archivée">Archivee</MenuItem>
-                            <MenuItem value="Refusée">Refusee</MenuItem>
+                            <MenuItem value="Archivee">Archivee</MenuItem>
+                            <MenuItem value="Refusee">Refusee</MenuItem>
                         </TextField>
                     </Grid>
                     <Grid item xs={12} sm={3}>
@@ -323,7 +440,8 @@ const AdminOffres = () => {
                             fullWidth
                             variant="outlined"
                             startIcon={<Refresh />}
-                            onClick={fetchOffres}
+                            onClick={refreshData}
+                            disabled={loading}
                             sx={{
                                 borderRadius: '10px',
                                 textTransform: 'none',
@@ -365,14 +483,24 @@ const AdminOffres = () => {
                         ) : filteredOffres.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                                    <Typography color="text.secondary">
-                                        Aucune offre trouvee
-                                    </Typography>
+                                    <Box>
+                                        <Typography color="text.secondary" sx={{ mb: 1 }}>
+                                            Aucune offre trouvee
+                                        </Typography>
+                                        <Button
+                                            variant="outlined"
+                                            size="small"
+                                            onClick={refreshData}
+                                            sx={{ borderRadius: '8px', textTransform: 'none' }}
+                                        >
+                                            Reessayer
+                                        </Button>
+                                    </Box>
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredOffres.map((offre) => (
-                                <TableRow key={offre._id} hover>
+                                <TableRow key={offre._id || offre.id} hover>
                                     <TableCell>
                                         <Typography variant="body2" fontWeight={600}>
                                             {offre.titre || 'Sans titre'}
@@ -380,7 +508,7 @@ const AdminOffres = () => {
                                     </TableCell>
                                     <TableCell>
                                         <Typography variant="body2">
-                                            {offre.departementId?.nom || '-'}
+                                            {offre.departementNom || offre.departementId?.nom || '-'}
                                         </Typography>
                                     </TableCell>
                                     <TableCell>
@@ -408,7 +536,7 @@ const AdminOffres = () => {
                                     <TableCell>
                                         <StatusChip
                                             label={getStatusLabel(offre.statut)}
-                                            status={getStatusLabel(offre.statut)}
+                                            status={offre.statut}
                                             size="small"
                                         />
                                     </TableCell>
@@ -416,27 +544,44 @@ const AdminOffres = () => {
                                         <Tooltip title="Voir">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleOpenDialog(offre, 'view')}
+                                                onClick={() => handleViewOffer(offre)}
                                             >
                                                 <Visibility sx={{ fontSize: 18, color: '#148aa0' }} />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title="Modifier">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleOpenDialog(offre, 'edit')}
-                                            >
-                                                <Edit sx={{ fontSize: 18, color: '#4f46e5' }} />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Supprimer">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleDelete(offre._id)}
-                                            >
-                                                <Delete sx={{ fontSize: 18, color: '#ef4444' }} />
-                                            </IconButton>
-                                        </Tooltip>
+                                        
+                                        {(offre.statut === 'Brouillon' || offre.statut === 'Refusee') && (
+                                            <Tooltip title="Modifier">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleEditOffer(offre)}
+                                                >
+                                                    <Edit sx={{ fontSize: 18, color: '#4f46e5' }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                        
+                                        {(offre.statut === 'Publiee' || offre.statut === 'EnAttente') && (
+                                            <Tooltip title="Archiver">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleArchive(offre)}
+                                                >
+                                                    <Archive sx={{ fontSize: 18, color: '#f59e0b' }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                        
+                                        {offre.statut === 'Brouillon' && (
+                                            <Tooltip title="Supprimer">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleDelete(offre._id)}
+                                                >
+                                                    <Delete sx={{ fontSize: 18, color: '#ef4444' }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -444,255 +589,716 @@ const AdminOffres = () => {
                     </TableBody>
                 </Table>
             </TableContainer>
+        </Container>
+    );
+};
 
-            {/* ===== DIALOG ===== */}
-            <Dialog
-                open={openDialog}
-                onClose={handleCloseDialog}
-                maxWidth="md"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: '16px', padding: '8px' },
-                }}
-            >
-                <DialogTitle>
-                    {dialogMode === 'add' && 'Nouvelle offre de stage'}
-                    {dialogMode === 'edit' && 'Modifier l\'offre'}
-                    {dialogMode === 'view' && 'Details de l\'offre'}
-                </DialogTitle>
-                <DialogContent>
-                    {dialogMode === 'view' ? (
-                        selectedOffre && (
-                            <Grid container spacing={2} sx={{ mt: 1 }}>
-                                <Grid item xs={12}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Titre
+// ============================================
+// PAGE DE CREATION D'OFFRE (PAGE ENTIERE)
+// ============================================
+const CreateOfferPage = ({ onBack }) => {
+    const navigate = useNavigate();
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [periods, setPeriods] = useState([]);
+
+    const [form, setForm] = useState({
+        titre: '',
+        description: '',
+        typeStage: '',
+        nbPostes: 1,
+        periodeId: '',
+        dateDebut: '',
+        dateFin: '',
+        dateLimiteCandidature: '',
+        departementId: '',
+        sujets: [{ titre: '', description: '', missions: [''], profilRecherche: '', competences: [{ nom: '', niveau: '' }] }],
+        documentsRequis: [],
+    });
+
+    useEffect(() => {
+        fetchPeriods();
+    }, []);
+
+    const fetchPeriods = async () => {
+        try {
+            const response = await api.get('/periods');
+            if (response.data?.data) {
+                setPeriods(response.data.data);
+            }
+        } catch (error) {
+            console.error('Erreur chargement periodes:', error);
+        }
+    };
+
+    const handleChange = (field, value) => {
+        setForm({ ...form, [field]: value });
+        setError('');
+        setSuccess('');
+    };
+
+    const handleSubjectChange = (index, field, value) => {
+        const newSubjects = [...form.sujets];
+        newSubjects[index][field] = value;
+        setForm({ ...form, sujets: newSubjects });
+    };
+
+    const addSubject = () => {
+        setForm({
+            ...form,
+            sujets: [
+                ...form.sujets,
+                { titre: '', description: '', missions: [''], profilRecherche: '', competences: [{ nom: '', niveau: '' }] },
+            ],
+        });
+    };
+
+    const removeSubject = (index) => {
+        if (form.sujets.length <= 1) return;
+        setForm({ ...form, sujets: form.sujets.filter((_, i) => i !== index) });
+    };
+
+    const addMission = (subjectIndex) => {
+        const newSubjects = [...form.sujets];
+        newSubjects[subjectIndex].missions.push('');
+        setForm({ ...form, sujets: newSubjects });
+    };
+
+    const removeMission = (subjectIndex, missionIndex) => {
+        const newSubjects = [...form.sujets];
+        if (newSubjects[subjectIndex].missions.length <= 1) return;
+        newSubjects[subjectIndex].missions = newSubjects[subjectIndex].missions.filter(
+            (_, i) => i !== missionIndex
+        );
+        setForm({ ...form, sujets: newSubjects });
+    };
+
+    const handleMissionChange = (subjectIndex, missionIndex, value) => {
+        const newSubjects = [...form.sujets];
+        newSubjects[subjectIndex].missions[missionIndex] = value;
+        setForm({ ...form, sujets: newSubjects });
+    };
+
+    const addCompetence = (subjectIndex) => {
+        const newSubjects = [...form.sujets];
+        newSubjects[subjectIndex].competences.push({ nom: '', niveau: '' });
+        setForm({ ...form, sujets: newSubjects });
+    };
+
+    const removeCompetence = (subjectIndex, compIndex) => {
+        const newSubjects = [...form.sujets];
+        if (newSubjects[subjectIndex].competences.length <= 1) return;
+        newSubjects[subjectIndex].competences = newSubjects[subjectIndex].competences.filter(
+            (_, i) => i !== compIndex
+        );
+        setForm({ ...form, sujets: newSubjects });
+    };
+
+    const handleCompetenceChange = (subjectIndex, compIndex, field, value) => {
+        const newSubjects = [...form.sujets];
+        newSubjects[subjectIndex].competences[compIndex][field] = value;
+        setForm({ ...form, sujets: newSubjects });
+    };
+
+    const validateForm = () => {
+        const errors = [];
+        if (!form.titre) errors.push('Le titre est obligatoire');
+        if (!form.description) errors.push('La description est obligatoire');
+        if (!form.typeStage) errors.push('Le type de stage est obligatoire');
+        if (!form.periodeId) errors.push('La periode est obligatoire');
+        if (!form.dateDebut) errors.push('La date de debut est obligatoire');
+        if (!form.dateFin) errors.push('La date de fin est obligatoire');
+        if (!form.dateLimiteCandidature) errors.push('La date limite de candidature est obligatoire');
+        form.sujets.forEach((sujet, index) => {
+            if (!sujet.titre) errors.push(`Le titre du sujet ${index + 1} est obligatoire`);
+            if (!sujet.description) errors.push(`La description du sujet ${index + 1} est obligatoire`);
+        });
+        return errors;
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+
+        const errors = validateForm();
+        if (errors.length > 0) {
+            setError(errors.join(', '));
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const dataToSend = { ...form };
+            if (!dataToSend.departementId) {
+                const deptResponse = await api.get('/departments');
+                if (deptResponse.data?.data && deptResponse.data.data.length > 0) {
+                    dataToSend.departementId = deptResponse.data.data[0]._id;
+                }
+            }
+            
+            await api.post('/offers', dataToSend);
+            setSuccess('Offre creee avec succes !');
+            setTimeout(() => onBack(), 1500);
+        } catch (error) {
+            console.error('Erreur creation offre:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la creation de l\'offre');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const typesStage = ['PFE', 'PFA', 'Initiation', 'Ete', 'Master', 'Licence', 'Technicien'];
+
+    return (
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+            <PageHeader>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <IconButton onClick={onBack} sx={{ color: '#666' }}>
+                        <ArrowBack />
+                    </IconButton>
+                    <Box>
+                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
+                            Nouvelle offre de stage
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Remplissez les informations ci-dessous pour creer une nouvelle offre
+                        </Typography>
+                    </Box>
+                </Box>
+                <StyledButton
+                    variant="contained"
+                    onClick={handleSubmit}
+                    disabled={saving}
+                >
+                    {saving ? 'Creation...' : 'Publier l\'offre'}
+                </StyledButton>
+            </PageHeader>
+
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
+
+            <Paper sx={{ p: 4, borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                        <TextField
+                            id="offer-title"
+                            label="Titre de l'offre *"
+                            value={form.titre}
+                            onChange={(e) => handleChange('titre', e.target.value)}
+                            fullWidth
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <TextField
+                            id="offer-description"
+                            label="Description *"
+                            value={form.description}
+                            onChange={(e) => handleChange('description', e.target.value)}
+                            fullWidth
+                            multiline
+                            rows={4}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                            <InputLabel id="offer-type-label">Type de stage *</InputLabel>
+                            <Select
+                                labelId="offer-type-label"
+                                id="offer-type"
+                                value={form.typeStage}
+                                onChange={(e) => handleChange('typeStage', e.target.value)}
+                                label="Type de stage *"
+                                sx={{ borderRadius: '10px' }}
+                            >
+                                {typesStage.map((type) => (
+                                    <MenuItem key={type} value={type}>{type}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="offer-nbPostes"
+                            label="Nombre de postes"
+                            type="number"
+                            value={form.nbPostes}
+                            onChange={(e) => handleChange('nbPostes', parseInt(e.target.value))}
+                            fullWidth
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                            <InputLabel id="offer-period-label">Periode *</InputLabel>
+                            <Select
+                                labelId="offer-period-label"
+                                id="offer-period"
+                                value={form.periodeId}
+                                onChange={(e) => handleChange('periodeId', e.target.value)}
+                                label="Periode *"
+                                sx={{ borderRadius: '10px' }}
+                            >
+                                {periods.map((period) => (
+                                    <MenuItem key={period._id} value={period._id}>
+                                        {period.nom}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="offer-dateDebut"
+                            label="Date de debut *"
+                            type="date"
+                            value={form.dateDebut}
+                            onChange={(e) => handleChange('dateDebut', e.target.value)}
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="offer-dateFin"
+                            label="Date de fin *"
+                            type="date"
+                            value={form.dateFin}
+                            onChange={(e) => handleChange('dateFin', e.target.value)}
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="offer-dateLimite"
+                            label="Date limite candidature *"
+                            type="date"
+                            value={form.dateLimiteCandidature}
+                            onChange={(e) => handleChange('dateLimiteCandidature', e.target.value)}
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12}>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mt: 2, mb: 1 }}>
+                            Sujets de stage
+                        </Typography>
+                        <Button
+                            variant="outlined"
+                            startIcon={<Add />}
+                            onClick={addSubject}
+                            sx={{ mb: 2, borderRadius: '10px', textTransform: 'none' }}
+                        >
+                            Ajouter un sujet
+                        </Button>
+                    </Grid>
+
+                    {form.sujets.map((sujet, subjectIndex) => (
+                        <Grid item xs={12} key={subjectIndex}>
+                            <Paper sx={{ p: 3, backgroundColor: '#f7f7f7', borderRadius: '12px' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                    <Typography variant="subtitle1" fontWeight={600}>
+                                        Sujet {subjectIndex + 1}
                                     </Typography>
-                                    <Typography variant="body1" fontWeight={600}>
-                                        {selectedOffre.titre}
-                                    </Typography>
-                                </Grid>
-                                <Grid item xs={12}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Description
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        {selectedOffre.description || 'Aucune description'}
-                                    </Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Type de stage
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        {selectedOffre.typeStage || '-'}
-                                    </Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Nombre de postes
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        {selectedOffre.nbPostes || 0}
-                                    </Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Date limite
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        {selectedOffre.dateLimiteCandidature
-                                            ? new Date(selectedOffre.dateLimiteCandidature).toLocaleDateString('fr-FR')
-                                            : '-'}
-                                    </Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Statut
-                                    </Typography>
-                                    <StatusChip
-                                        label={getStatusLabel(selectedOffre.statut)}
-                                        status={getStatusLabel(selectedOffre.statut)}
-                                        size="small"
-                                        sx={{ mt: 0.5 }}
-                                    />
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Date debut
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        {selectedOffre.dateDebut
-                                            ? new Date(selectedOffre.dateDebut).toLocaleDateString('fr-FR')
-                                            : '-'}
-                                    </Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Date fin
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        {selectedOffre.dateFin
-                                            ? new Date(selectedOffre.dateFin).toLocaleDateString('fr-FR')
-                                            : '-'}
-                                    </Typography>
-                                </Grid>
-                            </Grid>
-                        )
-                    ) : (
-                        <Box sx={{ mt: 2 }}>
-                            <Grid container spacing={2}>
-                                <Grid item xs={12}>
-                                    <TextField
-                                        label="Titre de l'offre"
-                                        name="titre"
-                                        value={formData.titre}
-                                        onChange={handleChange}
-                                        fullWidth
-                                        required
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12}>
-                                    <TextField
-                                        label="Description"
-                                        name="description"
-                                        value={formData.description}
-                                        onChange={handleChange}
-                                        fullWidth
-                                        multiline
-                                        rows={3}
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth>
-                                        <InputLabel>Type de stage</InputLabel>
-                                        <Select
-                                            name="typeStage"
-                                            value={formData.typeStage}
-                                            onChange={handleChange}
-                                            label="Type de stage"
-                                            sx={{ borderRadius: '10px' }}
+                                    {form.sujets.length > 1 && (
+                                        <IconButton onClick={() => removeSubject(subjectIndex)} color="error">
+                                            <Delete />
+                                        </IconButton>
+                                    )}
+                                </Box>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12}>
+                                        <TextField
+                                            id={`subject-title-${subjectIndex}`}
+                                            label="Titre du sujet *"
+                                            value={sujet.titre}
+                                            onChange={(e) => handleSubjectChange(subjectIndex, 'titre', e.target.value)}
+                                            fullWidth
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <TextField
+                                            id={`subject-description-${subjectIndex}`}
+                                            label="Description du sujet *"
+                                            value={sujet.description}
+                                            onChange={(e) => handleSubjectChange(subjectIndex, 'description', e.target.value)}
+                                            fullWidth
+                                            multiline
+                                            rows={3}
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <TextField
+                                            id={`subject-profil-${subjectIndex}`}
+                                            label="Profil recherche"
+                                            value={sujet.profilRecherche}
+                                            onChange={(e) => handleSubjectChange(subjectIndex, 'profilRecherche', e.target.value)}
+                                            fullWidth
+                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                            Missions
+                                        </Typography>
+                                        {sujet.missions.map((mission, missionIndex) => (
+                                            <Box key={missionIndex} sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                                                <TextField
+                                                    id={`subject-${subjectIndex}-mission-${missionIndex}`}
+                                                    value={mission}
+                                                    onChange={(e) => handleMissionChange(subjectIndex, missionIndex, e.target.value)}
+                                                    placeholder={`Mission ${missionIndex + 1}`}
+                                                    fullWidth
+                                                    size="small"
+                                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                                />
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => removeMission(subjectIndex, missionIndex)}
+                                                    disabled={sujet.missions.length <= 1}
+                                                    sx={{ color: '#ef4444' }}
+                                                >
+                                                    <Delete fontSize="small" />
+                                                </IconButton>
+                                            </Box>
+                                        ))}
+                                        <Button
+                                            size="small"
+                                            startIcon={<Add />}
+                                            onClick={() => addMission(subjectIndex)}
+                                            sx={{ textTransform: 'none', color: '#148aa0' }}
                                         >
-                                            {typesStage.map((type) => (
-                                                <MenuItem key={type} value={type}>
-                                                    {type}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <TextField
-                                        label="Nombre de postes"
-                                        name="nbPostes"
-                                        type="number"
-                                        value={formData.nbPostes}
-                                        onChange={handleChange}
-                                        fullWidth
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth>
-                                        <InputLabel>Departement</InputLabel>
-                                        <Select
-                                            name="departementId"
-                                            value={formData.departementId}
-                                            onChange={handleChange}
-                                            label="Departement"
-                                            sx={{ borderRadius: '10px' }}
+                                            Ajouter une mission
+                                        </Button>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                            Competences requises
+                                        </Typography>
+                                        {sujet.competences.map((comp, compIndex) => (
+                                            <Box key={compIndex} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
+                                                <TextField
+                                                    id={`subject-${subjectIndex}-comp-${compIndex}-name`}
+                                                    value={comp.nom}
+                                                    onChange={(e) => handleCompetenceChange(subjectIndex, compIndex, 'nom', e.target.value)}
+                                                    placeholder="Nom de la competence"
+                                                    size="small"
+                                                    sx={{ flex: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                                />
+                                                <FormControl size="small" sx={{ flex: 1 }}>
+                                                    <InputLabel id={`subject-${subjectIndex}-comp-${compIndex}-level-label`}>Niveau</InputLabel>
+                                                    <Select
+                                                        labelId={`subject-${subjectIndex}-comp-${compIndex}-level-label`}
+                                                        id={`subject-${subjectIndex}-comp-${compIndex}-level`}
+                                                        value={comp.niveau}
+                                                        onChange={(e) => handleCompetenceChange(subjectIndex, compIndex, 'niveau', e.target.value)}
+                                                        displayEmpty
+                                                        label="Niveau"
+                                                        sx={{ borderRadius: '8px' }}
+                                                    >
+                                                        <MenuItem value="">Niveau</MenuItem>
+                                                        <MenuItem value="Debutant">Debutant</MenuItem>
+                                                        <MenuItem value="Intermediaire">Intermediaire</MenuItem>
+                                                        <MenuItem value="Avance">Avance</MenuItem>
+                                                        <MenuItem value="Expert">Expert</MenuItem>
+                                                    </Select>
+                                                </FormControl>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => removeCompetence(subjectIndex, compIndex)}
+                                                    disabled={sujet.competences.length <= 1}
+                                                    sx={{ color: '#ef4444' }}
+                                                >
+                                                    <Delete fontSize="small" />
+                                                </IconButton>
+                                            </Box>
+                                        ))}
+                                        <Button
+                                            size="small"
+                                            startIcon={<Add />}
+                                            onClick={() => addCompetence(subjectIndex)}
+                                            sx={{ textTransform: 'none', color: '#148aa0' }}
                                         >
-                                            {departements.map((dept) => (
-                                                <MenuItem key={dept._id} value={dept._id}>
-                                                    {dept.nom}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
+                                            Ajouter une competence
+                                        </Button>
+                                    </Grid>
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth>
-                                        <InputLabel>Statut</InputLabel>
-                                        <Select
-                                            name="statut"
-                                            value={formData.statut}
-                                            onChange={handleChange}
-                                            label="Statut"
-                                            sx={{ borderRadius: '10px' }}
-                                        >
-                                            <MenuItem value="Brouillon">Brouillon</MenuItem>
-                                            <MenuItem value="En attente">En attente</MenuItem>
-                                            <MenuItem value="Publiee">Publiee</MenuItem>
-                                            <MenuItem value="Archivee">Archivee</MenuItem>
-                                            <MenuItem value="Refusee">Refusee</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <TextField
-                                        label="Date limite candidature"
-                                        name="dateLimiteCandidature"
-                                        type="date"
-                                        value={formData.dateLimiteCandidature}
-                                        onChange={handleChange}
-                                        fullWidth
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <TextField
-                                        label="Date debut"
-                                        name="dateDebut"
-                                        type="date"
-                                        value={formData.dateDebut}
-                                        onChange={handleChange}
-                                        fullWidth
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <TextField
-                                        label="Date fin"
-                                        name="dateFin"
-                                        type="date"
-                                        value={formData.dateFin}
-                                        onChange={handleChange}
-                                        fullWidth
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                                    />
-                                </Grid>
-                            </Grid>
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
+                            </Paper>
+                        </Grid>
+                    ))}
+                </Grid>
+            </Paper>
+        </Container>
+    );
+};
+
+// ============================================
+// PAGE DE MODIFICATION D'OFFRE
+// ============================================
+const EditOfferPage = ({ offerId, onBack }) => {
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [periods, setPeriods] = useState([]);
+
+    const [form, setForm] = useState({
+        titre: '',
+        description: '',
+        typeStage: '',
+        nbPostes: 1,
+        periodeId: '',
+        dateDebut: '',
+        dateFin: '',
+        dateLimiteCandidature: '',
+        departementId: '',
+        sujets: [],
+        documentsRequis: [],
+    });
+
+    useEffect(() => {
+        fetchOfferAndPeriods();
+    }, [offerId]);
+
+    const fetchOfferAndPeriods = async () => {
+        setLoading(true);
+        try {
+            const offerResponse = await api.get(`/offers/${offerId}`);
+            const offer = offerResponse.data?.offer || offerResponse.data?.data || {};
+            
+            const periodsResponse = await api.get('/periods');
+            const periodsData = periodsResponse.data?.data || [];
+            setPeriods(periodsData);
+
+            setForm({
+                titre: offer.titre || '',
+                description: offer.description || '',
+                typeStage: offer.typeStage || '',
+                nbPostes: offer.nbPostes || 1,
+                periodeId: offer.periodeId || '',
+                dateDebut: offer.dateDebut ? offer.dateDebut.split('T')[0] : '',
+                dateFin: offer.dateFin ? offer.dateFin.split('T')[0] : '',
+                dateLimiteCandidature: offer.dateLimiteCandidature ? offer.dateLimiteCandidature.split('T')[0] : '',
+                departementId: offer.departementId || '',
+                sujets: offer.sujets || [],
+                documentsRequis: offer.documentsRequis || [],
+            });
+
+        } catch (error) {
+            console.error('Erreur chargement offre:', error);
+            setError('Erreur lors du chargement de l\'offre');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleChange = (field, value) => {
+        setForm({ ...form, [field]: value });
+        setError('');
+        setSuccess('');
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setSaving(true);
+
+        try {
+            await api.put(`/offers/${offerId}`, form);
+            setSuccess('Offre modifiee avec succes !');
+            setTimeout(() => onBack(), 1500);
+        } catch (error) {
+            console.error('Erreur modification:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la modification');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <Container maxWidth="lg" sx={{ py: 4 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                    <CircularProgress sx={{ color: '#148aa0' }} />
+                </Box>
+            </Container>
+        );
+    }
+
+    const typesStage = ['PFE', 'PFA', 'Initiation', 'Ete', 'Master', 'Licence', 'Technicien'];
+
+    return (
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+            <PageHeader>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <IconButton onClick={onBack} sx={{ color: '#666' }}>
+                        <ArrowBack />
+                    </IconButton>
+                    <Box>
+                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
+                            Modifier l'offre
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            {form.titre || 'Offre sans titre'}
+                        </Typography>
+                    </Box>
+                </Box>
+                <StyledButton
+                    variant="contained"
+                    onClick={handleSubmit}
+                    disabled={saving}
+                >
+                    {saving ? 'Enregistrement...' : 'Enregistrer'}
+                </StyledButton>
+            </PageHeader>
+
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
+
+            <Paper sx={{ p: 4, borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                        <TextField
+                            id="edit-offer-title"
+                            label="Titre de l'offre *"
+                            value={form.titre}
+                            onChange={(e) => handleChange('titre', e.target.value)}
+                            fullWidth
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <TextField
+                            id="edit-offer-description"
+                            label="Description *"
+                            value={form.description}
+                            onChange={(e) => handleChange('description', e.target.value)}
+                            fullWidth
+                            multiline
+                            rows={4}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                            <InputLabel id="edit-offer-type-label">Type de stage *</InputLabel>
+                            <Select
+                                labelId="edit-offer-type-label"
+                                id="edit-offer-type"
+                                value={form.typeStage}
+                                onChange={(e) => handleChange('typeStage', e.target.value)}
+                                label="Type de stage *"
+                                sx={{ borderRadius: '10px' }}
+                            >
+                                {typesStage.map((type) => (
+                                    <MenuItem key={type} value={type}>{type}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="edit-offer-nbPostes"
+                            label="Nombre de postes"
+                            type="number"
+                            value={form.nbPostes}
+                            onChange={(e) => handleChange('nbPostes', parseInt(e.target.value))}
+                            fullWidth
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                            <InputLabel id="edit-offer-period-label">Periode *</InputLabel>
+                            <Select
+                                labelId="edit-offer-period-label"
+                                id="edit-offer-period"
+                                value={form.periodeId}
+                                onChange={(e) => handleChange('periodeId', e.target.value)}
+                                label="Periode *"
+                                sx={{ borderRadius: '10px' }}
+                            >
+                                {periods.map((period) => (
+                                    <MenuItem key={period._id || period.id} value={period._id || period.id}>
+                                        {period.nom}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="edit-offer-dateDebut"
+                            label="Date de debut *"
+                            type="date"
+                            value={form.dateDebut}
+                            onChange={(e) => handleChange('dateDebut', e.target.value)}
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="edit-offer-dateFin"
+                            label="Date de fin *"
+                            type="date"
+                            value={form.dateFin}
+                            onChange={(e) => handleChange('dateFin', e.target.value)}
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <TextField
+                            id="edit-offer-dateLimite"
+                            label="Date limite candidature *"
+                            type="date"
+                            value={form.dateLimiteCandidature}
+                            onChange={(e) => handleChange('dateLimiteCandidature', e.target.value)}
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                </Grid>
+
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
                     <Button
-                        onClick={handleCloseDialog}
+                        variant="outlined"
+                        onClick={onBack}
                         sx={{ borderRadius: '10px', textTransform: 'none' }}
                     >
-                        {dialogMode === 'view' ? 'Fermer' : 'Annuler'}
+                        Annuler
                     </Button>
-                    {dialogMode !== 'view' && (
-                        <Button
-                            variant="contained"
-                            onClick={handleSubmit}
-                            sx={{
-                                backgroundColor: '#148aa0',
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                '&:hover': { backgroundColor: '#0b7890' },
-                            }}
-                        >
-                            {dialogMode === 'add' ? 'Creer' : 'Enregistrer'}
-                        </Button>
-                    )}
-                </DialogActions>
-            </Dialog>
+                    <Button
+                        variant="contained"
+                        onClick={handleSubmit}
+                        disabled={saving}
+                        sx={{
+                            backgroundColor: '#000000',
+                            borderRadius: '10px',
+                            textTransform: 'none',
+                            '&:hover': { backgroundColor: '#333333' },
+                        }}
+                    >
+                        {saving ? 'Enregistrement...' : 'Enregistrer'}
+                    </Button>
+                </Box>
+            </Paper>
         </Container>
     );
 };

@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const internshipController = require('../controllers/internshipController');
 const { authenticate, authorize } = require('../middlewares/auth');
+const { ROLES } = require('../config/constants');
 const { logRequest, logAction } = require('../middlewares/logger');
 const multer = require('multer');
 const path = require('path');
@@ -41,6 +42,40 @@ router.use(authenticate());
 router.use(logRequest);
 
 // ============================================
+// ✅ ROUTES POUR LE DÉPARTEMENT
+// ============================================
+
+// Récupérer les stages du département
+router.get(
+    '/department',
+    authorize(ROLES.DEPARTEMENT),
+    internshipController.getDepartmentInternships
+);
+
+// Affecter un encadrant (Département)
+router.put(
+    '/:id/assign-supervisor',
+    authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
+    logAction('INTERNSHIP_ASSIGN_SUPERVISOR'),
+    internshipController.assignSupervisor
+);
+
+// Définir le sujet du stage (Département)
+router.put(
+    '/:id/define-subject',
+    authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
+    logAction('INTERNSHIP_DEFINE_SUBJECT'),
+    internshipController.defineSubject
+);
+
+// Consulter le rapport de stage (Département)
+router.get(
+    '/:id/report',
+    authorize(ROLES.DEPARTEMENT, ROLES.ENCADRANT, ROLES.RH, ROLES.ADMIN),
+    internshipController.getInternshipReport
+);
+
+// ============================================
 // Routes pour Encadrant (ses propres stages)
 // ============================================
 router.get('/my-internships', internshipController.getInternshipsBySupervisor);
@@ -61,7 +96,7 @@ router.put('/:id/validate-deliverable', logAction('INTERNSHIP_VALIDATE_DELIVERAB
 // ============================================
 // Routes pour Admin + RH + Encadrant
 // ============================================
-router.get('/', authorize('Administrateur', 'RH', 'Encadrant'), internshipController.getAllInternships);
+router.get('/', authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT), internshipController.getAllInternships);
 router.get('/:id', internshipController.getInternshipById);
 
 // ============================================
@@ -69,7 +104,7 @@ router.get('/:id', internshipController.getInternshipById);
 // ============================================
 router.post(
     '/',
-    authorize('Administrateur', 'RH'),
+    authorize(ROLES.ADMIN, ROLES.RH),
     logAction('INTERNSHIP_CREATE'),
     internshipController.createInternship
 );
@@ -81,17 +116,13 @@ router.post(
 );
 
 // ============================================
-// ✅ NOUVELLES ROUTES
-// ============================================
-
-// ============================================
-// ROUTES RH - GESTION DES CANDIDATURES ET STAGES
+// ✅ ROUTES RH - GESTION DES CANDIDATURES ET STAGES
 // ============================================
 
 // Valider les documents de candidature
 router.post(
     '/applications/:applicationId/validate',
-    authorize('RH', 'Administrateur'),
+    authorize(ROLES.RH, ROLES.ADMIN),
     logAction('INTERNSHIP_VALIDATE_APPLICATION'),
     internshipController.validateApplicationDocuments
 );
@@ -99,7 +130,7 @@ router.post(
 // Envoyer la demande au Directeur
 router.post(
     '/:id/send-to-directeur',
-    authorize('RH', 'Administrateur'),
+    authorize(ROLES.RH, ROLES.ADMIN),
     logAction('INTERNSHIP_SEND_TO_DIRECTEUR'),
     internshipController.sendToDirecteur
 );
@@ -107,7 +138,7 @@ router.post(
 // Envoyer la fiche signée à l'étudiant
 router.post(
     '/:id/send-fiche-signee',
-    authorize('RH', 'Administrateur'),
+    authorize(ROLES.RH, ROLES.ADMIN),
     logAction('INTERNSHIP_SEND_FICHE_SIGNEE'),
     internshipController.sendFicheSigneeToStudent
 );
@@ -115,13 +146,41 @@ router.post(
 // Générer l'attestation
 router.post(
     '/:id/generate-attestation',
-    authorize('RH', 'Administrateur'),
+    authorize(ROLES.RH, ROLES.ADMIN),
     logAction('INTERNSHIP_GENERATE_ATTESTATION'),
     internshipController.generateAttestation
 );
 
 // ============================================
-// ROUTES ÉTUDIANT - DÉPOT DES DOCUMENTS
+// ✅ ROUTES RH - GÉNÉRATION ET ENVOI DE DOCUMENTS
+// ============================================
+
+// Générer l'engagement de confidentialité (téléchargement)
+router.get(
+    '/:id/generate-engagement',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_GENERATE_ENGAGEMENT'),
+    internshipController.generateEngagementConfidentialite
+);
+
+// Envoyer l'engagement à l'étudiant par email
+router.post(
+    '/:id/send-engagement',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_SEND_ENGAGEMENT'),
+    internshipController.sendEngagementToStudent
+);
+
+// Générer la demande de stage pour le Directeur (téléchargement)
+router.get(
+    '/:id/generate-demande-stage',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_GENERATE_DEMANDE_STAGE'),
+    internshipController.generateDemandeStage
+);
+
+// ============================================
+// ✅ ROUTES ÉTUDIANT - DÉPOT DES DOCUMENTS
 // ============================================
 
 // Déposer l'engagement de confidentialité signé

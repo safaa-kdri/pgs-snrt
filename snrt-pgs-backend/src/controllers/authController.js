@@ -6,6 +6,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const { CONFIG, ROLES } = require('../config/constants');
+const AuditService = require('../services/auditService');
 
 const { validatePasswordPolicy } = require('../utils/validators');
 const { hashPassword, verifyPassword } = require('../utils/argon2');
@@ -261,13 +262,30 @@ const verifyTwoFactor = asyncHandler(async (req, res) => {
   const { role, accessToken } = await issueSession(res, user, payload.userType, req);
   clearPreAuthCookie(res);
 
+  // ✅ LOGGER LA CONNEXION RÉUSSIE
+  const userModel = payload.userType === 'interne' ? 'UtilisateurInterne' : 'UtilisateurExterne';
+  await AuditService.log({
+    userId: user._id,
+    userModel: userModel,
+    userEmail: user.email,
+    userNom: `${user.prenom} ${user.nom}`,
+    userRole: role,
+    action: 'LOGIN_SUCCESS',
+    actionLabel: 'Connexion réussie',
+    module: 'Auth',
+    details: { method: '2FA', cin: user.cin },
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+    status: 'SUCCESS'
+  });
+
   logger.audit('LOGIN_2FA_OK', { userId: user._id.toString() });
 
   // ✅ RÉPONSE AVEC TOKEN
   return res.status(200).json({
     success: true,
     message: 'Connexion reussie.',
-    token: accessToken, // ✅ AJOUT DU TOKEN ICI
+    token: accessToken,
     user: {
       id: user._id,
       nom: user.nom,
@@ -403,6 +421,24 @@ const logout = asyncHandler(async (req, res) => {
         const incomingHash = hashToken(refreshTokenCookie);
         user.refreshTokens = user.refreshTokens.filter((rt) => rt.tokenHash !== incomingHash);
         await user.save({ validateModifiedOnly: true });
+
+        // ✅ LOGGER LA DÉCONNEXION
+        const userModel = payload.userType === 'interne' ? 'UtilisateurInterne' : 'UtilisateurExterne';
+        const role = await resolveRoleName(user, payload.userType);
+        await AuditService.log({
+          userId: user._id,
+          userModel: userModel,
+          userEmail: user.email,
+          userNom: `${user.prenom} ${user.nom}`,
+          userRole: role,
+          action: 'LOGOUT',
+          actionLabel: 'Déconnexion',
+          module: 'Auth',
+          ip: req.ip,
+          userAgent: req.get('user-agent'),
+          status: 'SUCCESS'
+        });
+
         logger.audit('LOGOUT', { userId: user._id.toString() });
       }
     }
@@ -534,6 +570,23 @@ const changePassword = asyncHandler(async (req, res) => {
   user.motDePasse = await hashPassword(nouveauMotDePasse);
   user.refreshTokens = []; // Invalider tous les refresh tokens
   await user.save({ validateModifiedOnly: true });
+
+  // ✅ LOGGER LE CHANGEMENT DE MOT DE PASSE
+  const userModel = userType === 'interne' ? 'UtilisateurInterne' : 'UtilisateurExterne';
+  const role = await resolveRoleName(user, userType);
+  await AuditService.log({
+    userId: user._id,
+    userModel: userModel,
+    userEmail: user.email,
+    userNom: `${user.prenom} ${user.nom}`,
+    userRole: role,
+    action: 'PASSWORD_CHANGED',
+    actionLabel: 'Changement de mot de passe',
+    module: 'Auth',
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+    status: 'SUCCESS'
+  });
 
   logger.audit('PASSWORD_CHANGED', { userId: user._id.toString(), userType });
 

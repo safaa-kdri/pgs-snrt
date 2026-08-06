@@ -1,6 +1,8 @@
 // src/components/admin/UsersList.jsx
+// ✅ CORRECTION : Ajout des IDs pour les TextField
+
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -26,7 +28,11 @@ import {
     Switch,
     FormControlLabel,
     Divider,
+    FormControl,
+    InputLabel,
+    Select,
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import {
     Search,
     Add,
@@ -35,13 +41,18 @@ import {
     Block,
     CheckCircle,
     PersonAdd,
-    FilterList,
     Refresh,
     Visibility,
     ArrowBack,
     Save,
+    AdminPanelSettings as AdminIcon,
+    People as PeopleIcon,
+    Business as BusinessIcon,
+    School as SchoolIcon,
+    Person as PersonIcon,
+    SupervisorAccount as SupervisorIcon,
+    Group as GroupIcon,
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
 import api from '../../services/api';
 
 // ============================================
@@ -55,6 +66,38 @@ const PageHeader = styled(Box)({
     marginBottom: '24px',
     flexWrap: 'wrap',
     gap: '16px',
+});
+
+const TitleContainer = styled(Box)({
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '4px',
+    marginBottom: '24px',
+});
+
+const TitleIcon = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '4px',
+    '& svg': {
+        fontSize: '75px',
+        color: '#000000',
+    },
+});
+
+const TitleText = styled(Box)({
+    display: 'flex',
+    flexDirection: 'column',
+});
+
+const TitleMain = styled(Typography)({
+    fontWeight: 700,
+    fontSize: '28px',
+    color: '#1a2332',
+    fontFamily: 'Inter, sans-serif',
+    letterSpacing: '-0.5px',
 });
 
 const StyledTableCell = styled(TableCell)({
@@ -91,9 +134,11 @@ const BackButton = styled(Button)({
     borderRadius: '10px',
     textTransform: 'none',
     fontFamily: 'Inter, sans-serif',
-    color: '#148aa0',
+    color: '#000000',
+    borderColor: '#000000',
     '&:hover': {
-        backgroundColor: 'rgba(20, 138, 160, 0.05)',
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        borderColor: '#000000',
     },
 });
 
@@ -102,10 +147,10 @@ const SubmitButton = styled(Button)({
     textTransform: 'none',
     fontFamily: 'Inter, sans-serif',
     padding: '10px 32px',
-    backgroundColor: '#148aa0',
-    color: '#fff',
-    '&:hover': { backgroundColor: '#0b7890' },
-    '&:disabled': { backgroundColor: '#a0c4cd' },
+    backgroundColor: '#000000',
+    color: '#ffffff',
+    '&:hover': { backgroundColor: '#333333' },
+    '&:disabled': { backgroundColor: '#999999' },
 });
 
 const CancelButton = styled(Button)({
@@ -113,10 +158,66 @@ const CancelButton = styled(Button)({
     textTransform: 'none',
     fontFamily: 'Inter, sans-serif',
     padding: '10px 32px',
-    borderColor: '#d1d5db',
-    color: '#6b7280',
-    '&:hover': { borderColor: '#9ca3af' },
+    borderColor: '#000000',
+    color: '#000000',
+    '&:hover': { 
+        borderColor: '#333333',
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    },
 });
+
+// ✅ CONFIGURATION DES RÔLES
+const roleConfig = {
+    'all': { 
+        icon: <GroupIcon />, 
+        color: '#148aa0', 
+        label: 'Tous les utilisateurs', 
+    },
+    'Administrateur': { 
+        icon: <AdminIcon />, 
+        color: '#4f46e5', 
+        label: 'Administrateurs', 
+    },
+    'RH': { 
+        icon: <PeopleIcon />, 
+        color: '#8b5cf6', 
+        label: 'RH', 
+    },
+    'Departement': { 
+        icon: <BusinessIcon />, 
+        color: '#f59e0b', 
+        label: 'Département', 
+    },
+    'Encadrant': { 
+        icon: <SupervisorIcon />, 
+        color: '#22c55e', 
+        label: 'Encadrants', 
+    },
+    'Etudiant': { 
+        icon: <SchoolIcon />, 
+        color: '#148aa0', 
+        label: 'Étudiants', 
+    },
+};
+
+// ✅ MAPPING RÔLE → TYPE
+const ROLE_TO_TYPE = {
+    'Administrateur': 'interne',
+    'RH': 'interne',
+    'Departement': 'interne',
+    'Encadrant': 'interne',
+    'Etudiant': 'externe',
+};
+
+// ✅ RÔLES DISPONIBLES
+const ALL_ROLES = ['Administrateur', 'RH', 'Departement', 'Encadrant', 'Etudiant'];
+const INTERNAL_ROLES = ['Administrateur', 'RH', 'Departement', 'Encadrant'];
+
+// ✅ MIN PASSWORD LENGTH PAR TYPE
+const PASSWORD_MIN_LENGTH = {
+    'externe': 16,
+    'interne': 20,
+};
 
 // ============================================
 // COMPOSANT PRINCIPAL
@@ -124,12 +225,16 @@ const CancelButton = styled(Button)({
 
 const UsersList = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // ✅ LIRE LE RÔLE DEPUIS L'URL
+    const queryParams = new URLSearchParams(location.search);
+    const roleFilter = queryParams.get('role') || 'all';
 
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState([]);
     const [filteredUsers, setFilteredUsers] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [roleFilter, setRoleFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -138,6 +243,11 @@ const UsersList = () => {
     const [formMode, setFormMode] = useState('add');
     const [selectedUserId, setSelectedUserId] = useState(null);
     const [selectedUserType, setSelectedUserType] = useState('interne');
+
+    // ✅ DÉTERMINER SI ON EST DANS UN FILTRE SPÉCIFIQUE
+    const isFilteredByRole = roleFilter !== 'all';
+    const isEtudiantFilter = roleFilter === 'Etudiant';
+    const isInternalFilter = isFilteredByRole && roleFilter !== 'Etudiant';
 
     const [formData, setFormData] = useState({
         nom: '',
@@ -152,7 +262,22 @@ const UsersList = () => {
         type: 'interne',
     });
 
-    const roles = ['Administrateur', 'RH', 'Departement', 'Encadrant', 'Etudiant'];
+    // ✅ RÉCUPÉRER LA LONGUEUR MIN DU MOT DE PASSE
+    const getPasswordMinLength = () => {
+        if (isEtudiantFilter || formData.type === 'externe') {
+            return PASSWORD_MIN_LENGTH.externe;
+        }
+        return PASSWORD_MIN_LENGTH.interne;
+    };
+
+    // ✅ FERMER LE FORMULAIRE QUAND L'URL CHANGE (clic sur un autre rôle dans le menu)
+    useEffect(() => {
+        if (showForm) {
+            setShowForm(false);
+            setError('');
+            setSuccess('');
+        }
+    }, [location.pathname, location.search]);
 
     useEffect(() => {
         fetchUsers();
@@ -162,42 +287,35 @@ const UsersList = () => {
         filterUsers();
     }, [users, searchTerm, roleFilter, statusFilter]);
 
-    // ✅ CHARGER LES UTILISATEURS - ADAPTÉ À LA STRUCTURE DU BACKEND
+    const getRoleConfig = (role) => {
+        return roleConfig[role] || roleConfig['all'];
+    };
+
     const fetchUsers = async () => {
         setLoading(true);
         setError('');
         try {
             const response = await api.get('/users');
-            console.log('🔍 [UsersList] Response:', response.data);
 
             let allUsers = [];
 
-            // ✅ Adapter à la structure du backend
             if (response.data?.success && response.data?.data) {
                 const data = response.data.data;
-                
-                // Si data a des internes et externes
                 if (data.internes && data.externes) {
                     allUsers = [...data.internes, ...data.externes];
-                } 
-                // Si data est un tableau direct
-                else if (Array.isArray(data)) {
+                } else if (Array.isArray(data)) {
                     allUsers = data;
-                } 
-                // Si data est un objet unique
-                else {
+                } else {
                     allUsers = [data];
                 }
             } else if (Array.isArray(response.data)) {
                 allUsers = response.data;
             }
 
-            console.log('🔍 [UsersList] Utilisateurs extraits:', allUsers.length);
-
             if (!allUsers || allUsers.length === 0) {
                 setUsers([]);
                 setFilteredUsers([]);
-                setError('Aucun utilisateur trouvé dans la base de données');
+                setError('Aucun utilisateur trouvé');
                 setLoading(false);
                 return;
             }
@@ -218,8 +336,8 @@ const UsersList = () => {
             setUsers(formattedData);
             setFilteredUsers(formattedData);
         } catch (error) {
-            console.error('❌ Erreur chargement utilisateurs:', error);
-            setError(error.response?.data?.message || 'Erreur lors du chargement des utilisateurs');
+            console.error('❌ Erreur chargement:', error);
+            setError(error.response?.data?.message || 'Erreur de chargement');
             setUsers([]);
             setFilteredUsers([]);
         } finally {
@@ -258,16 +376,30 @@ const UsersList = () => {
         return colors[role] || '#999';
     };
 
+    const getRoleIcon = (role) => {
+        const icons = {
+            Administrateur: <AdminIcon sx={{ fontSize: 18 }} />,
+            RH: <PeopleIcon sx={{ fontSize: 18 }} />,
+            Departement: <BusinessIcon sx={{ fontSize: 18 }} />,
+            Encadrant: <SupervisorIcon sx={{ fontSize: 18 }} />,
+            Etudiant: <SchoolIcon sx={{ fontSize: 18 }} />,
+        };
+        return icons[role] || <PersonIcon sx={{ fontSize: 18 }} />;
+    };
+
     const getInitials = (nom, prenom) => {
         if (!nom || !prenom) return '?';
         return `${prenom[0]}${nom[0]}`.toUpperCase();
     };
 
+    // ✅ OUVRIR LE FORMULAIRE AVEC PRÉ-REMPLISSAGE SELON LE FILTRE
     const openForm = (mode, user = null) => {
         setFormMode(mode);
         setError('');
         setSuccess('');
+        
         if (user) {
+            // ✅ ÉDITION D'UN UTILISATEUR EXISTANT
             setSelectedUserId(user.id);
             setSelectedUserType(user.userType || 'interne');
             setFormData({
@@ -283,20 +415,58 @@ const UsersList = () => {
                 type: user.userType || 'interne',
             });
         } else {
+            // ✅ AJOUT D'UN NOUVEL UTILISATEUR
             setSelectedUserId(null);
-            setSelectedUserType('interne');
-            setFormData({
-                nom: '',
-                prenom: '',
-                email: '',
-                cin: '',
-                telephone: '',
-                role: '',
-                motDePasse: '',
-                confirmMotDePasse: '',
-                actif: true,
-                type: 'interne',
-            });
+            
+            // ✅ SI LE FILTRE EST "Etudiant" → pré-remplir avec Etudiant/Externe
+            if (isEtudiantFilter) {
+                setFormData({
+                    nom: '',
+                    prenom: '',
+                    email: '',
+                    cin: '',
+                    telephone: '',
+                    role: 'Etudiant',
+                    motDePasse: '',
+                    confirmMotDePasse: '',
+                    actif: true,
+                    type: 'externe',
+                });
+                setSelectedUserType('externe');
+            } 
+            // ✅ SI UN AUTRE FILTRE DE RÔLE EST ACTIF (RH, Administrateur, etc.)
+            else if (isFilteredByRole) {
+                const type = ROLE_TO_TYPE[roleFilter] || 'interne';
+                setFormData({
+                    nom: '',
+                    prenom: '',
+                    email: '',
+                    cin: '',
+                    telephone: '',
+                    role: roleFilter,
+                    motDePasse: '',
+                    confirmMotDePasse: '',
+                    actif: true,
+                    type: type,
+                });
+                setSelectedUserType(type);
+            } 
+            // ✅ AUCUN FILTRE → l'admin choisit
+            else {
+                setFormData({
+                    nom: '',
+                    prenom: '',
+                    email: '',
+                    cin: '',
+                    telephone: '',
+                    role: '',
+                    motDePasse: '',
+                    confirmMotDePasse: '',
+                    actif: true,
+                    type: 'interne',
+                });
+                setSelectedUserType('interne');
+            }
         }
         setShowForm(true);
     };
@@ -313,7 +483,47 @@ const UsersList = () => {
         setFormData({ ...formData, [name]: value });
     };
 
-    // ✅ AJOUTER/MODIFIER UTILISATEUR
+    // ✅ QUAND LE TYPE CHANGE, ON AJUSTE LE RÔLE
+    const handleTypeChange = (e) => {
+        const newType = e.target.value;
+        let newRole = formData.role;
+        
+        // Si le rôle actuel n'est pas compatible avec le nouveau type
+        if (newType === 'externe') {
+            newRole = 'Etudiant';
+        } else if (newType === 'interne' && formData.role === 'Etudiant') {
+            newRole = '';
+        }
+        
+        setFormData({ 
+            ...formData, 
+            type: newType,
+            role: newRole
+        });
+    };
+
+    // ✅ DÉTERMINER SI LE CHAMP RÔLE EST DÉSACTIVÉ
+    const isRoleDisabled = () => {
+        if (isFilteredByRole) {
+            return true;
+        }
+        if (formMode === 'edit' || formMode === 'view') {
+            return true;
+        }
+        return false;
+    };
+
+    // ✅ DÉTERMINER SI LE CHAMP TYPE EST DÉSACTIVÉ
+    const isTypeDisabled = () => {
+        if (isFilteredByRole) {
+            return true;
+        }
+        if (formMode === 'edit' || formMode === 'view') {
+            return true;
+        }
+        return false;
+    };
+
     const handleSubmitForm = async () => {
         setError('');
         setSuccess('');
@@ -323,9 +533,24 @@ const UsersList = () => {
             return;
         }
 
-        if (formMode === 'add' && (!formData.motDePasse || formData.motDePasse.length < 8)) {
-            setError('Le mot de passe doit contenir au moins 8 caracteres');
-            return;
+        // ✅ VALIDATION DU MOT DE PASSE SELON LE TYPE
+        const minLength = getPasswordMinLength();
+        if (formMode === 'add') {
+            if (!formData.motDePasse || formData.motDePasse.length < minLength) {
+                setError(`Le mot de passe doit contenir au moins ${minLength} caractères`);
+                return;
+            }
+            // Vérifier les exigences du mot de passe
+            const password = formData.motDePasse;
+            const errors = [];
+            if (!/[A-Z]/.test(password)) errors.push('une majuscule');
+            if (!/[a-z]/.test(password)) errors.push('une minuscule');
+            if (!/[0-9]/.test(password)) errors.push('un chiffre');
+            if (!/[^A-Za-z0-9]/.test(password)) errors.push('un caractère spécial');
+            if (errors.length > 0) {
+                setError(`Le mot de passe doit contenir : ${errors.join(', ')}`);
+                return;
+            }
         }
 
         if (formData.motDePasse && formData.motDePasse !== formData.confirmMotDePasse) {
@@ -371,7 +596,6 @@ const UsersList = () => {
         }
     };
 
-    // ✅ SUPPRIMER UTILISATEUR
     const handleDeleteUser = async (user) => {
         if (!window.confirm(`Supprimer ${user.prenom} ${user.nom} ?`)) return;
         try {
@@ -383,7 +607,6 @@ const UsersList = () => {
         }
     };
 
-    // ✅ CHANGER STATUT
     const handleToggleStatus = async (user) => {
         const newStatus = user.status === 'active' ? false : true;
         try {
@@ -395,15 +618,37 @@ const UsersList = () => {
         }
     };
 
+    const currentRoleConfig = getRoleConfig(roleFilter);
+
+    // ✅ AFFICHER LE TITRE DU FORMULAIRE
+    const getFormTitle = () => {
+        if (formMode === 'add') {
+            if (isFilteredByRole) {
+                return `Ajouter un ${roleFilter}`;
+            }
+            return 'Ajouter un utilisateur';
+        }
+        if (formMode === 'edit') return 'Modifier un utilisateur';
+        return 'Détails de l\'utilisateur';
+    };
+
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
             
+            <TitleContainer>
+                <TitleIcon>
+                    {currentRoleConfig.icon}
+                </TitleIcon>
+                <TitleText>
+                    <TitleMain>{currentRoleConfig.label}</TitleMain>
+                </TitleText>
+            </TitleContainer>
+
             <PageHeader>
                 <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        Gestion des utilisateurs
+                    <Typography variant="body2" color="text.secondary">
+                        {filteredUsers.length} utilisateur(s) trouvé(s)
                     </Typography>
-                    
                 </Box>
                 {!showForm && (
                     <Box sx={{ display: 'flex', gap: 2 }}>
@@ -412,7 +657,16 @@ const UsersList = () => {
                             startIcon={<Refresh />}
                             onClick={fetchUsers}
                             disabled={loading}
-                            sx={{ borderRadius: '12px', textTransform: 'none' }}
+                            sx={{ 
+                                borderRadius: '12px', 
+                                textTransform: 'none',
+                                color: '#000000',
+                                borderColor: '#000000',
+                                '&:hover': {
+                                    borderColor: '#000000',
+                                    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                }
+                            }}
                         >
                             Rafraîchir
                         </Button>
@@ -420,10 +674,11 @@ const UsersList = () => {
                             variant="contained"
                             startIcon={<PersonAdd />}
                             sx={{
-                                backgroundColor: '#148aa0',
+                                backgroundColor: '#000000',
                                 borderRadius: '12px',
                                 textTransform: 'none',
-                                '&:hover': { backgroundColor: '#0b7890' },
+                                color: '#ffffff',
+                                '&:hover': { backgroundColor: '#333333' },
                             }}
                             onClick={() => openForm('add')}
                         >
@@ -451,10 +706,19 @@ const UsersList = () => {
                             Retour
                         </BackButton>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            {formMode === 'add' && 'Ajouter un utilisateur'}
-                            {formMode === 'edit' && 'Modifier un utilisateur'}
-                            {formMode === 'view' && 'Détails de l\'utilisateur'}
+                            {getFormTitle()}
                         </Typography>
+                        {isFilteredByRole && (
+                            <Chip 
+                                label={`Rôle: ${formData.role}`}
+                                size="small"
+                                sx={{ 
+                                    backgroundColor: getRoleColor(formData.role) + '20',
+                                    color: getRoleColor(formData.role),
+                                    fontWeight: 600,
+                                }}
+                            />
+                        )}
                     </Box>
 
                     <Divider sx={{ mb: 3 }} />
@@ -462,6 +726,7 @@ const UsersList = () => {
                     <Grid container spacing={3}>
                         <Grid item xs={12} sm={6}>
                             <TextField
+                                id="user-nom"
                                 label="Nom *"
                                 name="nom"
                                 value={formData.nom}
@@ -474,6 +739,7 @@ const UsersList = () => {
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <TextField
+                                id="user-prenom"
                                 label="Prénom *"
                                 name="prenom"
                                 value={formData.prenom}
@@ -487,6 +753,7 @@ const UsersList = () => {
 
                         <Grid item xs={12} sm={6}>
                             <TextField
+                                id="user-email"
                                 label="Email *"
                                 name="email"
                                 type="email"
@@ -500,6 +767,7 @@ const UsersList = () => {
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <TextField
+                                id="user-cin"
                                 label="CIN *"
                                 name="cin"
                                 value={formData.cin}
@@ -513,6 +781,7 @@ const UsersList = () => {
 
                         <Grid item xs={12} sm={6}>
                             <TextField
+                                id="user-telephone"
                                 label="Téléphone"
                                 name="telephone"
                                 value={formData.telephone}
@@ -522,44 +791,60 @@ const UsersList = () => {
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
                             />
                         </Grid>
+
                         <Grid item xs={12} sm={6}>
-                            <TextField
-                                select
-                                label="Rôle *"
-                                name="role"
-                                value={formData.role}
-                                onChange={handleFormChange}
-                                fullWidth
-                                required
-                                disabled={formMode === 'view'}
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                            >
-                                <MenuItem value="">Sélectionner un rôle</MenuItem>
-                                {roles.map((role) => (
-                                    <MenuItem key={role} value={role}>
-                                        {role}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
+                            <FormControl fullWidth>
+                                <InputLabel id="user-type-label">Type d'utilisateur *</InputLabel>
+                                <Select
+                                    labelId="user-type-label"
+                                    id="user-type"
+                                    name="type"
+                                    value={formData.type}
+                                    onChange={handleTypeChange}
+                                    label="Type d'utilisateur *"
+                                    disabled={isTypeDisabled() || formMode === 'view'}
+                                    sx={{ borderRadius: '10px' }}
+                                >
+                                    <MenuItem value="interne">Interne</MenuItem>
+                                    <MenuItem value="externe">Externe</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
+                                <InputLabel id="user-role-label">Rôle *</InputLabel>
+                                <Select
+                                    labelId="user-role-label"
+                                    id="user-role"
+                                    name="role"
+                                    value={formData.role}
+                                    onChange={handleFormChange}
+                                    label="Rôle *"
+                                    disabled={isRoleDisabled() || formMode === 'view'}
+                                    sx={{ borderRadius: '10px' }}
+                                >
+                                    <MenuItem value="">Sélectionner un rôle</MenuItem>
+                                    {formData.type === 'interne' 
+                                        ? INTERNAL_ROLES.map((role) => (
+                                            <MenuItem key={role} value={role}>{role}</MenuItem>
+                                          ))
+                                        : ALL_ROLES.map((role) => (
+                                            <MenuItem key={role} value={role}>{role}</MenuItem>
+                                          ))
+                                    }
+                                </Select>
+                            </FormControl>
+                            {isFilteredByRole && (
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                    Le rôle est fixé par le filtre actuel
+                                </Typography>
+                            )}
                         </Grid>
 
                         <Grid item xs={12} sm={6}>
                             <TextField
-                                select
-                                label="Type d'utilisateur"
-                                name="type"
-                                value={formData.type}
-                                onChange={handleFormChange}
-                                fullWidth
-                                disabled={formMode === 'edit' || formMode === 'view'}
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                            >
-                                <MenuItem value="interne">Interne</MenuItem>
-                                <MenuItem value="externe">Externe</MenuItem>
-                            </TextField>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <TextField
+                                id="user-password"
                                 label={formMode === 'add' ? 'Mot de passe *' : 'Nouveau mot de passe'}
                                 name="motDePasse"
                                 type="password"
@@ -567,7 +852,25 @@ const UsersList = () => {
                                 onChange={handleFormChange}
                                 fullWidth
                                 disabled={formMode === 'view'}
-                                helperText={formMode === 'edit' ? 'Laisser vide pour ne pas modifier' : 'Minimum 8 caractères'}
+                                helperText={
+                                    formMode === 'edit' 
+                                        ? 'Laisser vide pour ne pas modifier' 
+                                        : `Minimum ${getPasswordMinLength()} caractères avec majuscule, minuscule, chiffre et caractère spécial`
+                                }
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                id="user-confirm-password"
+                                label="Confirmer le mot de passe"
+                                name="confirmMotDePasse"
+                                type="password"
+                                value={formData.confirmMotDePasse}
+                                onChange={handleFormChange}
+                                fullWidth
+                                disabled={formMode === 'view'}
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
                             />
                         </Grid>
@@ -576,6 +879,7 @@ const UsersList = () => {
                             <FormControlLabel
                                 control={
                                     <Switch
+                                        id="user-active"
                                         checked={formData.actif}
                                         onChange={(e) => setFormData({ ...formData, actif: e.target.checked })}
                                         disabled={formMode === 'view'}
@@ -600,12 +904,12 @@ const UsersList = () => {
                 </FormCard>
             ) : (
                 <>
-                    {/* FILTRES */}
-                    <Paper sx={{ p: 2, mb: 3, borderRadius: '12px' }}>
+                    <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#fafbfc' }}>
                         <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} sm={4}>
+                            <Grid item xs={12} sm={8}>
                                 <TextField
-                                    placeholder="Rechercher..."
+                                    id="search-users"
+                                    placeholder="Rechercher par nom, email..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     size="small"
@@ -625,28 +929,9 @@ const UsersList = () => {
                                     }}
                                 />
                             </Grid>
-                            <Grid item xs={12} sm={3}>
+                            <Grid item xs={12} sm={4}>
                                 <TextField
-                                    select
-                                    label="Rôle"
-                                    value={roleFilter}
-                                    onChange={(e) => setRoleFilter(e.target.value)}
-                                    size="small"
-                                    fullWidth
-                                    sx={{
-                                        '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                    }}
-                                >
-                                    <MenuItem value="all">Tous les rôles</MenuItem>
-                                    {roles.map((role) => (
-                                        <MenuItem key={role} value={role}>
-                                            {role}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-                            </Grid>
-                            <Grid item xs={12} sm={3}>
-                                <TextField
+                                    id="filter-status"
                                     select
                                     label="Statut"
                                     value={statusFilter}
@@ -654,7 +939,7 @@ const UsersList = () => {
                                     size="small"
                                     fullWidth
                                     sx={{
-                                        '& .MuiOutlinedInput-root': { borderRadius: '10px' },
+                                        '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
                                     }}
                                 >
                                     <MenuItem value="all">Tous les statuts</MenuItem>
@@ -662,30 +947,9 @@ const UsersList = () => {
                                     <MenuItem value="inactive">Inactif</MenuItem>
                                 </TextField>
                             </Grid>
-                            <Grid item xs={12} sm={2}>
-                                <Button
-                                    fullWidth
-                                    variant="outlined"
-                                    startIcon={<FilterList />}
-                                    onClick={() => {
-                                        setSearchTerm('');
-                                        setRoleFilter('all');
-                                        setStatusFilter('all');
-                                    }}
-                                    sx={{
-                                        borderRadius: '10px',
-                                        textTransform: 'none',
-                                        borderColor: '#ddd',
-                                        color: '#666',
-                                    }}
-                                >
-                                    Réinitialiser
-                                </Button>
-                            </Grid>
                         </Grid>
                     </Paper>
 
-                    {/* TABLEAU */}
                     <TableContainer
                         component={Paper}
                         sx={{ borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
@@ -705,104 +969,114 @@ const UsersList = () => {
                                 {loading ? (
                                     <TableRow>
                                         <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                                            <CircularProgress size={40} sx={{ color: '#148aa0' }} />
+                                            <CircularProgress size={40} sx={{ color: '#000000' }} />
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredUsers.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                                             <Typography variant="body1" color="text.secondary">
-                                                Aucun utilisateur trouvé
+                                                {roleFilter !== 'all' 
+                                                    ? `Aucun utilisateur avec le rôle "${roleFilter}"`
+                                                    : 'Aucun utilisateur trouvé'}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredUsers.map((user) => (
-                                        <TableRow key={user.id} hover>
-                                            <TableCell>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                    <Avatar
-                                                        sx={{
-                                                            backgroundColor: getRoleColor(user.role),
-                                                            width: 36,
-                                                            height: 36,
-                                                            fontSize: 14,
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        {getInitials(user.nom, user.prenom)}
-                                                    </Avatar>
-                                                    <Box>
-                                                        <Typography variant="body2" fontWeight={600}>
-                                                            {user.prenom} {user.nom}
-                                                        </Typography>
+                                    filteredUsers.map((user) => {
+                                        const roleIcon = getRoleIcon(user.role);
+                                        const roleColor = getRoleColor(user.role);
+                                        return (
+                                            <TableRow key={user.id} hover>
+                                                <TableCell>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                        <Avatar
+                                                            sx={{
+                                                                backgroundColor: roleColor,
+                                                                width: 36,
+                                                                height: 36,
+                                                                fontSize: 14,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {getInitials(user.nom, user.prenom)}
+                                                        </Avatar>
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={600}>
+                                                                {user.prenom} {user.nom}
+                                                            </Typography>
+                                                        </Box>
                                                     </Box>
-                                                </Box>
-                                            </TableCell>
-                                            <TableCell>{user.email}</TableCell>
-                                            <TableCell>
-                                                <Chip
-                                                    label={user.role}
-                                                    size="small"
-                                                    sx={{
-                                                        backgroundColor: getRoleColor(user.role) + '20',
-                                                        color: getRoleColor(user.role),
-                                                        fontWeight: 500,
-                                                    }}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <StatusChip
-                                                    label={user.status === 'active' ? 'Actif' : 'Inactif'}
-                                                    status={user.status}
-                                                    size="small"
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {new Date(user.dateInscription).toLocaleDateString('fr-FR')}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell align="right">
-                                                <Tooltip title="Voir">
-                                                    <IconButton
+                                                </TableCell>
+                                                <TableCell>{user.email}</TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        icon={roleIcon}
+                                                        label={user.role}
                                                         size="small"
-                                                        onClick={() => openForm('view', user)}
-                                                    >
-                                                        <Visibility sx={{ fontSize: 18, color: '#148aa0' }} />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title="Modifier">
-                                                    <IconButton
+                                                        sx={{
+                                                            backgroundColor: roleColor + '20',
+                                                            color: roleColor,
+                                                            fontWeight: 500,
+                                                            '& .MuiChip-icon': {
+                                                                color: roleColor,
+                                                            },
+                                                        }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <StatusChip
+                                                        label={user.status === 'active' ? 'Actif' : 'Inactif'}
+                                                        status={user.status}
                                                         size="small"
-                                                        onClick={() => openForm('edit', user)}
-                                                    >
-                                                        <Edit sx={{ fontSize: 18, color: '#4f46e5' }} />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title={user.status === 'active' ? 'Désactiver' : 'Activer'}>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleToggleStatus(user)}
-                                                    >
-                                                        {user.status === 'active' ? (
-                                                            <Block sx={{ fontSize: 18, color: '#f59e0b' }} />
-                                                        ) : (
-                                                            <CheckCircle sx={{ fontSize: 18, color: '#22c55e' }} />
-                                                        )}
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title="Supprimer">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleDeleteUser(user)}
-                                                    >
-                                                        <Delete sx={{ fontSize: 18, color: '#ef4444' }} />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {new Date(user.dateInscription).toLocaleDateString('fr-FR')}
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Tooltip title="Voir">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => openForm('view', user)}
+                                                        >
+                                                            <Visibility sx={{ fontSize: 18, color: '#148aa0' }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="Modifier">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => openForm('edit', user)}
+                                                        >
+                                                            <Edit sx={{ fontSize: 18, color: '#4f46e5' }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title={user.status === 'active' ? 'Désactiver' : 'Activer'}>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleToggleStatus(user)}
+                                                        >
+                                                            {user.status === 'active' ? (
+                                                                <Block sx={{ fontSize: 18, color: '#f59e0b' }} />
+                                                            ) : (
+                                                                <CheckCircle sx={{ fontSize: 18, color: '#22c55e' }} />
+                                                            )}
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="Supprimer">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleDeleteUser(user)}
+                                                        >
+                                                            <Delete sx={{ fontSize: 18, color: '#ef4444' }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>

@@ -16,30 +16,45 @@ const {
   changeUserStatusSchema,
 } = require('../utils/validators');
 
-// Gestion des utilisateurs reservee a l'Administrateur (cahier des charges, 7.2).
-router.use(authenticate(), authorize(ROLES.ADMIN));
+// ============================================
+// ✅ Authentification requise pour toutes les routes
+// ============================================
+router.use(authenticate());
 
-router.post('/internal', validate(createInternalUserSchema), userController.createInternalUser);
-
-router.post('/external', validate(createExternalUserSchema), userController.createExternalUser);
-
+// ============================================
+// ✅ Routes GET accessibles aux départements (pour consulter les encadrants)
+// ============================================
 router.get('/', userController.getAllUsers);
 router.get('/:type/:id', userController.getUserById);
 
+// ============================================
+// ✅ Routes de modification - Admin uniquement
+// ============================================
 
+// Création d'utilisateurs (Admin uniquement)
+router.post('/internal', authorize(ROLES.ADMIN), validate(createInternalUserSchema), userController.createInternalUser);
+router.post('/external', authorize(ROLES.ADMIN), validate(createExternalUserSchema), userController.createExternalUser);
+
+// Mise à jour (Admin uniquement)
 function validateUpdateUser(req, res, next) {
   const schema = req.params.type === 'interne' ? updateInternalUserSchema : updateExternalUserSchema;
   return validate(schema)(req, res, next);
 }
-router.put('/:type/:id', validateUpdateUser, userController.updateUser);
+router.put('/:type/:id', authorize(ROLES.ADMIN), validateUpdateUser, userController.updateUser);
 
-router.delete('/:type/:id', userController.deleteUser);
+// Suppression (Admin uniquement)
+router.delete('/:type/:id', authorize(ROLES.ADMIN), userController.deleteUser);
 
+// Restauration (Admin uniquement)
+router.patch('/:type/:id/restore', authorize(ROLES.ADMIN), userController.restoreUser);
 
-router.patch('/:type/:id/restore', userController.restoreUser);
+// Changement de rôle (Admin uniquement)
+router.patch('/:type/:id/role', authorize(ROLES.ADMIN), validate(changeUserRoleSchema), userController.changeUserRole);
 
-router.patch('/:type/:id/role', validate(changeUserRoleSchema), userController.changeUserRole);
-router.patch('/internal/:id/department', validate(assignDepartmentToUserSchema), userController.assignDepartment);
-router.patch('/:type/:id/status', validate(changeUserStatusSchema), userController.changeUserStatus);
+// Assignation de département (Admin uniquement)
+router.patch('/internal/:id/department', authorize(ROLES.ADMIN), validate(assignDepartmentToUserSchema), userController.assignDepartment);
+
+// Changement de statut (Admin uniquement)
+router.patch('/:type/:id/status', authorize(ROLES.ADMIN), validate(changeUserStatusSchema), userController.changeUserStatus);
 
 module.exports = router;

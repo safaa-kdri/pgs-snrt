@@ -1,4 +1,6 @@
 // src/components/department/Dashboard.jsx
+// ✅ VERSION AVEC TITRE STYLE "Candidatures reçues" - SANS ACTIVITÉS RÉCENTES
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -11,23 +13,22 @@ import {
     Button,
     CircularProgress,
     Alert,
-    Chip,
     List,
     ListItem,
     ListItemText,
-    ListItemAvatar,
     Avatar,
+    LinearProgress,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled, alpha } from '@mui/material/styles';
 import {
-    Work,
-    Pending,
-    TrendingUp,
-    ArrowForward,
-    People,
     Assignment,
-    CalendarToday,
+    Pending,
+    Work,
+    Event,
     Refresh,
+    ArrowForward,
+    CheckCircle,
+    Description,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -36,40 +37,134 @@ import api from '../../services/api';
 // STYLES
 // ============================================
 
-const StatCard = styled(Card)({
-    borderRadius: '14px',
-    padding: '22px 24px',
-    height: '100%',
-    background: '#ffffff',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    border: '1px solid #eef1f3',
-    borderLeft: '4px solid #148aa0',
-    transition: 'all 0.25s ease',
-    '&:hover': {
-        boxShadow: '0 6px 20px rgba(0,0,0,0.07)',
-        transform: 'translateY(-2px)',
-    },
+const PageContainer = styled(Container)({
+    paddingTop: '28px',
+    paddingBottom: '28px',
 });
 
-const StatIconWrapper = styled(Box)({
-    width: '44px',
-    height: '44px',
+const HeaderSection = styled(Box)({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '28px',
+    flexWrap: 'wrap',
+    gap: '12px',
+});
+
+// ✅ STYLE IDENTIQUE À "Candidatures reçues"
+const HeaderTitle = styled(Typography)({
+    fontWeight: 700,
+    fontSize: '32px',  // h4 en MUI = 32px
+    color: '#1a2332',
+});
+
+const HeaderSubtitle = styled(Typography)({
+    color: '#687480',
+    fontSize: '15px',
+    fontWeight: 500,
+});
+
+// ✅ Carte
+const StatCard = styled(Card)(({ color }) => ({
     borderRadius: '12px',
-    backgroundColor: '#eaf5f7',
+    padding: '18px 22px',
+    height: '100%',
+    background: '#ffffff',
+    boxShadow: 'none',
+    border: '1px solid #eef1f3',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    '&:hover': {
+        borderColor: color || '#2d3748',
+        boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+    },
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '4px',
+        height: '100%',
+        backgroundColor: color || '#2d3748',
+        borderRadius: '12px 0 0 12px',
+    },
+    position: 'relative',
+}));
+
+const StatIcon = styled(Box)(({ color }) => ({
+    width: '40px',
+    height: '40px',
+    borderRadius: '10px',
+    backgroundColor: alpha(color || '#2d3748', 0.08),
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#148aa0',
+    color: color || '#2d3748',
     flexShrink: 0,
+    '& svg': {
+        fontSize: '20px',
+    },
+}));
+
+const StatValue = styled(Typography)({
+    fontWeight: 700,
+    fontSize: '24px',
+    color: '#1a2332',
+    lineHeight: 1.3,
 });
 
-const SectionTitle = styled(Typography)({
+const StatLabel = styled(Typography)({
+    color: '#687480',
+    fontSize: '13px',
+    fontWeight: 500,
+});
+
+// ✅ Bloc "À traiter"
+const ActionCard = styled(Paper)({
+    borderRadius: '12px',
+    padding: '18px 22px',
+    border: '1px solid #eef1f3',
+    boxShadow: 'none',
+    backgroundColor: '#fafbfc',
+    marginBottom: '28px',
+});
+
+const ActionItem = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '6px 0',
+});
+
+const ActionIcon = styled(Box)(({ color }) => ({
+    width: '34px',
+    height: '34px',
+    borderRadius: '8px',
+    backgroundColor: alpha(color || '#2d3748', 0.1),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: color || '#2d3748',
     fontSize: '16px',
-    fontWeight: 600,
-    color: '#1a2332',
-    marginBottom: '16px',
-    letterSpacing: '0.2px',
-    fontFamily: '"Inter", "Segoe UI", sans-serif',
+    flexShrink: 0,
+}));
+
+// ✅ Liste
+const StyledListItem = styled(ListItem)({
+    padding: '10px 0',
+    borderBottom: '1px solid #f0f2f5',
+    cursor: 'pointer',
+    '&:last-child': {
+        borderBottom: 'none',
+    },
+    '&:hover': {
+        backgroundColor: '#f8f9fa',
+        borderRadius: '8px',
+        paddingLeft: '8px',
+        paddingRight: '8px',
+        marginLeft: '-8px',
+        marginRight: '-8px',
+    },
 });
 
 // ============================================
@@ -79,13 +174,15 @@ const SectionTitle = styled(Typography)({
 const DepartmentDashboard = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [stats, setStats] = useState({
-        offres: { total: 0, publiees: 0, enAttente: 0 },
-        candidatures: { total: 0, recues: 0 },
-        entretiens: { total: 0, aVenir: 0 },
-        offresList: [],
+        candidatures: { total: 0, enAttente: 0 },
+        stages: { enCours: 0, total: 0 },
+        entretiensAVenir: 0,
+        aTraiter: { candidatures: 0, entretiens: 0, conventions: 0 },
+        dernieresCandidatures: [],
         recentActivities: [],
     });
 
@@ -97,34 +194,48 @@ const DepartmentDashboard = () => {
         setLoading(true);
         setError('');
         try {
-            const response = await api.get('/dashboard');
-            const data = response.data;
-            if (data.role === 'Departement' || data.role === 'DEPARTEMENT') {
-                const d = data.dashboard || {};
-                setStats({
-                    offres: d.offres || { total: 0, publiees: 0, enAttente: 0 },
-                    candidatures: d.candidatures || { total: 0, recues: 0 },
-                    entretiens: d.entretiens || { total: 0, aVenir: 0 },
-                    offresList: d.offresList || [],
-                    recentActivities: d.recentActivities || [],
-                });
-            }
-        } catch (err) {
-            console.error('Erreur chargement dashboard:', err);
-            setError(err.response?.data?.message || 'Erreur de chargement');
+            const response = await api.get('/dashboard/department');
+            const data = response.data?.data || response.data || {};
+            
             setStats({
-                offres: { total: 12, publiees: 8, enAttente: 4 },
-                candidatures: { total: 45, recues: 12 },
-                entretiens: { total: 6, aVenir: 3 },
-                offresList: [
-                    { id: 1, titre: 'Stage en Développement Web', statut: 'Publiee', nbCandidatures: 8 },
-                    { id: 2, titre: 'Stage en Data Science', statut: 'EnAttente', nbCandidatures: 0 },
-                    { id: 3, titre: 'Stage en Communication', statut: 'Publiee', nbCandidatures: 4 },
+                candidatures: {
+                    total: data.candidatures?.total || 0,
+                    enAttente: data.candidatures?.enAttente || 0,
+                },
+                stages: {
+                    enCours: data.stages?.enCours || 0,
+                    total: data.stages?.total || 0,
+                },
+                entretiensAVenir: data.entretiensAVenir || 0,
+                aTraiter: {
+                    candidatures: data.candidatures?.enAttente || 0,
+                    entretiens: data.entretiensAVenir || 0,
+                    conventions: 0,
+                },
+                dernieresCandidatures: data.dernieresCandidatures || [],
+                recentActivities: data.recentActivities || [],
+            });
+        } catch (err) {
+            console.error('Erreur:', err);
+            setError(err.response?.data?.message || 'Erreur de chargement');
+            // ✅ Données mockées
+            setStats({
+                candidatures: { total: 45, enAttente: 12 },
+                stages: { enCours: 5, total: 8 },
+                entretiensAVenir: 6,
+                aTraiter: { candidatures: 12, entretiens: 6, conventions: 2 },
+                dernieresCandidatures: [
+                    { id: '1', candidat: 'Youssef EL HASSANI', offre: 'Stage Développement Web', statut: 'EnAnalyse', date: new Date().toISOString() },
+                    { id: '2', candidat: 'Fatima BENNANI', offre: 'Stage Data Science', statut: 'Soumise', date: new Date(Date.now() - 86400000).toISOString() },
+                    { id: '3', candidat: 'Ahmed ALAMI', offre: 'Stage Cybersécurité', statut: 'Entretien', date: new Date(Date.now() - 172800000).toISOString() },
+                    { id: '4', candidat: 'Sara LAKHDAR', offre: 'Stage Marketing Digital', statut: 'Soumise', date: new Date(Date.now() - 259200000).toISOString() },
+                    { id: '5', candidat: 'Karim BENJELLOUN', offre: 'Stage DevOps', statut: 'EnAnalyse', date: new Date(Date.now() - 345600000).toISOString() },
                 ],
                 recentActivities: [
-                    { id: 1, title: 'Offre publiée', description: 'Stage en Développement Web', date: 'Il y a 2h' },
-                    { id: 2, title: 'Nouvelle candidature', description: 'Ahmed Benjelloun — Stage Data Science', date: 'Il y a 4h' },
-                    { id: 3, title: 'Entretien planifié', description: 'Stage Communication — 15/07/2026', date: 'Il y a 1j' },
+                    { id: '1', action: 'Candidature acceptée', date: "Aujourd'hui" },
+                    { id: '2', action: 'Nouvelle candidature', date: 'Hier' },
+                    { id: '3', action: 'Entretien programmé', date: '04 août' },
+                    { id: '4', action: 'Stage clôturé', date: '03 août' },
                 ],
             });
         } finally {
@@ -132,142 +243,193 @@ const DepartmentDashboard = () => {
         }
     };
 
-    const statCards = [
-        { label: 'Offres', value: stats.offres.total, sub: `${stats.offres.publiees} publiées`, icon: <Assignment sx={{ fontSize: 22 }} /> },
-        { label: 'En attente', value: stats.offres.enAttente, sub: `${stats.offres.enAttente} en validation`, icon: <Pending sx={{ fontSize: 22 }} /> },
-        { label: 'Candidatures', value: stats.candidatures.total, sub: `${stats.candidatures.recues} nouvelles`, icon: <People sx={{ fontSize: 22 }} /> },
-        { label: 'Entretiens', value: stats.entretiens.total, sub: `${stats.entretiens.aVenir} à venir`, icon: <CalendarToday sx={{ fontSize: 22 }} /> },
+    // ============================================
+    // UTILITAIRES
+    // ============================================
+
+    const getStatusLabel = (s) => {
+        const labels = { Soumise: 'Soumise', EnAnalyse: 'En analyse', Entretien: 'Entretien', Acceptee: 'Acceptée', Refusee: 'Refusée', Brouillon: 'Brouillon' };
+        return labels[s] || s;
+    };
+
+    const getStatusColor = (s) => {
+        const colors = { Soumise: '#1d4ed8', EnAnalyse: '#d97706', Entretien: '#6b21a8', Acceptee: '#065f46', Refusee: '#991b1b', Brouillon: '#6b7280' };
+        return colors[s] || '#6b7280';
+    };
+
+    const formatDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+    const getInitials = (name) => name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
+
+    // ============================================
+    // CARTES - 4 SEULEMENT
+    // ============================================
+
+    const cards = [
+        { label: 'Candidatures reçues', value: stats.candidatures.total, icon: <Assignment />, color: '#2d3748', path: '/department/candidatures' },
+        { label: 'En attente', value: stats.candidatures.enAttente, icon: <Pending />, color: '#f59e0b', path: '/department/candidatures?statut=Soumise' },
+        { label: 'Stages en cours', value: stats.stages.enCours, icon: <Work />, color: '#148aa0', path: '/department/interns?statut=EnCours' },
+        { label: 'Entretiens', value: stats.entretiensAVenir, icon: <Event />, color: '#8b5cf6', path: '/department/interviews' },
     ];
+
+    const progressValue = stats.stages.total > 0 ? Math.round((stats.stages.enCours / stats.stages.total) * 100) : 0;
 
     if (loading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={44} sx={{ color: '#148aa0' }} />
-            </Box>
+            <PageContainer maxWidth="xl">
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+                    <CircularProgress size={44} sx={{ color: '#2d3748' }} />
+                </Box>
+            </PageContainer>
         );
     }
 
     return (
-        <Container maxWidth="xl" sx={{ py: 4, px: { xs: 2, md: 3 } }}>
+        <PageContainer maxWidth="xl">
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+            {/* ===== EN-TÊTE ===== */}
+            <HeaderSection>
                 <Box>
-                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#148aa0', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                        Département
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332', letterSpacing: '-0.02em', mt: 0.5 }}>
-                        Tableau de bord
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: '#687480', mt: 0.5 }}>
-                        Gestion de vos offres et candidatures
-                    </Typography>
+                    <HeaderTitle>Tableau de bord</HeaderTitle>
+                    <HeaderSubtitle>{user?.departementId?.nom || 'Département'}</HeaderSubtitle>
                 </Box>
                 <Button
                     variant="outlined"
                     startIcon={<Refresh />}
                     onClick={fetchDashboardData}
                     sx={{
-                        textTransform: 'none',
                         borderRadius: '10px',
+                        textTransform: 'none',
                         borderColor: '#e0e4e8',
                         color: '#20242b',
-                        fontSize: '13px',
+                        fontSize: '14px',
                         fontWeight: 500,
                         px: 3,
-                        '&:hover': { borderColor: '#148aa0', backgroundColor: '#eaf5f7' },
+                        py: 0.8,
                     }}
                 >
                     Actualiser
                 </Button>
-            </Box>
+            </HeaderSection>
 
+            {/* ===== 4 CARTES ===== */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
-                {statCards.map((stat, idx) => (
-                    <Grid item xs={12} sm={6} lg={3} key={idx}>
-                        <StatCard>
+                {cards.map((card, i) => (
+                    <Grid item xs={6} sm={3} key={i}>
+                        <StatCard color={card.color} onClick={() => navigate(card.path)}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Box>
-                                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#1a2332', fontSize: '28px' }}>{stat.value}</Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 500, color: '#687480' }}>{stat.label}</Typography>
-                                    <Typography variant="caption" sx={{ color: '#9aa4ac', display: 'block', mt: 0.5 }}>{stat.sub}</Typography>
+                                    <StatValue>{card.value}</StatValue>
+                                    <StatLabel>{card.label}</StatLabel>
                                 </Box>
-                                <StatIconWrapper>{stat.icon}</StatIconWrapper>
+                                <StatIcon color={card.color}>{card.icon}</StatIcon>
                             </Box>
                         </StatCard>
                     </Grid>
                 ))}
             </Grid>
 
-            <Grid container spacing={3}>
-                <Grid item xs={12} lg={8}>
-                    <Paper sx={{ p: 3, borderRadius: '14px', border: '1px solid #eef1f3', boxShadow: 'none' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <SectionTitle sx={{ mb: 0 }}>Mes offres</SectionTitle>
-                            <Button size="small" sx={{ color: '#148aa0', textTransform: 'none', fontSize: '13px' }} onClick={() => navigate('/department/offers')}>
-                                Voir tout <ArrowForward sx={{ fontSize: 16, ml: 0.5 }} />
-                            </Button>
-                        </Box>
-                        {stats.offresList.length > 0 ? (
-                            <List sx={{ p: 0 }}>
-                                {stats.offresList.map((offre) => (
-                                    <ListItem key={offre.id} sx={{ px: 0, py: 1.5, borderBottom: '1px solid #f0f2f5' }}>
-                                        <ListItemText
-                                            primary={<Typography variant="body2" fontWeight={600} color="#1a2332">{offre.titre}</Typography>}
-                                            secondary={<Typography variant="caption" color="#687480">{offre.nbCandidatures || 0} candidature(s)</Typography>}
-                                        />
-                                        <Chip
-                                            label={offre.statut === 'Publiee' ? 'Publiée' : 'En attente'}
-                                            size="small"
-                                            sx={{
-                                                bgcolor: offre.statut === 'Publiee' ? '#d1fae5' : '#fef3c7',
-                                                color: offre.statut === 'Publiee' ? '#065f46' : '#d97706',
-                                                fontSize: '11px',
-                                                height: '22px',
-                                            }}
-                                        />
-                                        <Button size="small" sx={{ color: '#148aa0', ml: 1 }} onClick={() => navigate(`/department/offers/${offre.id}`)}>Voir</Button>
-                                    </ListItem>
-                                ))}
-                            </List>
-                        ) : (
-                            <Typography variant="body2" color="#687480" sx={{ textAlign: 'center', py: 3 }}>Aucune offre créée</Typography>
-                        )}
-                    </Paper>
+            {/* ===== À TRAITER ===== */}
+            <ActionCard>
+                <Typography variant="subtitle2" fontWeight={600} color="#1a2332" sx={{ mb: 1.5, fontSize: '14px' }}>
+                    À traiter aujourd'hui
+                </Typography>
+                <Grid container spacing={3}>
+                    <Grid item xs={4}>
+                        <ActionItem>
+                            <ActionIcon color="#f59e0b"><Assignment sx={{ fontSize: 16 }} /></ActionIcon>
+                            <Box>
+                                <Typography variant="h6" fontWeight={700} color="#1a2332" sx={{ fontSize: '18px', lineHeight: 1.2 }}>
+                                    {stats.aTraiter.candidatures}
+                                </Typography>
+                                <Typography variant="caption" color="#687480">candidatures à analyser</Typography>
+                            </Box>
+                        </ActionItem>
+                    </Grid>
+                    <Grid item xs={4}>
+                        <ActionItem>
+                            <ActionIcon color="#8b5cf6"><Event sx={{ fontSize: 16 }} /></ActionIcon>
+                            <Box>
+                                <Typography variant="h6" fontWeight={700} color="#1a2332" sx={{ fontSize: '18px', lineHeight: 1.2 }}>
+                                    {stats.aTraiter.entretiens}
+                                </Typography>
+                                <Typography variant="caption" color="#687480">entretiens à programmer</Typography>
+                            </Box>
+                        </ActionItem>
+                    </Grid>
+                    <Grid item xs={4}>
+                        <ActionItem>
+                            <ActionIcon color="#22c55e"><Description sx={{ fontSize: 16 }} /></ActionIcon>
+                            <Box>
+                                <Typography variant="h6" fontWeight={700} color="#1a2332" sx={{ fontSize: '18px', lineHeight: 1.2 }}>
+                                    {stats.aTraiter.conventions}
+                                </Typography>
+                                <Typography variant="caption" color="#687480">conventions à signer</Typography>
+                            </Box>
+                        </ActionItem>
+                    </Grid>
                 </Grid>
-                <Grid item xs={12} lg={4}>
-                    <Paper sx={{ p: 3, borderRadius: '14px', border: '1px solid #eef1f3', boxShadow: 'none' }}>
-                        <SectionTitle>Activités récentes</SectionTitle>
-                        {stats.recentActivities.length > 0 ? (
-                            <List sx={{ p: 0 }}>
-                                {stats.recentActivities.map((activity) => (
-                                    <ListItem key={activity.id} sx={{ px: 0, py: 1.5, borderBottom: '1px solid #f0f2f5' }}>
-                                        <ListItemAvatar>
-                                            <Avatar sx={{ width: 32, height: 32, bgcolor: '#eaf5f7', color: '#148aa0', fontSize: 16 }}>
-                                                {activity.title.includes('Offre') && '📋'}
-                                                {activity.title.includes('Candidature') && '📄'}
-                                                {activity.title.includes('Entretien') && '📅'}
-                                            </Avatar>
-                                        </ListItemAvatar>
+            </ActionCard>
+
+            {/* ===== DERNIÈRES CANDIDATURES ===== */}
+            <Paper sx={{ borderRadius: '12px', border: '1px solid #eef1f3', boxShadow: 'none', mb: 3 }}>
+                <Box sx={{ px: 3, pt: 2.5, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="subtitle2" fontWeight={600} color="#1a2332" sx={{ fontSize: '14px' }}>
+                        Dernières candidatures
+                    </Typography>
+                    <Button size="small" endIcon={<ArrowForward sx={{ fontSize: 16 }} />} onClick={() => navigate('/department/candidatures')} sx={{ textTransform: 'none', color: '#687480', fontSize: '13px', fontWeight: 500 }}>
+                        Voir toutes
+                    </Button>
+                </Box>
+                <Box sx={{ px: 3, pb: 2 }}>
+                    {stats.dernieresCandidatures.length > 0 ? (
+                        <List sx={{ p: 0 }}>
+                            {stats.dernieresCandidatures.slice(0, 5).map((c) => {
+                                const color = getStatusColor(c.statut);
+                                return (
+                                    <StyledListItem key={c.id} onClick={() => navigate(`/department/candidature/${c.id}`)}>
+                                        <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(color, 0.12), color, fontSize: 12, fontWeight: 600, mr: 1.5 }}>
+                                            {getInitials(c.candidat)}
+                                        </Avatar>
                                         <ListItemText
-                                            primary={<Typography variant="body2" fontWeight={600} color="#1a2332">{activity.title}</Typography>}
-                                            secondary={
-                                                <>
-                                                    <Typography variant="caption" display="block" color="#687480">{activity.description}</Typography>
-                                                    <Typography variant="caption" display="block" color="#9aa4ac" sx={{ mt: 0.5 }}>{activity.date}</Typography>
-                                                </>
-                                            }
+                                            primary={<Typography variant="body2" fontWeight={600} color="#1a2332">{c.candidat}</Typography>}
+                                            secondary={<Typography variant="caption" color="#687480">{c.offre} • {formatDate(c.date)}</Typography>}
+                                            sx={{ my: 0 }}
                                         />
-                                    </ListItem>
-                                ))}
-                            </List>
-                        ) : (
-                            <Typography variant="body2" color="#687480" sx={{ textAlign: 'center', py: 3 }}>Aucune activité récente</Typography>
-                        )}
-                    </Paper>
-                </Grid>
-            </Grid>
-        </Container>
+                                        <Typography variant="caption" fontWeight={600} color={color} sx={{ fontSize: '11px' }}>
+                                            {getStatusLabel(c.statut)}
+                                        </Typography>
+                                    </StyledListItem>
+                                );
+                            })}
+                        </List>
+                    ) : (
+                        <Typography variant="body2" color="#687480" sx={{ textAlign: 'center', py: 2 }}>
+                            Aucune candidature récente
+                        </Typography>
+                    )}
+                </Box>
+            </Paper>
+
+            {/* ===== STAGES EN COURS - UNIQUEMENT ===== */}
+            <Paper sx={{ borderRadius: '12px', border: '1px solid #eef1f3', boxShadow: 'none', p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                    <Typography variant="subtitle2" fontWeight={600} color="#1a2332" sx={{ fontSize: '14px' }}>
+                        Stages en cours
+                    </Typography>
+                    <Button size="small" endIcon={<ArrowForward sx={{ fontSize: 16 }} />} onClick={() => navigate('/department/interns')} sx={{ textTransform: 'none', color: '#687480', fontSize: '13px', fontWeight: 500 }}>
+                        Voir
+                    </Button>
+                </Box>
+                <Typography variant="body2" color="#687480" sx={{ mb: 1.5, fontSize: '14px' }}>
+                    {stats.stages.enCours} stage(s) actuellement
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <LinearProgress variant="determinate" value={progressValue} sx={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: '#eef1f3', '& .MuiLinearProgress-bar': { backgroundColor: '#22c55e', borderRadius: 3 } }} />
+                    <Typography variant="caption" fontWeight={600} color="#22c55e">{progressValue}%</Typography>
+                </Box>
+            </Paper>
+        </PageContainer>
     );
 };
 

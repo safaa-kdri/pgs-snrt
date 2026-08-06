@@ -83,15 +83,68 @@ exports.createExternalUser = async (req, res) => {
 };
 
 // ============================================
-// GET ALL
+// GET ALL - ✅ MODIFIÉ AVEC FILTRE DÉPARTEMENT
 // ============================================
 
 exports.getAllUsers = async (req, res) => {
     try {
-        const { type } = req.query;
+        const { type, role, departementId } = req.query;
 
+        // ✅ Si le département demande uniquement ses encadrants
+        if (departementId && role === 'Encadrant') {
+            const users = await UtilisateurInterne.find({
+                departementId: departementId,
+                roleId: { $ne: null }
+            })
+            .select('-motDePasse')
+            .populate({ path: 'roleId', select: 'nom' })
+            .populate({ path: 'departementId', select: 'nom description' })
+            .sort({ createdAt: -1 })
+            .lean();
+
+            // Filtrer pour ne garder que ceux avec le rôle "Encadrant"
+            const filteredUsers = users.filter(u => 
+                u.roleId?.nom === 'Encadrant'
+            );
+
+            const formatted = filteredUsers.map(u => ({
+                ...u,
+                userType: 'interne',
+                role: u.roleId?.nom || 'Inconnu'
+            }));
+
+            return res.status(200).json({
+                success: true,
+                type: 'interne',
+                count: formatted.length,
+                data: formatted
+            });
+        }
+
+        // ✅ Si on demande spécifiquement les utilisateurs internes
         if (type === 'interne') {
-            const users = await UtilisateurInterne.find()
+            // Construire le filtre
+            const filter = {};
+            if (role) {
+                // Si un rôle est spécifié, on doit filtrer par le nom du rôle
+                const roleDoc = await Role.findOne({ nom: role });
+                if (roleDoc) {
+                    filter.roleId = roleDoc._id;
+                } else {
+                    // Rôle non trouvé → retourner tableau vide
+                    return res.status(200).json({
+                        success: true,
+                        type: 'interne',
+                        count: 0,
+                        data: []
+                    });
+                }
+            }
+            if (departementId) {
+                filter.departementId = departementId;
+            }
+
+            const users = await UtilisateurInterne.find(filter)
                 .select('-motDePasse')
                 .populate({ path: 'roleId', select: 'nom' })
                 .populate({ path: 'departementId', select: 'nom description' })
@@ -112,6 +165,7 @@ exports.getAllUsers = async (req, res) => {
             });
         }
 
+        // ✅ Si on demande spécifiquement les utilisateurs externes
         if (type === 'externe') {
             const users = await UtilisateurExterne.find()
                 .select('-motDePasse')
@@ -134,7 +188,7 @@ exports.getAllUsers = async (req, res) => {
             });
         }
 
-        // Tous les utilisateurs
+        // ✅ Tous les utilisateurs (sans filtre)
         const [internalUsers, externalUsers] = await Promise.all([
             UtilisateurInterne.find()
                 .select('-motDePasse')
@@ -410,7 +464,6 @@ exports.changeUserRole = async (req, res) => {
             });
         }
 
-        // Externe n'a pas de rôle
         if (type === 'externe') {
             return res.status(400).json({
                 success: false,

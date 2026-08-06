@@ -1,6 +1,6 @@
 // src/components/auth/LoginInterne.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom'; // ✅ Ajout de useLocation
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     Typography,
@@ -36,21 +36,16 @@ const LoginCard = styled(Paper)({
     boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
     maxWidth: '360px',
     width: '100%',
+    textAlign: 'center',
 });
 
-const CardIcon = styled(Box)({
-    width: '56px',
-    height: '56px',
-    borderRadius: '50%',
-    backgroundColor: '#ffffff',
+const Logo = styled(Box)({
     display: 'flex',
-    alignItems: 'center',
     justifyContent: 'center',
-    margin: '0 auto 10px',
-    border: '2px solid #ffffff',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    alignItems: 'center',
+    marginBottom: '16px',
     '& img': {
-        width: '36px',
+        width: '80px',
         height: 'auto',
         objectFit: 'contain',
     },
@@ -74,6 +69,7 @@ const Subtitle = styled(Typography)({
     marginBottom: '16px',
 });
 
+// ✅ CHAMPS AVEC ESPACE SUFFISANT POUR LES ICÔNES
 const StyledTextField = styled(TextField)({
     width: '100%',
     marginBottom: '10px',
@@ -94,7 +90,7 @@ const StyledTextField = styled(TextField)({
         },
     },
     '& .MuiInputBase-input': {
-        padding: '0 14px 0 14px',
+        padding: '0 14px 0 44px', // ✅ Padding gauche augmenté (14px → 44px) pour laisser de la place à l'icône
         fontSize: '14px',
         color: '#1a1a2e',
         fontFamily: 'Inter, sans-serif',
@@ -111,7 +107,7 @@ const StyledTextField = styled(TextField)({
     },
     '& .MuiInputAdornment-root': {
         position: 'absolute',
-        left: '16px',
+        left: '14px', // ✅ Légèrement décalé vers la droite
         top: '50%',
         transform: 'translateY(-50%)',
         color: '#aab1b8',
@@ -248,7 +244,7 @@ const GrayButton = styled(Button)({
 
 const LoginInterne = () => {
     const navigate = useNavigate();
-    const location = useLocation(); // ✅ Ajout de useLocation
+    const location = useLocation();
     const dispatch = useDispatch();
 
     const [cin, setCin] = useState('');
@@ -284,10 +280,9 @@ const LoginInterne = () => {
         }
     }, [isAuthenticated, user, navigate]);
 
-    // ✅ GÉNÉRER LE CAPTCHA AU CHARGEMENT ET À CHAQUE CHANGEMENT DE PAGE
     useEffect(() => {
         regenerateCaptcha();
-    }, [location.pathname]); // ✅ Dépendance ajoutée
+    }, [location.pathname]);
 
     const regenerateCaptcha = () => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -330,7 +325,6 @@ const LoginInterne = () => {
 
             if (result.requiresTwoFactor || result.needs2FA) {
                 localStorage.setItem('2faEmail', cin);
-                // ✅ REDIRECTION VERS Verify2FAInterne (interne)
                 navigate('/verify-2fa-interne', { replace: true });
                 return;
             }
@@ -348,9 +342,9 @@ const LoginInterne = () => {
     return (
         <PageContainer>
             <LoginCard>
-                <CardIcon>
+                <Logo>
                     <img src="/logo_snrt_final.png" alt="SNRT" />
-                </CardIcon>
+                </Logo>
 
                 <Title>Espace Personnel</Title>
                 <Subtitle>Connectez-vous avec votre CIN</Subtitle>
@@ -362,6 +356,7 @@ const LoginInterne = () => {
                 )}
 
                 <form onSubmit={handleSubmit}>
+                    {/* ✅ CIN - Icône Enveloppe */}
                     <StyledTextField
                         label="CIN"
                         value={cin}
@@ -376,6 +371,7 @@ const LoginInterne = () => {
                         }}
                     />
 
+                    {/* ✅ Mot de passe - Icône Cadenas */}
                     <StyledTextField
                         label="Mot de passe"
                         type="password"

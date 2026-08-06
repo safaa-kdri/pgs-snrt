@@ -8,8 +8,9 @@ const mongoSanitize = require('express-mongo-sanitize');
 const connectDB = require('./src/config/database');
 const { CONFIG, assertRequiredEnv } = require('./src/config/constants');
 const logger = require('./src/utils/logger');
+const logRoutes = require('./src/routes/logRoutes');
 const errorHandler = require('./src/middlewares/errorHandler');
-const { initGridFS } = require('./src/services/gridfsService'); // ✅ AJOUTÉ
+const { initGridFS } = require('./src/services/gridfsService');
 
 const authRoutes = require('./src/routes/authRoutes');
 const offerRoutes = require('./src/routes/offerRoutes');
@@ -21,6 +22,8 @@ const documentRoutes = require('./src/routes/documentRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const studentRoutes = require('./src/routes/studentRoutes');
+const internshipRoutes = require('./src/routes/internshipRoutes');
+//const settingsRoutes = require('./src/routes/settingsRoutes');
 // BUGFIX (code mort) : resultsRoutes existait (routes + controller complets,
 // getResults/getResultDetail lisent bien documentsConcours.ResultatConcours
 // deja alimente par offerController.uploadConcoursDocument) mais n'etait
@@ -88,6 +91,12 @@ app.use('/api/v1/users', userRoutes);
 
 // ✅ ROUTES DES PÉRIODES (ajouté ici)
 app.use('/api/v1/periods', periodRoutes);
+
+// === Routes Logs (Admin uniquement) ===
+app.use('/api/v1/logs', logRoutes);
+app.use('/api/v1/internships', internshipRoutes);
+
+// app.use('/api/v1/settings', settingsRoutes);
 
 // D'autres routers (internshipRoutes...) seront montes ici au
 // fur et a mesure de leur integration par le reste de l'equipe.

@@ -1,6 +1,6 @@
 // src/components/admin/DepartmentsList.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -34,15 +34,19 @@ import {
     Search,
     Add,
     Edit,
-    Delete,
     Refresh,
     FilterList,
     CheckCircle,
     Block,
     Visibility,
+    Archive,
+    Restore,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import api from '../../services/api';
+import DepartmentDetailPage from './DepartmentDetailPage';
+import DepartmentEditPage from './DepartmentEditPage';
+import DepartmentAddPage from './DepartmentAddPage'; // ✅ AJOUTER
 
 // ============================================
 // STYLES
@@ -83,6 +87,7 @@ const StatusChip = styled(Chip)(({ status }) => {
 
 const DepartmentsList = () => {
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [loading, setLoading] = useState(true);
     const [departments, setDepartments] = useState([]);
@@ -90,6 +95,7 @@ const DepartmentsList = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
     // Dialog states
     const [openDialog, setOpenDialog] = useState(false);
@@ -98,23 +104,33 @@ const DepartmentsList = () => {
     const [formData, setFormData] = useState({
         nom: '',
         description: '',
-        responsable: '',
+        responsableId: '',
         status: 'active',
     });
 
+    // ✅ Détection des pages
+    const isViewPage = location.pathname.startsWith('/admin/departments/view/');
+    const isEditPage = location.pathname.startsWith('/admin/departments/edit/');
+    const isAddPage = location.pathname === '/admin/departments/add';
+
     useEffect(() => {
-        fetchDepartments();
-    }, []);
+        if (!isViewPage && !isEditPage && !isAddPage) {
+            fetchDepartments();
+        }
+    }, [isViewPage, isEditPage, isAddPage]);
 
     useEffect(() => {
         filterDepartments();
     }, [departments, searchTerm, statusFilter]);
 
+    // ✅ CHARGER DEPUIS L'API AVEC POPULATE
     const fetchDepartments = async () => {
         setLoading(true);
         setError('');
         try {
             const response = await api.get('/departments');
+            
+            console.log('📥 [DepartmentsList] Réponse API:', response.data);
             
             let data = [];
             if (response.data?.data) {
@@ -129,17 +145,21 @@ const DepartmentsList = () => {
                 id: dept._id || dept.id,
                 nom: dept.nom || dept.name || 'Sans nom',
                 description: dept.description || '',
-                responsable: dept.responsable?.nom || dept.responsable || 'Non assigné',
+                responsable: dept.responsableId?.nom || dept.responsable?.nom || dept.responsable || 'Non assigne',
+                responsableId: dept.responsableId?._id || dept.responsableId || dept.responsable?._id || null,
                 nbStagiaires: dept.nbStagiaires || 0,
                 status: dept.actif !== undefined ? (dept.actif ? 'active' : 'inactive') : 'active',
                 dateCreation: dept.createdAt || dept.dateCreation || new Date().toISOString(),
             }));
             
+            console.log('📥 [DepartmentsList] Données formatées:', formattedData.length);
+            
             setDepartments(formattedData);
             setFilteredDepartments(formattedData);
         } catch (error) {
-            console.error('Erreur chargement departements:', error);
-            setError('Erreur lors du chargement des departements');
+            console.error('❌ Erreur chargement departements:', error);
+            console.error('❌ Détails:', error.response?.data);
+            setError(error.response?.data?.message || 'Erreur lors du chargement des departements');
             setDepartments([]);
             setFilteredDepartments([]);
         } finally {
@@ -182,13 +202,18 @@ const DepartmentsList = () => {
             setSelectedDept(dept);
             setFormData({
                 nom: dept.nom,
-                description: dept.description,
-                responsable: dept.responsable,
+                description: dept.description || '',
+                responsableId: dept.responsableId || '',
                 status: dept.status || 'active',
             });
         } else {
             setSelectedDept(null);
-            setFormData({ nom: '', description: '', responsable: '', status: 'active' });
+            setFormData({ 
+                nom: '', 
+                description: '', 
+                responsableId: '', 
+                status: 'active' 
+            });
         }
         setDialogMode(mode);
         setOpenDialog(true);
@@ -199,14 +224,17 @@ const DepartmentsList = () => {
         setSelectedDept(null);
     };
 
+    // ✅ SAUVEGARDER VERS L'API
     const handleSaveDepartment = async () => {
         try {
             const payload = {
                 nom: formData.nom,
                 description: formData.description,
-                responsable: formData.responsable,
+                responsableId: formData.responsableId || undefined,
                 actif: formData.status === 'active',
             };
+
+            console.log('📤 [DepartmentsList] Payload:', payload);
 
             if (dialogMode === 'add') {
                 await api.post('/departments', payload);
@@ -216,33 +244,62 @@ const DepartmentsList = () => {
             handleCloseDialog();
             fetchDepartments();
         } catch (error) {
-            console.error('Erreur sauvegarde:', error);
-            setError('Erreur lors de la sauvegarde du departement');
+            console.error('❌ Erreur sauvegarde:', error);
+            console.error('❌ Détails:', error.response?.data);
+            setError(error.response?.data?.message || 'Erreur lors de la sauvegarde du departement');
         }
     };
 
-    const handleDeleteDepartment = async () => {
+    // ✅ ARCHIVER (Désactiver) - Garder la traçabilité
+    const handleArchiveDepartment = async (dept) => {
+        if (!window.confirm(`Voulez-vous vraiment archiver le departement "${dept.nom}" ?`)) return;
         try {
-            await api.delete(`/departments/${selectedDept.id}`);
-            handleCloseDialog();
+            await api.put(`/departments/${dept.id}`, { actif: false });
+            setSuccess('Departement archive avec succes');
             fetchDepartments();
         } catch (error) {
-            console.error('Erreur suppression:', error);
-            setError('Erreur lors de la suppression du departement');
+            console.error('❌ Erreur archivage:', error);
+            setError(error.response?.data?.message || 'Erreur lors de l\'archivage');
         }
     };
 
-    const handleToggleStatus = async (dept) => {
-        const newStatus = dept.status === 'active' ? false : true;
+    // ✅ RESTAURER (Réactiver) - Pour les départements inactifs
+    const handleRestoreDepartment = async (dept) => {
+        if (!window.confirm(`Voulez-vous vraiment restaurer le departement "${dept.nom}" ?`)) return;
         try {
-            await api.put(`/departments/${dept.id}`, { actif: newStatus });
+            await api.put(`/departments/${dept.id}`, { actif: true });
+            setSuccess('Departement restaure avec succes');
             fetchDepartments();
         } catch (error) {
-            console.error('Erreur changement statut:', error);
-            setError('Erreur lors du changement de statut');
+            console.error('❌ Erreur restauration:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la restauration');
         }
     };
 
+    // ============================================
+    // ✅ AFFICHAGE : PAGE DE DETAIL
+    // ============================================
+    if (isViewPage) {
+        return <DepartmentDetailPage />;
+    }
+
+    // ============================================
+    // ✅ AFFICHAGE : PAGE DE MODIFICATION
+    // ============================================
+    if (isEditPage) {
+        return <DepartmentEditPage />;
+    }
+
+    // ============================================
+    // ✅ AFFICHAGE : PAGE D'AJOUT
+    // ============================================
+    if (isAddPage) {
+        return <DepartmentAddPage />;
+    }
+
+    // ============================================
+    // AFFICHAGE : LISTE DES DEPARTEMENTS
+    // ============================================
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
             {/* ===== EN-TÊTE ===== */}
@@ -269,12 +326,13 @@ const DepartmentsList = () => {
                         variant="contained"
                         startIcon={<Add />}
                         sx={{
-                            backgroundColor: '#148aa0',
+                            backgroundColor: '#2d3748',
                             borderRadius: '12px',
                             textTransform: 'none',
-                            '&:hover': { backgroundColor: '#0b7890' },
+                            color: '#ffffff',
+                            '&:hover': { backgroundColor: '#1a202c' },
                         }}
-                        onClick={() => handleOpenDialog(null, 'add')}
+                        onClick={() => navigate('/admin/departments/add')}
                     >
                         Ajouter un departement
                     </Button>
@@ -284,6 +342,11 @@ const DepartmentsList = () => {
             {error && (
                 <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>
                     {error}
+                </Alert>
+            )}
+            {success && (
+                <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>
+                    {success}
                 </Alert>
             )}
 
@@ -372,7 +435,7 @@ const DepartmentsList = () => {
                         {loading ? (
                             <TableRow>
                                 <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                                    <CircularProgress size={40} sx={{ color: '#148aa0' }} />
+                                    <CircularProgress size={40} sx={{ color: '#2d3748' }} />
                                 </TableCell>
                             </TableRow>
                         ) : filteredDepartments.length === 0 ? (
@@ -390,7 +453,7 @@ const DepartmentsList = () => {
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                             <Avatar
                                                 sx={{
-                                                    backgroundColor: '#148aa0',
+                                                    backgroundColor: '#2d3748',
                                                     width: 36,
                                                     height: 36,
                                                     fontSize: 14,
@@ -411,7 +474,9 @@ const DepartmentsList = () => {
                                         </Typography>
                                     </TableCell>
                                     <TableCell>
-                                        <Typography variant="body2">{dept.responsable || '-'}</Typography>
+                                        <Typography variant="body2">
+                                            {dept.responsable || '-'}
+                                        </Typography>
                                     </TableCell>
                                     <TableCell>
                                         <Chip
@@ -435,39 +500,44 @@ const DepartmentsList = () => {
                                         <Tooltip title="Voir">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleOpenDialog(dept, 'view')}
+                                                onClick={() => navigate(`/admin/departments/view/${dept.id}`)}
                                             >
                                                 <Visibility sx={{ fontSize: 18, color: '#148aa0' }} />
                                             </IconButton>
                                         </Tooltip>
+                                        
                                         <Tooltip title="Modifier">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleOpenDialog(dept, 'edit')}
+                                                onClick={() => navigate(`/admin/departments/edit/${dept.id}`)}
                                             >
                                                 <Edit sx={{ fontSize: 18, color: '#4f46e5' }} />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title={dept.status === 'active' ? 'Désactiver' : 'Activer'}>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleToggleStatus(dept)}
-                                            >
-                                                {dept.status === 'active' ? (
-                                                    <Block sx={{ fontSize: 18, color: '#f59e0b' }} />
-                                                ) : (
-                                                    <CheckCircle sx={{ fontSize: 18, color: '#22c55e' }} />
-                                                )}
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Supprimer">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleOpenDialog(dept, 'delete')}
-                                            >
-                                                <Delete sx={{ fontSize: 18, color: '#ef4444' }} />
-                                            </IconButton>
-                                        </Tooltip>
+                                        
+                                        {dept.status === 'active' && (
+                                            <Tooltip title="Archiver">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleArchiveDepartment(dept)}
+                                                    sx={{ color: '#f59e0b' }}
+                                                >
+                                                    <Archive sx={{ fontSize: 18 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                        
+                                        {dept.status === 'inactive' && (
+                                            <Tooltip title="Restaurer">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleRestoreDepartment(dept)}
+                                                    sx={{ color: '#22c55e' }}
+                                                >
+                                                    <Restore sx={{ fontSize: 18 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -475,169 +545,6 @@ const DepartmentsList = () => {
                     </TableBody>
                 </Table>
             </TableContainer>
-
-            {/* ===== DIALOG ===== */}
-            <Dialog
-                open={openDialog}
-                onClose={handleCloseDialog}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: '16px', padding: '8px' },
-                }}
-            >
-                <DialogTitle>
-                    {dialogMode === 'view' && 'Details du departement'}
-                    {dialogMode === 'add' && 'Ajouter un departement'}
-                    {dialogMode === 'edit' && 'Modifier le departement'}
-                    {dialogMode === 'delete' && 'Supprimer le departement'}
-                </DialogTitle>
-                <DialogContent>
-                    {dialogMode === 'delete' ? (
-                        <Typography>
-                            Etes-vous sûr de vouloir supprimer le departement{' '}
-                            <strong>{selectedDept?.nom}</strong> ?
-                            Cette action est irréversible.
-                        </Typography>
-                    ) : dialogMode === 'view' ? (
-                        selectedDept && (
-                            <Box sx={{ mt: 2 }}>
-                                <Grid container spacing={2}>
-                                    <Grid item xs={12}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Nom
-                                        </Typography>
-                                        <Typography variant="body1" fontWeight={600}>
-                                            {selectedDept.nom}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Description
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            {selectedDept.description || '-'}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Responsable
-                                        </Typography>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {selectedDept.responsable || '-'}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Stagiaires
-                                        </Typography>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {selectedDept.nbStagiaires || 0}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Statut
-                                        </Typography>
-                                        <StatusChip
-                                            label={selectedDept.status === 'active' ? 'Actif' : 'Inactif'}
-                                            status={selectedDept.status}
-                                            size="small"
-                                            sx={{ mt: 0.5 }}
-                                        />
-                                    </Grid>
-                                </Grid>
-                            </Box>
-                        )
-                    ) : (
-                        <Box sx={{ mt: 2 }}>
-                            <TextField
-                                label="Nom du departement"
-                                value={formData.nom}
-                                onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-                                fullWidth
-                                margin="normal"
-                                sx={{
-                                    '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                }}
-                            />
-                            <TextField
-                                label="Description"
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                fullWidth
-                                margin="normal"
-                                multiline
-                                rows={3}
-                                sx={{
-                                    '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                }}
-                            />
-                            <TextField
-                                label="Responsable"
-                                value={formData.responsable}
-                                onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
-                                fullWidth
-                                margin="normal"
-                                sx={{
-                                    '& .MuiOutlinedInput-root': { borderRadius: '10px' },
-                                }}
-                            />
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        checked={formData.status === 'active'}
-                                        onChange={(e) =>
-                                            setFormData({
-                                                ...formData,
-                                                status: e.target.checked ? 'active' : 'inactive',
-                                            })
-                                        }
-                                    />
-                                }
-                                label={formData.status === 'active' ? 'Actif' : 'Inactif'}
-                                sx={{ mt: 1 }}
-                            />
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button
-                        onClick={handleCloseDialog}
-                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                    >
-                        {dialogMode === 'delete' ? 'Annuler' : 'Fermer'}
-                    </Button>
-                    {dialogMode === 'delete' && (
-                        <Button
-                            variant="contained"
-                            onClick={handleDeleteDepartment}
-                            sx={{
-                                backgroundColor: '#ef4444',
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                '&:hover': { backgroundColor: '#dc2626' },
-                            }}
-                        >
-                            Supprimer
-                        </Button>
-                    )}
-                    {(dialogMode === 'add' || dialogMode === 'edit') && (
-                        <Button
-                            variant="contained"
-                            onClick={handleSaveDepartment}
-                            sx={{
-                                backgroundColor: '#148aa0',
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                '&:hover': { backgroundColor: '#0b7890' },
-                            }}
-                        >
-                            {dialogMode === 'add' ? 'Ajouter' : 'Enregistrer'}
-                        </Button>
-                    )}
-                </DialogActions>
-            </Dialog>
         </Container>
     );
 };

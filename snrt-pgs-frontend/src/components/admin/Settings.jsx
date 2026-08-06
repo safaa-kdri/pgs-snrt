@@ -1,10 +1,11 @@
 // src/components/admin/Settings.jsx
+// ✅ CORRECTION : Ajout des IDs pour les TextField et Select
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Container,
-    Paper,
     Typography,
     TextField,
     Button,
@@ -13,14 +14,13 @@ import {
     Grid,
     Alert,
     CircularProgress,
-    Divider,
     Card,
     CardContent,
     Select,
     MenuItem,
     InputLabel,
     FormControl,
-    Chip,
+    Snackbar,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
@@ -30,9 +30,9 @@ import {
     Security,
     Email,
     Storage,
-    Palette,
     Language,
     Notifications,
+    Build,
 } from '@mui/icons-material';
 
 // ============================================
@@ -43,6 +43,7 @@ const SettingsCard = styled(Card)({
     borderRadius: '16px',
     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
     marginBottom: '24px',
+    border: '1px solid #eef1f3',
     '& .MuiCardContent-root': {
         padding: '24px',
     },
@@ -70,14 +71,30 @@ const StyledTextField = styled(TextField)({
 
 const SaveButton = styled(Button)({
     borderRadius: '12px',
-    backgroundColor: '#148aa0',
-    color: '#fff',
+    backgroundColor: '#000000',
+    color: '#ffffff',
     textTransform: 'none',
     fontWeight: 600,
     padding: '10px 32px',
-    '&:hover': { backgroundColor: '#0b7890' },
-    '&:disabled': { backgroundColor: '#a0c4cd' },
+    '&:hover': { backgroundColor: '#333333' },
+    '&:disabled': { backgroundColor: '#999999' },
 });
+
+const CancelButton = styled(Button)({
+    borderRadius: '12px',
+    textTransform: 'none',
+    fontWeight: 500,
+    padding: '10px 32px',
+    color: '#666666',
+    borderColor: '#cccccc',
+    '&:hover': {
+        borderColor: '#666666',
+        backgroundColor: 'rgba(0,0,0,0.04)',
+    },
+});
+
+// Clé pour le stockage local
+const SETTINGS_STORAGE_KEY = 'snrt_pgs_settings';
 
 // ============================================
 // COMPOSANT PRINCIPAL
@@ -90,54 +107,59 @@ const Settings = () => {
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState('');
     const [error, setError] = useState('');
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
 
-    // État des paramètres
-    const [settings, setSettings] = useState({
-        // Général
+    // Valeurs par défaut
+    const defaultSettings = {
         appName: 'SNRT - PGS',
-        appLogo: '',
         appLanguage: 'fr',
         appTheme: 'light',
-
-        // Sécurité
         maxLoginAttempts: 3,
         blockDuration: 60,
         twoFactorRequired: true,
         sessionTimeout: 24,
-
-        // Email
         emailHost: 'smtp.gmail.com',
         emailPort: 587,
+        emailSecure: false,
+        emailUser: '',
+        emailPassword: '',
         emailFrom: 'noreply@snrt.ma',
-
-        // Notifications
         emailNotifications: true,
         pushNotifications: true,
         newOfferNotifications: true,
         applicationNotifications: true,
-
-        // Base de données
         backupFrequency: 'daily',
         retentionDays: 365,
-
-        // Maintenance
         maintenanceMode: false,
         maintenanceMessage: 'La plateforme est en maintenance. Veuillez revenir plus tard.',
-    });
+    };
+
+    const [settings, setSettings] = useState(defaultSettings);
 
     useEffect(() => {
-        fetchSettings();
+        loadSettings();
     }, []);
 
-    const fetchSettings = async () => {
+    // ✅ CHARGER LES PARAMÈTRES DEPUIS localStorage
+    const loadSettings = () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
-            // TODO: Appel API GET /settings
+            const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                setSettings({ ...defaultSettings, ...parsed });
+            } else {
+                setSettings(defaultSettings);
+                // Sauvegarder les valeurs par défaut
+                localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(defaultSettings));
+            }
             setSuccess('Paramètres chargés avec succès');
+            setTimeout(() => setSuccess(''), 3000);
         } catch (error) {
             console.error('Erreur chargement paramètres:', error);
             setError('Erreur lors du chargement des paramètres');
+            setSettings(defaultSettings);
         } finally {
             setLoading(false);
         }
@@ -149,27 +171,47 @@ const Settings = () => {
         setError('');
     };
 
+    // ✅ SAUVEGARDER LES PARAMÈTRES DANS localStorage
     const handleSave = async () => {
         setSaving(true);
         setError('');
         setSuccess('');
+        setSnackbarOpen(false);
+
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            // TODO: Appel API PUT /settings
-            console.log('💾 Paramètres sauvegardés:', settings);
-            setSuccess('✅ Paramètres sauvegardés avec succès !');
+            // Sauvegarder dans localStorage
+            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+            
+            // Simuler un délai pour l'effet de sauvegarde
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            setSuccess('Paramètres sauvegardés avec succès');
+            setSnackbarOpen(true);
         } catch (error) {
             console.error('Erreur sauvegarde:', error);
-            setError('❌ Erreur lors de la sauvegarde des paramètres');
+            setError('Erreur lors de la sauvegarde des paramètres');
         } finally {
             setSaving(false);
         }
     };
 
+    const handleReset = () => {
+        if (window.confirm('Voulez-vous vraiment réinitialiser tous les paramètres ?')) {
+            localStorage.removeItem(SETTINGS_STORAGE_KEY);
+            setSettings(defaultSettings);
+            setSuccess('Paramètres réinitialisés');
+            setTimeout(() => setSuccess(''), 3000);
+        }
+    };
+
+    const handleSnackbarClose = () => {
+        setSnackbarOpen(false);
+    };
+
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={60} thickness={4} sx={{ color: '#148aa0' }} />
+                <CircularProgress size={60} thickness={4} sx={{ color: '#000000' }} />
             </Box>
         );
     }
@@ -179,7 +221,7 @@ const Settings = () => {
             {/* ===== EN-TÊTE ===== */}
             <Box sx={{ mb: 4 }}>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                    ⚙️ Paramètres généraux
+                    Paramètres généraux
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     Configurez les paramètres de la plateforme
@@ -192,22 +234,34 @@ const Settings = () => {
                 </Alert>
             )}
 
-            {success && (
+            {success && !snackbarOpen && (
                 <Alert severity="success" sx={{ mb: 3, borderRadius: '12px' }}>
                     {success}
                 </Alert>
             )}
 
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={6000}
+                onClose={handleSnackbarClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert onClose={handleSnackbarClose} severity="success" sx={{ borderRadius: '12px' }}>
+                    Paramètres sauvegardés avec succès
+                </Alert>
+            </Snackbar>
+
             {/* ===== GÉNÉRAL ===== */}
             <SettingsCard>
                 <CardContent>
                     <SectionTitle>
-                        <SettingsIcon sx={{ color: '#148aa0' }} />
+                        <SettingsIcon sx={{ color: '#000000' }} />
                         Général
                     </SectionTitle>
                     <Grid container spacing={3}>
                         <Grid item xs={12} sm={6}>
                             <StyledTextField
+                                id="settings-appName"
                                 label="Nom de l'application"
                                 value={settings.appName}
                                 onChange={(e) => handleChange('appName', e.target.value)}
@@ -216,8 +270,10 @@ const Settings = () => {
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <FormControl fullWidth>
-                                <InputLabel>Langue</InputLabel>
+                                <InputLabel id="settings-language-label">Langue</InputLabel>
                                 <Select
+                                    labelId="settings-language-label"
+                                    id="settings-language"
                                     value={settings.appLanguage}
                                     onChange={(e) => handleChange('appLanguage', e.target.value)}
                                     label="Langue"
@@ -231,8 +287,10 @@ const Settings = () => {
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <FormControl fullWidth>
-                                <InputLabel>Thème</InputLabel>
+                                <InputLabel id="settings-theme-label">Thème</InputLabel>
                                 <Select
+                                    labelId="settings-theme-label"
+                                    id="settings-theme"
                                     value={settings.appTheme}
                                     onChange={(e) => handleChange('appTheme', e.target.value)}
                                     label="Thème"
@@ -258,38 +316,44 @@ const Settings = () => {
                     <Grid container spacing={3}>
                         <Grid item xs={12} sm={4}>
                             <StyledTextField
+                                id="settings-maxLoginAttempts"
                                 label="Tentatives max"
                                 type="number"
                                 value={settings.maxLoginAttempts}
                                 onChange={(e) => handleChange('maxLoginAttempts', parseInt(e.target.value))}
                                 fullWidth
+                                InputProps={{ inputProps: { min: 1, max: 10 } }}
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                             <StyledTextField
+                                id="settings-blockDuration"
                                 label="Durée blocage (minutes)"
                                 type="number"
                                 value={settings.blockDuration}
                                 onChange={(e) => handleChange('blockDuration', parseInt(e.target.value))}
                                 fullWidth
+                                InputProps={{ inputProps: { min: 5, max: 1440 } }}
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                             <StyledTextField
+                                id="settings-sessionTimeout"
                                 label="Timeout session (heures)"
                                 type="number"
                                 value={settings.sessionTimeout}
                                 onChange={(e) => handleChange('sessionTimeout', parseInt(e.target.value))}
                                 fullWidth
+                                InputProps={{ inputProps: { min: 1, max: 72 } }}
                             />
                         </Grid>
                         <Grid item xs={12}>
                             <FormControlLabel
                                 control={
                                     <Switch
+                                        id="settings-twoFactorRequired"
                                         checked={settings.twoFactorRequired}
                                         onChange={(e) => handleChange('twoFactorRequired', e.target.checked)}
-                                        sx={{ '& .MuiSwitch-track': { backgroundColor: settings.twoFactorRequired ? '#148aa0' : '#ccc' } }}
                                     />
                                 }
                                 label="Authentification à deux facteurs (2FA) obligatoire"
@@ -309,27 +373,66 @@ const Settings = () => {
                     <Grid container spacing={3}>
                         <Grid item xs={12} sm={6}>
                             <StyledTextField
+                                id="settings-emailHost"
                                 label="Serveur SMTP"
                                 value={settings.emailHost}
                                 onChange={(e) => handleChange('emailHost', e.target.value)}
                                 fullWidth
+                                placeholder="smtp.gmail.com"
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <StyledTextField
+                                id="settings-emailPort"
                                 label="Port"
                                 type="number"
                                 value={settings.emailPort}
                                 onChange={(e) => handleChange('emailPort', parseInt(e.target.value))}
                                 fullWidth
+                                InputProps={{ inputProps: { min: 1, max: 65535 } }}
+                            />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        id="settings-emailSecure"
+                                        checked={settings.emailSecure}
+                                        onChange={(e) => handleChange('emailSecure', e.target.checked)}
+                                    />
+                                }
+                                label="Utiliser une connexion sécurisée (SSL/TLS)"
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <StyledTextField
+                                id="settings-emailUser"
+                                label="Utilisateur SMTP"
+                                value={settings.emailUser}
+                                onChange={(e) => handleChange('emailUser', e.target.value)}
+                                fullWidth
+                                placeholder="user@domain.com"
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <StyledTextField
+                                id="settings-emailPassword"
+                                label="Mot de passe SMTP"
+                                type="password"
+                                value={settings.emailPassword}
+                                onChange={(e) => handleChange('emailPassword', e.target.value)}
+                                fullWidth
+                                placeholder="••••••••"
                             />
                         </Grid>
                         <Grid item xs={12}>
                             <StyledTextField
+                                id="settings-emailFrom"
                                 label="Email d'envoi"
                                 value={settings.emailFrom}
                                 onChange={(e) => handleChange('emailFrom', e.target.value)}
                                 fullWidth
+                                placeholder="noreply@snrt.ma"
                             />
                         </Grid>
                     </Grid>
@@ -348,6 +451,7 @@ const Settings = () => {
                             <FormControlLabel
                                 control={
                                     <Switch
+                                        id="settings-emailNotifications"
                                         checked={settings.emailNotifications}
                                         onChange={(e) => handleChange('emailNotifications', e.target.checked)}
                                     />
@@ -359,6 +463,7 @@ const Settings = () => {
                             <FormControlLabel
                                 control={
                                     <Switch
+                                        id="settings-pushNotifications"
                                         checked={settings.pushNotifications}
                                         onChange={(e) => handleChange('pushNotifications', e.target.checked)}
                                     />
@@ -370,6 +475,7 @@ const Settings = () => {
                             <FormControlLabel
                                 control={
                                     <Switch
+                                        id="settings-newOfferNotifications"
                                         checked={settings.newOfferNotifications}
                                         onChange={(e) => handleChange('newOfferNotifications', e.target.checked)}
                                     />
@@ -381,6 +487,7 @@ const Settings = () => {
                             <FormControlLabel
                                 control={
                                     <Switch
+                                        id="settings-applicationNotifications"
                                         checked={settings.applicationNotifications}
                                         onChange={(e) => handleChange('applicationNotifications', e.target.checked)}
                                     />
@@ -402,8 +509,10 @@ const Settings = () => {
                     <Grid container spacing={3}>
                         <Grid item xs={12} sm={6}>
                             <FormControl fullWidth>
-                                <InputLabel>Fréquence des sauvegardes</InputLabel>
+                                <InputLabel id="settings-backup-label">Fréquence des sauvegardes</InputLabel>
                                 <Select
+                                    labelId="settings-backup-label"
+                                    id="settings-backup"
                                     value={settings.backupFrequency}
                                     onChange={(e) => handleChange('backupFrequency', e.target.value)}
                                     label="Fréquence des sauvegardes"
@@ -418,11 +527,13 @@ const Settings = () => {
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <StyledTextField
+                                id="settings-retentionDays"
                                 label="Conservation (jours)"
                                 type="number"
                                 value={settings.retentionDays}
                                 onChange={(e) => handleChange('retentionDays', parseInt(e.target.value))}
                                 fullWidth
+                                InputProps={{ inputProps: { min: 1, max: 3650 } }}
                             />
                         </Grid>
                     </Grid>
@@ -433,7 +544,7 @@ const Settings = () => {
             <SettingsCard>
                 <CardContent>
                     <SectionTitle>
-                        <SettingsIcon sx={{ color: '#ef4444' }} />
+                        <Build sx={{ color: '#ef4444' }} />
                         Maintenance
                     </SectionTitle>
                     <Grid container spacing={3}>
@@ -441,14 +552,14 @@ const Settings = () => {
                             <FormControlLabel
                                 control={
                                     <Switch
+                                        id="settings-maintenanceMode"
                                         checked={settings.maintenanceMode}
                                         onChange={(e) => handleChange('maintenanceMode', e.target.checked)}
-                                        sx={{ '& .MuiSwitch-track': { backgroundColor: settings.maintenanceMode ? '#ef4444' : '#ccc' } }}
                                     />
                                 }
                                 label={
                                     <Typography color={settings.maintenanceMode ? '#ef4444' : 'inherit'}>
-                                        {settings.maintenanceMode ? '⚠️ Mode maintenance activé' : 'Mode maintenance désactivé'}
+                                        {settings.maintenanceMode ? 'Mode maintenance activé' : 'Mode maintenance désactivé'}
                                     </Typography>
                                 }
                             />
@@ -456,12 +567,14 @@ const Settings = () => {
                         {settings.maintenanceMode && (
                             <Grid item xs={12}>
                                 <StyledTextField
+                                    id="settings-maintenanceMessage"
                                     label="Message de maintenance"
                                     value={settings.maintenanceMessage}
                                     onChange={(e) => handleChange('maintenanceMessage', e.target.value)}
                                     fullWidth
                                     multiline
                                     rows={3}
+                                    placeholder="La plateforme est en maintenance. Veuillez revenir plus tard."
                                 />
                             </Grid>
                         )}
@@ -471,20 +584,20 @@ const Settings = () => {
 
             {/* ===== BOUTONS ===== */}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
-                <Button
+                <CancelButton
                     variant="outlined"
                     startIcon={<Refresh />}
-                    onClick={fetchSettings}
-                    sx={{ borderRadius: '12px', textTransform: 'none' }}
+                    onClick={handleReset}
+                    disabled={saving}
                 >
                     Réinitialiser
-                </Button>
+                </CancelButton>
                 <SaveButton
                     onClick={handleSave}
                     disabled={saving}
                     startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Save />}
                 >
-                    {saving ? 'Sauvegarde...' : '💾 Sauvegarder'}
+                    {saving ? 'Sauvegarde...' : 'Sauvegarder'}
                 </SaveButton>
             </Box>
         </Container>
