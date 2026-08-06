@@ -1,3 +1,6 @@
+// src/utils/validators.js
+// ✅ CORRECTION : Utiliser les mêmes valeurs que le modèle MongoDB (sans accents)
+
 const Joi = require('joi');
 const ApiError = require('./ApiError');
 const { PASSWORD_MIN_LENGTH, OFFER_TYPES, INTERVIEW_TYPES } = require('../config/constants');
@@ -47,7 +50,6 @@ const registerSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(60).required(),
   prenom: Joi.string().trim().min(2).max(60).required(),
   email: Joi.string().trim().email().required(),
-  // ✅ AJOUTER EMAIL CONFIRMATION
   emailConfirmation: Joi.string().trim().email().required(),
   motDePasse: Joi.string().min(16).max(128).required(),
   telephone: Joi.string()
@@ -65,13 +67,11 @@ const registerSchema = Joi.object({
   filiere: Joi.string().trim().max(150).allow('', null),
   niveau: Joi.string().trim().max(50).allow('', null),
   annee: Joi.string().trim().max(20).allow('', null),
-  // ✅ AJOUTER ACCEPTATION DES CONDITIONS
   acceptTerms: Joi.boolean().valid(true).required().messages({
     'any.only': 'Vous devez accepter les conditions d\'utilisation.',
     'any.required': 'Vous devez accepter les conditions d\'utilisation.',
   }),
 }).custom((value, helpers) => {
-  // ✅ Vérifier que les emails correspondent
   if (value.email !== value.emailConfirmation) {
     return helpers.message('Les adresses email ne correspondent pas.');
   }
@@ -98,10 +98,6 @@ const resetPasswordSchema = Joi.object({
   motDePasse: Joi.string().min(16).max(128).required(),
 });
 
-// ============================================
-// CHANGER MOT DE PASSE
-// ✅ PAS DE min(8) - La validation est faite par validatePasswordPolicy
-// ============================================
 const changePasswordSchema = Joi.object({
   ancienMotDePasse: Joi.string().required().messages({
     'string.empty': 'Le mot de passe actuel est requis',
@@ -113,7 +109,7 @@ const changePasswordSchema = Joi.object({
   }),
 });
 
-
+// ✅ CORRECTION : Utiliser les valeurs sans accents pour correspondre au modèle MongoDB
 const subjectSchema = Joi.object({
   titre: Joi.string().trim().min(2).max(150).required(),
   description: Joi.string().trim().min(10).max(3000).required(),
@@ -148,10 +144,10 @@ const createOfferSchema = Joi.object({
   }),
   periodeId: Joi.string().hex().length(24).required(),
   sujets: Joi.array().items(subjectSchema).min(1).required().messages({
-
     'array.min': 'Une offre doit comporter au moins un sujet (RG-010).',
   }),
   documentsRequis: Joi.array().items(documentRequisSchema).default([]),
+  departementId: Joi.string().hex().length(24).optional().allow(null, ''),
 });
 
 const updateOfferSchema = createOfferSchema.fork(
@@ -200,9 +196,6 @@ const updateInterviewSchema = Joi.object({
 }).min(1);
 
 
-// When creating an application, the server uses the authenticated user's id
-// as `etudiantId`. Do not require `etudiantId` in the request body to avoid
-// spurious validation errors when the frontend omits it.
 const createApplicationSchema = Joi.object({
   offreId: Joi.string().hex().length(24).required(),
   commentaire: Joi.string().trim().max(1000).allow('', null),

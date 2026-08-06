@@ -1,4 +1,6 @@
 // src/components/admin/PeriodsList.jsx
+// ✅ VERSION SANS BOUTONS RAFRAÎCHIR ET RÉINITIALISER
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -74,6 +76,15 @@ const StatusChip = styled(Chip)(({ status }) => {
         fontSize: '12px',
         height: '24px',
     };
+});
+
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+    border: '1px solid #eef1f3',
 });
 
 // ============================================
@@ -244,31 +255,20 @@ const PeriodsList = () => {
                         {filteredPeriods.length} période(s) trouvée(s)
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchPeriods}
-                        disabled={loading}
-                        sx={{ borderRadius: '12px', textTransform: 'none' }}
-                    >
-                        Rafraîchir
-                    </Button>
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        sx={{
-                            backgroundColor: '#2d3748',
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            color: '#ffffff',
-                            '&:hover': { backgroundColor: '#1a2332' },
-                        }}
-                        onClick={() => navigate('/admin/periods/add')}
-                    >
-                        Ajouter une période
-                    </Button>
-                </Box>
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    sx={{
+                        backgroundColor: '#2d3748',
+                        borderRadius: '12px',
+                        textTransform: 'none',
+                        color: '#ffffff',
+                        '&:hover': { backgroundColor: '#1a2332' },
+                    }}
+                    onClick={() => navigate('/admin/periods/add')}
+                >
+                    Ajouter une période
+                </Button>
             </PageHeader>
 
             {error && (
@@ -277,12 +277,14 @@ const PeriodsList = () => {
                 </Alert>
             )}
 
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
+            {/* ========================================== */}
+            {/* ✅ FILTRES - SANS BOUTON RÉINITIALISER */}
+            {/* ========================================== */}
+            <FiltersContainer>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12} sm={7}>
                         <TextField
-                            placeholder="Rechercher..."
+                            placeholder="Rechercher par nom..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -302,7 +304,7 @@ const PeriodsList = () => {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={5}>
                         <TextField
                             select
                             label="Statut"
@@ -321,28 +323,8 @@ const PeriodsList = () => {
                             <MenuItem value="inactive">Inactif</MenuItem>
                         </TextField>
                     </Grid>
-                    <Grid item xs={12} sm={2}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<FilterList />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                setStatusFilter('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
                 </Grid>
-            </Paper>
+            </FiltersContainer>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer
@@ -372,7 +354,9 @@ const PeriodsList = () => {
                             <TableRow>
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucune période trouvée
+                                        {searchTerm || statusFilter !== 'all'
+                                            ? 'Aucune période ne correspond à vos critères'
+                                            : 'Aucune période trouvée'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>

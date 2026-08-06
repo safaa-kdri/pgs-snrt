@@ -1,8 +1,8 @@
-// src/components/department/CreateOffer.jsx
-// ✅ CORRECTION : Alignement des boutons à droite + suppression des doublons
+// src/components/department/OfferEditPage.jsx
+// ✅ PAGE DE MODIFICATION D'OFFRE
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -31,18 +31,15 @@ import {
     Add,
     Delete,
     Save,
-    Send,
     Work,
     School,
     Description,
-    CheckCircle,
-    Cancel,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
 // ============================================
-// STYLES - MODERNES ET PROFESSIONNELS
+// STYLES
 // ============================================
 
 const PageContainer = styled(Container)({
@@ -50,13 +47,13 @@ const PageContainer = styled(Container)({
     paddingBottom: '32px',
 });
 
-// ✅ CORRECTION : HeaderSection pour alignement des boutons
 const HeaderSection = styled(Box)({
     display: 'flex',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '32px',
-    gap: '16px',
+    marginBottom: '16px',
     flexWrap: 'wrap',
+    gap: '16px',
 });
 
 const HeaderLeft = styled(Box)({
@@ -74,6 +71,20 @@ const HeaderTitle = styled(Typography)({
 const HeaderSubtitle = styled(Typography)({
     color: '#687480',
     fontSize: '14px',
+});
+
+const ActionBar = styled(Paper)({
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    padding: '12px 24px',
+    marginBottom: '24px',
+    borderRadius: '10px',
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #eef1f3',
+    boxShadow: 'none',
+    flexWrap: 'wrap',
+    gap: '12px',
 });
 
 const CreateCard = styled(Paper)({
@@ -125,18 +136,20 @@ const FormCard = styled(Card)({
     },
 });
 
-const ActionButton = styled(Button)({
-    borderRadius: '8px',
-    textTransform: 'none',
-    fontWeight: 500,
-    padding: '8px 24px',
-});
-
-const SubmitButton = styled(Button)({
+const PrimaryButton = styled(Button)({
     borderRadius: '8px',
     textTransform: 'none',
     fontWeight: 600,
-    padding: '8px 32px',
+    padding: '8px 28px',
+    backgroundColor: '#148aa0',
+    color: '#ffffff',
+    '&:hover': {
+        backgroundColor: '#0b7890',
+    },
+    '&:disabled': {
+        backgroundColor: '#94b8c4',
+        color: '#ffffff',
+    },
 });
 
 // ============================================
@@ -150,14 +163,16 @@ const COMPETENCE_LEVELS = ['Debutant', 'Intermediaire', 'Avance', 'Expert'];
 // COMPOSANT PRINCIPAL
 // ============================================
 
-const CreateOffer = () => {
+const OfferEditPage = () => {
     const navigate = useNavigate();
+    const { id } = useParams();
     const { user } = useAuth();
 
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [periods, setPeriods] = useState([]);
 
     // ÉTAT DU FORMULAIRE
     const [form, setForm] = useState({
@@ -180,40 +195,72 @@ const CreateOffer = () => {
         ],
     });
 
-    // ÉTAT DES PÉRIODES
-    const [periods, setPeriods] = useState([]);
-    const [periodsLoading, setPeriodsLoading] = useState(true);
-
     useEffect(() => {
-        fetchPeriods();
-    }, []);
+        if (id) {
+            fetchOfferDetail();
+            fetchPeriods();
+        }
+    }, [id]);
+
+    const fetchOfferDetail = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const response = await api.get(`/offers/${id}`);
+            const data = response.data?.offer || response.data?.data || response.data;
+            
+            if (!data) {
+                throw new Error('Offre non trouvée');
+            }
+
+            // Formater les dates pour le formulaire
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                const date = new Date(dateStr);
+                return date.toISOString().split('T')[0];
+            };
+
+            setForm({
+                titre: data.titre || '',
+                description: data.description || '',
+                nbPostes: data.nbPostes || 1,
+                typeStage: data.typeStage || '',
+                periodeId: data.periodeId || '',
+                dateDebut: formatDate(data.dateDebut),
+                dateFin: formatDate(data.dateFin),
+                dateLimiteCandidature: formatDate(data.dateLimiteCandidature),
+                sujets: data.sujets && data.sujets.length > 0 ? data.sujets : [
+                    {
+                        titre: '',
+                        description: '',
+                        missions: [''],
+                        profilRecherche: '',
+                        competences: [{ nom: '', niveau: '' }],
+                    },
+                ],
+            });
+
+        } catch (error) {
+            console.error('Erreur chargement offre:', error);
+            setError(error.response?.data?.message || 'Erreur lors du chargement de l\'offre');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const fetchPeriods = async () => {
-        setPeriodsLoading(true);
         try {
             const response = await api.get('/periods');
-            
             let data = [];
             if (response.data?.data) {
                 data = response.data.data;
             } else if (Array.isArray(response.data)) {
                 data = response.data;
-            } else if (response.data?.periods) {
-                data = response.data.periods;
             }
-
             const activePeriods = data.filter(p => p.actif !== false && p.isDeleted !== true);
             setPeriods(activePeriods);
-            
-            if (activePeriods.length > 0 && !form.periodeId) {
-                setForm(prev => ({ ...prev, periodeId: activePeriods[0]._id || activePeriods[0].id }));
-            }
         } catch (error) {
             console.error('Erreur chargement périodes:', error);
-            setError('Erreur lors du chargement des périodes');
-            setPeriods([]);
-        } finally {
-            setPeriodsLoading(false);
         }
     };
 
@@ -374,77 +421,23 @@ const CreateOffer = () => {
                 return;
             }
 
-            console.log('📤 [CreateOffer] Envoi des données:', JSON.stringify(dataToSend, null, 2));
+            console.log('📤 [OfferEdit] Envoi des données:', JSON.stringify(dataToSend, null, 2));
 
-            await api.post('/offers', dataToSend);
+            await api.put(`/offers/${id}`, dataToSend);
 
-            setSuccess('Offre créée avec succès !');
+            setSuccess('Offre modifiée avec succès !');
             setTimeout(() => {
                 navigate('/department/my-offers');
             }, 1500);
         } catch (error) {
-            console.error('Erreur création offre:', error);
-            setError(error.response?.data?.message || 'Erreur lors de la création de l\'offre');
+            console.error('Erreur modification offre:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la modification de l\'offre');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleSaveDraft = async () => {
-        setError('');
-        setSuccess('');
-
-        if (!form.titre || form.titre.trim() === '') {
-            setError('Le titre est obligatoire pour sauvegarder un brouillon');
-            return;
-        }
-
-        setSaving(true);
-
-        try {
-            const dataToSend = {
-                titre: form.titre.trim(),
-                description: form.description ? form.description.trim() : '',
-                nbPostes: form.nbPostes || 1,
-                typeStage: form.typeStage || 'PFE',
-                periodeId: form.periodeId || '',
-                dateDebut: form.dateDebut || null,
-                dateFin: form.dateFin || null,
-                dateLimiteCandidature: form.dateLimiteCandidature || null,
-                sujets: form.sujets
-                    .filter(s => s.titre && s.titre.trim() !== '')
-                    .map(sujet => ({
-                        titre: sujet.titre.trim(),
-                        description: sujet.description ? sujet.description.trim() : '',
-                        missions: (sujet.missions || [])
-                            .filter(m => m && m.trim() !== ''),
-                        profilRecherche: sujet.profilRecherche ? sujet.profilRecherche.trim() : '',
-                        competences: (sujet.competences || [])
-                            .filter(c => c.nom && c.nom.trim() !== '')
-                            .map(c => ({
-                                nom: c.nom.trim(),
-                                niveau: c.niveau || 'Debutant'
-                            }))
-                    })),
-                documentsRequis: []
-            };
-
-            console.log('📤 [CreateOffer] Sauvegarde brouillon:', JSON.stringify(dataToSend, null, 2));
-
-            await api.post('/offers', dataToSend);
-            setSuccess('Brouillon sauvegardé avec succès !');
-            setTimeout(() => {
-                navigate('/department/my-offers');
-            }, 1500);
-        } catch (error) {
-            console.error('Erreur sauvegarde brouillon:', error);
-            setError(error.response?.data?.message || 'Erreur lors de la sauvegarde du brouillon');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (periodsLoading) {
+    if (loading) {
         return (
             <PageContainer maxWidth="lg">
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -459,47 +452,32 @@ const CreateOffer = () => {
             {/* ===== EN-TÊTE ===== */}
             <HeaderSection>
                 <HeaderLeft>
-                    <IconButton onClick={() => navigate('/department')} sx={{ color: '#666' }}>
+                    <IconButton onClick={() => navigate('/department/my-offers')} sx={{ color: '#666' }}>
                         <ArrowBack />
                     </IconButton>
                     <Box>
-                        <HeaderTitle>Créer une offre de stage</HeaderTitle>
+                        <HeaderTitle>Modifier l'offre</HeaderTitle>
                         <HeaderSubtitle>
-                            Remplissez les informations ci-dessous pour créer une nouvelle offre
+                            {form.titre || 'Offre sans titre'}
                         </HeaderSubtitle>
                     </Box>
                 </HeaderLeft>
-                {/* ✅ CORRECTION : Stack avec marginLeft: auto pour aligner à droite */}
-                <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{
-                        marginLeft: 'auto',
-                    }}
-                >
-                    <ActionButton
-                        variant="outlined"
-                        startIcon={<Save />}
-                        onClick={handleSaveDraft}
-                        disabled={saving}
-                        sx={{ borderColor: '#e0e4e8', color: '#687480' }}
-                    >
-                        {saving ? 'Sauvegarde...' : 'Sauvegarder en brouillon'}
-                    </ActionButton>
-                    <SubmitButton
-                        variant="contained"
-                        startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Send />}
-                        onClick={handleSubmit}
-                        disabled={saving}
-                        sx={{ backgroundColor: '#148aa0', '&:hover': { backgroundColor: '#0b7890' } }}
-                    >
-                        {saving ? 'Création...' : 'Soumettre pour validation'}
-                    </SubmitButton>
-                </Stack>
             </HeaderSection>
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '8px' }}>{success}</Alert>}
+
+            {/* ===== BARRE D'ACTIONS ===== */}
+            <ActionBar>
+                <PrimaryButton
+                    variant="contained"
+                    startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Save />}
+                    onClick={handleSubmit}
+                    disabled={saving}
+                >
+                    {saving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+                </PrimaryButton>
+            </ActionBar>
 
             <CreateCard>
                 <form onSubmit={handleSubmit}>
@@ -518,7 +496,6 @@ const CreateOffer = () => {
                                 onChange={(e) => handleChange('titre', e.target.value)}
                                 fullWidth
                                 required
-                                placeholder="Ex: Stage en Développement Web"
                             />
                         </Grid>
                         <Grid item xs={12}>
@@ -530,7 +507,6 @@ const CreateOffer = () => {
                                 multiline
                                 rows={4}
                                 required
-                                placeholder="Décrivez l'offre de stage en détail..."
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -552,7 +528,6 @@ const CreateOffer = () => {
                                     label="Type de stage *"
                                     sx={{ borderRadius: '8px', backgroundColor: '#fff' }}
                                 >
-                                    <MenuItem value="" disabled>Sélectionnez un type</MenuItem>
                                     {STAGE_TYPES.map((type) => (
                                         <MenuItem key={type} value={type}>{type}</MenuItem>
                                     ))}
@@ -578,11 +553,6 @@ const CreateOffer = () => {
                                         ))
                                     )}
                                 </Select>
-                                {periods.length === 0 && (
-                                    <FormHelperText error>
-                                        ⚠️ Aucune période disponible. Veuillez en créer une dans l'administration.
-                                    </FormHelperText>
-                                )}
                             </FormControl>
                         </Grid>
                     </Grid>
@@ -674,7 +644,6 @@ const CreateOffer = () => {
                                         onChange={(e) => handleSubjectChange(subjectIndex, 'titre', e.target.value)}
                                         fullWidth
                                         required
-                                        placeholder="Ex: Développement d'une application de gestion"
                                     />
                                 </Grid>
                                 <Grid item xs={12}>
@@ -686,7 +655,6 @@ const CreateOffer = () => {
                                         multiline
                                         rows={3}
                                         required
-                                        placeholder="Décrivez le sujet du stage..."
                                     />
                                 </Grid>
                                 <Grid item xs={12}>
@@ -695,7 +663,6 @@ const CreateOffer = () => {
                                         value={sujet.profilRecherche}
                                         onChange={(e) => handleSubjectChange(subjectIndex, 'profilRecherche', e.target.value)}
                                         fullWidth
-                                        placeholder="Ex: Étudiant en 5ème année informatique"
                                     />
                                 </Grid>
                             </Grid>
@@ -782,12 +749,10 @@ const CreateOffer = () => {
                             </Box>
                         </FormCard>
                     ))}
-
-                    {/* ✅ SUPPRESSION DES BOUTONS EN BAS (DOUBLON) */}
                 </form>
             </CreateCard>
         </PageContainer>
     );
 };
 
-export default CreateOffer;
+export default OfferEditPage;

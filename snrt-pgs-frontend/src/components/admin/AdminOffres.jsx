@@ -1,5 +1,5 @@
 // src/components/admin/AdminOffres.jsx
-// ✅ CORRECTION : Utilisation de useState pour garantir le bon ordre + IDs pour les TextField
+// ✅ VERSION SANS BOUTON RAFRAÎCHIR
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -91,6 +91,15 @@ const StyledButton = styled(Button)({
         backgroundColor: '#999999',
         color: '#ffffff',
     },
+});
+
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+    border: '1px solid #eef1f3',
 });
 
 // ============================================
@@ -217,18 +226,6 @@ const AdminOffres = () => {
         }
     };
 
-    // ============================================
-    // ✅ REINITIALISER LE CHARGEMENT (pour rafraîchir)
-    // ============================================
-    const refreshData = async () => {
-        setLoading(true);
-        // ✅ Réinitialiser le map pour forcer le rechargement
-        setDepartementMap({});
-        // ✅ Recharger les départements
-        await fetchDepartements();
-        // ✅ Les offres se chargeront automatiquement via le useEffect
-    };
-
     const filterOffres = () => {
         let filtered = [...offres];
 
@@ -261,7 +258,7 @@ const AdminOffres = () => {
     // ============================================
     const handleBackToList = () => {
         navigate('/admin/offres');
-        refreshData();
+        fetchDepartements();
     };
 
     // ============================================
@@ -292,7 +289,7 @@ const AdminOffres = () => {
                 
                 await api.delete(`/offers/${id}`);
                 setSuccess('Offre supprimee avec succes');
-                refreshData();
+                fetchDepartements();
             } catch (error) {
                 console.error('Erreur suppression:', error);
                 if (error.response?.data?.message?.includes('brouillon')) {
@@ -313,7 +310,7 @@ const AdminOffres = () => {
         try {
             await api.put(`/offers/${offer._id || offer.id}/archive`);
             setSuccess('Offre archivee avec succes');
-            refreshData();
+            fetchDepartements();
         } catch (error) {
             console.error('Erreur archivage:', error);
             setError(error.response?.data?.message || 'Erreur lors de l\'archivage');
@@ -388,13 +385,15 @@ const AdminOffres = () => {
                 </Alert>
             )}
 
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
+            {/* ========================================== */}
+            {/* ✅ FILTRES - SANS BOUTON RAFRAÎCHIR */}
+            {/* ========================================== */}
+            <FiltersContainer>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={5}>
+                    <Grid item xs={12} sm={7}>
                         <TextField
                             id="search-offers"
-                            placeholder="Rechercher..."
+                            placeholder="Rechercher par titre, département..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -414,7 +413,7 @@ const AdminOffres = () => {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={5}>
                         <TextField
                             id="filter-status"
                             select
@@ -435,26 +434,8 @@ const AdminOffres = () => {
                             <MenuItem value="Refusee">Refusee</MenuItem>
                         </TextField>
                     </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<Refresh />}
-                            onClick={refreshData}
-                            disabled={loading}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                            }}
-                        >
-                            Rafraichir
-                        </Button>
-                    </Grid>
                 </Grid>
-            </Paper>
+            </FiltersContainer>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer
@@ -485,16 +466,10 @@ const AdminOffres = () => {
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Box>
                                         <Typography color="text.secondary" sx={{ mb: 1 }}>
-                                            Aucune offre trouvee
+                                            {searchTerm || statusFilter !== 'all'
+                                                ? 'Aucune offre ne correspond à vos critères'
+                                                : 'Aucune offre trouvee'}
                                         </Typography>
-                                        <Button
-                                            variant="outlined"
-                                            size="small"
-                                            onClick={refreshData}
-                                            sx={{ borderRadius: '8px', textTransform: 'none' }}
-                                        >
-                                            Reessayer
-                                        </Button>
                                     </Box>
                                 </TableCell>
                             </TableRow>

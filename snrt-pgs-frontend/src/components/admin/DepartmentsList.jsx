@@ -1,4 +1,6 @@
 // src/components/admin/DepartmentsList.jsx
+// ✅ VERSION SANS BOUTONS RAFRAÎCHIR ET RÉINITIALISER
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -46,7 +48,7 @@ import { styled } from '@mui/material/styles';
 import api from '../../services/api';
 import DepartmentDetailPage from './DepartmentDetailPage';
 import DepartmentEditPage from './DepartmentEditPage';
-import DepartmentAddPage from './DepartmentAddPage'; // ✅ AJOUTER
+import DepartmentAddPage from './DepartmentAddPage';
 
 // ============================================
 // STYLES
@@ -79,6 +81,15 @@ const StatusChip = styled(Chip)(({ status }) => {
         fontSize: '12px',
         height: '24px',
     };
+});
+
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+    border: '1px solid #eef1f3',
 });
 
 // ============================================
@@ -312,31 +323,20 @@ const DepartmentsList = () => {
                         {filteredDepartments.length} departement(s) trouvé(s)
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchDepartments}
-                        disabled={loading}
-                        sx={{ borderRadius: '12px', textTransform: 'none' }}
-                    >
-                        Rafraîchir
-                    </Button>
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        sx={{
-                            backgroundColor: '#2d3748',
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            color: '#ffffff',
-                            '&:hover': { backgroundColor: '#1a202c' },
-                        }}
-                        onClick={() => navigate('/admin/departments/add')}
-                    >
-                        Ajouter un departement
-                    </Button>
-                </Box>
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    sx={{
+                        backgroundColor: '#2d3748',
+                        borderRadius: '12px',
+                        textTransform: 'none',
+                        color: '#ffffff',
+                        '&:hover': { backgroundColor: '#1a202c' },
+                    }}
+                    onClick={() => navigate('/admin/departments/add')}
+                >
+                    Ajouter un departement
+                </Button>
             </PageHeader>
 
             {error && (
@@ -350,12 +350,14 @@ const DepartmentsList = () => {
                 </Alert>
             )}
 
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
+            {/* ========================================== */}
+            {/* ✅ FILTRES - SANS BOUTON RÉINITIALISER */}
+            {/* ========================================== */}
+            <FiltersContainer>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12} sm={7}>
                         <TextField
-                            placeholder="Rechercher..."
+                            placeholder="Rechercher par nom, description, responsable..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -375,7 +377,7 @@ const DepartmentsList = () => {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={5}>
                         <TextField
                             select
                             label="Statut"
@@ -392,28 +394,8 @@ const DepartmentsList = () => {
                             <MenuItem value="inactive">Inactif</MenuItem>
                         </TextField>
                     </Grid>
-                    <Grid item xs={12} sm={2}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<FilterList />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                setStatusFilter('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
                 </Grid>
-            </Paper>
+            </FiltersContainer>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer
@@ -442,7 +424,9 @@ const DepartmentsList = () => {
                             <TableRow>
                                 <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucun departement trouvé
+                                        {searchTerm || statusFilter !== 'all'
+                                            ? 'Aucun departement ne correspond à vos critères'
+                                            : 'Aucun departement trouvé'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>

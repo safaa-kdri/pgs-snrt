@@ -1,4 +1,6 @@
 // src/components/department/MyOffers.jsx
+// ✅ VERSION SANS BOUTON RÉINITIALISER
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -86,6 +88,14 @@ const StatusChip = styled(Chip)(({ status }) => {
     };
 });
 
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -160,7 +170,6 @@ const MyOffers = () => {
         } catch (error) {
             console.error('❌ Erreur chargement offres:', error);
             setError(error.response?.data?.message || 'Erreur de chargement');
-            // ❌ PLUS DE DONNÉES FICTIVES
             setOffers([]);
             setFilteredOffers([]);
             setTotal(0);
@@ -316,21 +325,6 @@ const MyOffers = () => {
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchOffers}
-                        disabled={loading}
-                        sx={{
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            borderColor: '#e0e4e8',
-                            color: '#20242b',
-                            '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                        }}
-                    >
-                        Rafraîchir
-                    </Button>
-                    <Button
                         variant="contained"
                         startIcon={<Add />}
                         sx={{
@@ -350,10 +344,12 @@ const MyOffers = () => {
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
 
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#fafbfc' }}>
+            {/* ========================================== */}
+            {/* ✅ FILTRES - SANS BOUTON RÉINITIALISER */}
+            {/* ========================================== */}
+            <FiltersContainer>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={5}>
+                    <Grid item xs={12} sm={6}>
                         <TextField
                             placeholder="Rechercher par titre, description..."
                             value={searchTerm}
@@ -375,7 +371,7 @@ const MyOffers = () => {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={6}>
                         <TextField
                             select
                             label="Statut"
@@ -394,29 +390,8 @@ const MyOffers = () => {
                             ))}
                         </TextField>
                     </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<FilterList />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                handleStatusFilterChange('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                                '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
                 </Grid>
-            </Paper>
+            </FiltersContainer>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer
@@ -442,7 +417,9 @@ const MyOffers = () => {
                                     <Typography variant="body1" color="text.secondary">
                                         {statusFilter !== 'all' 
                                             ? `Aucune offre avec le statut "${getStatusLabel(statusFilter)}"`
-                                            : 'Aucune offre trouvée'}
+                                            : searchTerm 
+                                                ? 'Aucune offre ne correspond à votre recherche'
+                                                : 'Aucune offre trouvée'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>
@@ -500,11 +477,12 @@ const MyOffers = () => {
                                         </Typography>
                                     </TableCell>
                                     <TableCell align="center">
+                                        {/* ✅ ICÔNE ŒIL EN NOIR */}
                                         <Tooltip title="Voir">
                                             <IconButton
                                                 size="small"
                                                 onClick={() => handleViewOffer(offer)}
-                                                sx={{ color: '#148aa0' }}
+                                                sx={{ color: '#000000' }}
                                             >
                                                 <Visibility fontSize="small" />
                                             </IconButton>

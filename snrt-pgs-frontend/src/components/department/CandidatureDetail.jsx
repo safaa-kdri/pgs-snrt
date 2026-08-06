@@ -1,4 +1,6 @@
 // src/components/department/CandidatureDetail.jsx
+// ✅ VERSION AVEC BOUTON RETOUR POSITIONNÉ COMME LE RH (AU-DESSUS)
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -59,7 +61,7 @@ import {
     Edit as EditIcon,
     Business,
     School,
-    People,      // ✅ AJOUTER
+    People,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -207,16 +209,14 @@ const ActionButton = styled(Button)({
     fontSize: '13px',
 });
 
+// ✅ BOUTON RETOUR STYLE RH - POSITIONNÉ AU-DESSUS
 const BackButton = styled(Button)({
-    borderRadius: '8px',
     textTransform: 'none',
-    fontWeight: 500,
-    padding: '6px 16px',
-    fontSize: '13px',
-    backgroundColor: '#2d3748',
-    color: '#ffffff',
+    color: '#666',
+    marginBottom: '16px', // ✅ Espacement avant l'avatar
     '&:hover': {
-        backgroundColor: '#1a2332',
+        backgroundColor: 'transparent',
+        color: '#1a2332',
     },
 });
 
@@ -702,6 +702,14 @@ const CandidatureDetail = () => {
 
     return (
         <PageContainer maxWidth="lg">
+            {/* ===== BOUTON RETOUR - AU-DESSUS DE L'AVATAR (COMME RH) ===== */}
+            <BackButton
+                startIcon={<ArrowBack />}
+                onClick={() => navigate('/department/candidatures')}
+            >
+                Retour à la liste
+            </BackButton>
+
             {/* ===== EN-TÊTE ===== */}
             <HeaderSection>
                 <HeaderLeft>
@@ -724,6 +732,7 @@ const CandidatureDetail = () => {
                     </Box>
                 </HeaderLeft>
 
+                {/* ===== BOUTONS D'ACTION - À DROITE ===== */}
                 <Stack direction="row" spacing={1}>
                     {canAct && (
                         <>
@@ -763,9 +772,6 @@ const CandidatureDetail = () => {
                             Affecter un encadrant
                         </ActionButton>
                     )}
-                    <BackButton startIcon={<ArrowBack />} onClick={() => navigate('/department/candidatures')}>
-                        Retour
-                    </BackButton>
                 </Stack>
             </HeaderSection>
 

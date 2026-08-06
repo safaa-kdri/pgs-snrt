@@ -7,11 +7,11 @@ const { createOfferSchema, updateOfferSchema, validateOfferSchema } = require('.
 
 const router = express.Router();
 
-
+// ✅ Routes publiques (ou avec authentification optionnelle)
 router.get('/', optionalAuthenticate(), offerController.listOffers);
 router.get('/:id', optionalAuthenticate(), offerController.getOfferById);
 
-
+// ✅ Routes protégées
 router.post('/', authenticate(), validate(createOfferSchema), offerController.createOffer);
 router.put('/:id', authenticate(), validate(updateOfferSchema), offerController.updateOffer);
 router.put('/:id/submit', authenticate(), offerController.submitOffer);
@@ -19,7 +19,10 @@ router.put('/:id/validate', authenticate(), validate(validateOfferSchema), offer
 router.put('/:id/archive', authenticate(), offerController.archiveOffer);
 router.delete('/:id', authenticate(), offerController.deleteOffer);
 
+// ✅ NOUVELLE ROUTE : Récupérer les offres du département
+router.get('/my-offers', authenticate(), offerController.getMyOffers);
 
+// Routes pour les documents de concours
 router.post(
   '/:id/concours-documents',
   authenticate(),

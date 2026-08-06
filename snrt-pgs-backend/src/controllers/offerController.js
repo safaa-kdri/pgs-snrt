@@ -1,4 +1,8 @@
+// src/controllers/offerController.js
+// ✅ CORRECTION : Peupler createurId, validateurId et departementId
+
 const Offer = require('../models/Offer');
+const Application = require('../models/Application');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
@@ -11,16 +15,33 @@ const createOffer = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('Seul un responsable de departement peut creer une offre.');
   }
 
+  const departementId = req.user.departementId;
+
+  if (!departementId) {
+    throw ApiError.badRequest(
+      'Votre compte n\'est rattaché à aucun département. ' +
+      'Veuillez contacter l\'administrateur pour assigner un département.'
+    );
+  }
+
   const offer = await Offer.create({
     ...req.body,
-    departementId: req.user.departementId || req.body.departementId,
+    departementId: departementId,
     createurId: req.user.id,
     statut: OFFER_STATUS.BROUILLON,
   });
 
-  logger.audit('OFFER_CREATED', { offerId: offer._id.toString(), userId: req.user.id });
+  logger.audit('OFFER_CREATED', { 
+    offerId: offer._id.toString(), 
+    userId: req.user.id,
+    departementId: departementId 
+  });
 
-  return res.status(201).json({ success: true, message: 'Offre creee (brouillon).', offer });
+  return res.status(201).json({ 
+    success: true, 
+    message: 'Offre creee (brouillon).', 
+    offer 
+  });
 });
 
 
@@ -45,7 +66,6 @@ const listOffers = asyncHandler(async (req, res) => {
     console.log('📥 [listOffers] Recherche textuelle:', search);
   }
 
-  // ✅ SUPPORT DE LA DATE (recherche par date limite de candidature)
   if (date) {
     const searchDate = new Date(date);
     filter.$or = [
@@ -60,24 +80,21 @@ const listOffers = asyncHandler(async (req, res) => {
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
-  // ✅ TRI AVEC PRIORITÉ AUX OFFRES DISPONIBLES (NON EXPIRÉES)
-  // 1. Offres disponibles (dateLimiteCandidature >= aujourd'hui) : triées par date limite (proche → lointain)
-  // 2. Offres expirées (dateLimiteCandidature < aujourd'hui) : en dernier
   const [offers, total] = await Promise.all([
     Offer.find(filter)
+      // ✅ AJOUTER LES POPULATES POUR AVOIR LES NOMS
+      .populate('createurId', 'nom prenom email')
+      .populate('validateurId', 'nom prenom email')
+      .populate('departementId', 'nom')
+      .populate('candidaturesCount')
       .sort({ 
-        // ✅ 1. Priorité : Offres disponibles (non expirées) en premier
-        // MongoDB ne permet pas de tri conditionnel directement,
-        // on utilise l'agrégation ou on trie en 2 étapes.
-        // Solution : on trie par dateLimiteCandidature et on sépare
         dateLimiteCandidature: 1,
-        // ✅ 2. datePublication en second tri
         datePublication: -1,
-        // ✅ 3. createdAt en dernier
         createdAt: -1
       })
       .skip((pageNum - 1) * limitNum)
-      .limit(limitNum),
+      .limit(limitNum)
+      .lean(),
     Offer.countDocuments(filter),
   ]);
 
@@ -89,29 +106,25 @@ const listOffers = asyncHandler(async (req, res) => {
     const dateA = a.dateLimiteCandidature ? new Date(a.dateLimiteCandidature) : null;
     const dateB = b.dateLimiteCandidature ? new Date(b.dateLimiteCandidature) : null;
     
-    // Mettre à minuit pour comparer les dates
     if (dateA) dateA.setHours(0, 0, 0, 0);
     if (dateB) dateB.setHours(0, 0, 0, 0);
     
     const aExpired = !dateA || dateA < today;
     const bExpired = !dateB || dateB < today;
     
-    // ✅ 1. Priorité : Offres disponibles (non expirées) en premier
     if (aExpired && !bExpired) return 1;
     if (!aExpired && bExpired) return -1;
     
-    // ✅ 2. Pour les offres disponibles : tri par date limite (proche → lointain)
     if (!aExpired && !bExpired) {
       if (!dateA) return 1;
       if (!dateB) return -1;
       return dateA - dateB;
     }
     
-    // ✅ 3. Pour les offres expirées : tri par date limite (proche → lointain)
     if (aExpired && bExpired) {
       if (!dateA) return 1;
       if (!dateB) return -1;
-      return dateB - dateA; // Expirées : les plus anciennes en premier
+      return dateB - dateA;
     }
     
     return 0;
@@ -129,9 +142,17 @@ const listOffers = asyncHandler(async (req, res) => {
 
 
 const getOfferById = asyncHandler(async (req, res) => {
-  const offer = await Offer.findById(req.params.id);
+  const offer = await Offer.findById(req.params.id)
+    // ✅ Peupler les références pour avoir les noms complets
+    .populate('createurId', 'nom prenom email')      // Créateur de l'offre
+    .populate('validateurId', 'nom prenom email')    // Validateur (RH)
+    .populate('departementId', 'nom')                // Département
+    .populate('candidaturesCount')                   // Nombre de candidatures
+    .lean();
+    
   if (!offer) throw ApiError.notFound('Offre introuvable.');
 
+  // ✅ Vérifier que l'étudiant ne voit que les offres publiées
   if ((!req.user || req.user.role === ROLES.ETUDIANT) && offer.statut !== OFFER_STATUS.PUBLIEE) {
     throw ApiError.notFound('Offre introuvable.');
   }
@@ -276,7 +297,6 @@ const uploadConcoursDocument = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Aucun fichier fourni.');
   }
 
-
   const replacedDocs = offer.documentsConcours.filter((doc) => doc.type === type);
   offer.documentsConcours = offer.documentsConcours.filter((doc) => doc.type !== type);
   offer.documentsConcours.push({
@@ -307,6 +327,7 @@ const uploadConcoursDocument = asyncHandler(async (req, res) => {
   return res.status(201).json({ success: true, message: 'Document de concours publie avec succes.', offer });
 });
 
+
 const deleteConcoursDocument = asyncHandler(async (req, res) => {
   if (!STAFF_TREATMENT_ROLES.includes(req.user.role)) {
     throw ApiError.forbidden("Vous n'avez pas les droits pour supprimer ce document.");
@@ -319,7 +340,6 @@ const deleteConcoursDocument = asyncHandler(async (req, res) => {
   if (req.user.role === ROLES.DEPARTEMENT && !isOwner) {
     throw ApiError.forbidden('Vous ne pouvez supprimer que les documents de vos propres offres.');
   }
-
 
   const docToDelete = offer.documentsConcours.find((doc) => doc._id.toString() === req.params.docId);
   if (!docToDelete) {
@@ -343,6 +363,63 @@ const deleteConcoursDocument = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Document supprime avec succes.' });
 });
 
+
+const getMyOffers = asyncHandler(async (req, res) => {
+  if (req.user.role !== ROLES.DEPARTEMENT) {
+    throw ApiError.forbidden('Accès réservé aux responsables de département.');
+  }
+
+  if (!req.user.departementId) {
+    throw ApiError.badRequest('Votre compte n\'est rattaché à aucun département.');
+  }
+
+  const { statut, search, page = 1, limit = 20 } = req.query;
+  const filter = {
+    departementId: req.user.departementId,
+    isDeleted: false
+  };
+
+  if (statut) filter.statut = statut;
+
+  if (search) {
+    filter.$or = [
+      { titre: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } }
+    ];
+  }
+
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const skip = (pageNum - 1) * limitNum;
+
+  const [offers, total] = await Promise.all([
+    Offer.find(filter)
+      .populate('departementId', 'nom')
+      // ✅ AJOUTER LES POPULATES POUR AVOIR LES NOMS
+      .populate('createurId', 'nom prenom email')
+      .populate('validateurId', 'nom prenom email')
+      .populate('candidaturesCount')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    Offer.countDocuments(filter)
+  ]);
+
+  return res.status(200).json({
+    success: true,
+    count: offers.length,
+    total,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: Math.ceil(total / limitNum)
+    },
+    data: offers
+  });
+});
+
 module.exports = {
   createOffer,
   listOffers,
@@ -354,4 +431,5 @@ module.exports = {
   deleteOffer,
   uploadConcoursDocument,
   deleteConcoursDocument,
+  getMyOffers,
 };

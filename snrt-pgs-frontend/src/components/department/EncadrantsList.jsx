@@ -1,4 +1,6 @@
 // src/components/department/EncadrantsList.jsx
+// ✅ VERSION SANS BOUTON RÉINITIALISER
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -89,6 +91,14 @@ const StatusChip = styled(Chip)(({ status }) => {
         fontSize: '11px',
         height: '24px',
     };
+});
+
+// ✅ Filtres Container
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
 });
 
 // ============================================
@@ -236,8 +246,6 @@ const EncadrantsList = () => {
         return `${(prenom || '')[0] || ''}${(nom || '')[0] || ''}`.toUpperCase() || '?';
     };
 
-    // ✅ SUPPRIMÉ : handleOpenAdd et handleOpenEdit (remplacés par navigation)
-
     const handleOpenDelete = (encadrant) => {
         setSelectedEncadrant(encadrant);
         setOpenDeleteDialog(true);
@@ -322,21 +330,6 @@ const EncadrantsList = () => {
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchEncadrants}
-                        disabled={loading}
-                        sx={{
-                            borderRadius: '12px',
-                            textTransform: 'none',
-                            borderColor: '#e0e4e8',
-                            color: '#20242b',
-                            '&:hover': { borderColor: '#000000', backgroundColor: '#f5f5f5' },
-                        }}
-                    >
-                        Rafraîchir
-                    </Button>
-                    <Button
                         variant="contained"
                         startIcon={<PersonAdd />}
                         onClick={() => navigate('/department/encadrants/add')}
@@ -355,12 +348,14 @@ const EncadrantsList = () => {
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
 
-            {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#fafbfc' }}>
+            {/* ========================================== */}
+            {/* ✅ FILTRES - UNIQUEMENT RECHERCHE */}
+            {/* ========================================== */}
+            <FiltersContainer>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={8}>
+                    <Grid item xs={12}>
                         <TextField
-                            placeholder="Rechercher par nom, email..."
+                            placeholder="Rechercher par nom, prénom, email..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -380,25 +375,8 @@ const EncadrantsList = () => {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<Refresh />}
-                            onClick={() => setSearchTerm('')}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
                 </Grid>
-            </Paper>
+            </FiltersContainer>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer
@@ -422,7 +400,7 @@ const EncadrantsList = () => {
                             <TableRow>
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucun encadrant trouvé
+                                        {searchTerm ? 'Aucun encadrant ne correspond à votre recherche' : 'Aucun encadrant trouvé'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>
@@ -490,7 +468,6 @@ const EncadrantsList = () => {
                                                 {enc.actif ? <Cancel fontSize="small" /> : <CheckCircle fontSize="small" />}
                                             </IconButton>
                                         </Tooltip>
-                                        {/* ❌ SUPPRIMER le bouton Supprimer */}
                                     </TableCell>
                                 </TableRow>
                             ))
