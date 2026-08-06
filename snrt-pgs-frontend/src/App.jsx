@@ -32,6 +32,11 @@ import SupervisorDashboard from "./components/supervisor/Dashboard";
 import RhDashboard from "./components/rh/Dashboard";
 import DepartmentDashboard from "./components/department/Dashboard";
 
+// ===== LAYOUTS =====
+import SupervisorLayout from "./components/supervisor/SupervisorLayout";
+import RhLayout from "./components/rh/RhLayout";
+import DepartmentLayout from "./components/department/DepartmentLayout";
+
 // ===== ADMIN PAGES =====
 import UsersList from "./components/admin/UsersList";
 import DepartmentsList from "./components/admin/DepartmentsList";
@@ -66,7 +71,6 @@ import InternsListDept from "./components/department/InternsList";
 import InternDetailDept from "./components/department/InternDetail";
 import EncadrantsList from "./components/department/EncadrantsList";
 import InterviewsDept from "./components/department/InterviewsDept";
-import DepartmentLayout from "./components/department/DepartmentLayout";
 import DepartmentStats from "./components/department/DepartmentStats";
 import ApplyPage from "./components/public/ApplyPage";
 
@@ -77,8 +81,6 @@ import ValidateOffers from "./components/rh/ValidateOffers";
 import Interviews from "./components/rh/Interviews";
 import InterviewAddPage from "./components/rh/InterviewAddPage";
 import GenerateConvention from "./components/rh/GenerateConvention";
-import RhLayout from "./components/rh/RhLayout";
-// ✅ IMPORT DE LA PAGE DÉTAILS OFFRE RH
 import OfferDetailPage from "./components/rh/OfferDetailPage";
 
 // ============================================
@@ -354,7 +356,9 @@ function App() {
           }
         />
 
-        {/* ===== STUDENT ROUTES ===== */}
+        {/* ========================================== */}
+        {/* STUDENT ROUTES */}
+        {/* ========================================== */}
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route
           path="/dashboard/applications"
@@ -491,8 +495,6 @@ function App() {
             </AdminDashboard>
           }
         />
-
-        {/* ROUTES DÉPARTEMENTS - ADD, DETAIL ET EDITION */}
         <Route
           path="/admin/departments"
           element={
@@ -525,8 +527,6 @@ function App() {
             </AdminDashboard>
           }
         />
-
-        {/* ROUTES PERIODES - ADD, DETAIL ET EDITION */}
         <Route
           path="/admin/periods"
           element={
@@ -559,7 +559,6 @@ function App() {
             </AdminDashboard>
           }
         />
-
         <Route
           path="/admin/settings"
           element={
@@ -570,56 +569,56 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* SUPERVISOR ROUTES */}
+        {/* SUPERVISOR ROUTES - AVEC SupervisorLayout */}
         {/* ========================================== */}
         <Route
           path="/supervisor"
           element={
-            <Layout>
-              <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+            <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+              <SupervisorLayout>
                 <SupervisorDashboard />
-              </PrivateRoute>
-            </Layout>
+              </SupervisorLayout>
+            </PrivateRoute>
           }
         />
         <Route
-          path="/supervisor/interns"
+          path="/supervisor/stagiaires"
           element={
-            <Layout>
-              <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+            <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+              <SupervisorLayout>
                 <InternsList />
-              </PrivateRoute>
-            </Layout>
+              </SupervisorLayout>
+            </PrivateRoute>
           }
         />
         <Route
-          path="/supervisor/interns/:id"
+          path="/supervisor/stagiaire/:id"
           element={
-            <Layout>
-              <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+            <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+              <SupervisorLayout>
                 <InternDetailSupervisor />
-              </PrivateRoute>
-            </Layout>
+              </SupervisorLayout>
+            </PrivateRoute>
           }
         />
         <Route
-          path="/supervisor/evaluate/:id"
+          path="/supervisor/evaluation/:id"
           element={
-            <Layout>
-              <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+            <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+              <SupervisorLayout>
                 <Evaluation />
-              </PrivateRoute>
-            </Layout>
+              </SupervisorLayout>
+            </PrivateRoute>
           }
         />
         <Route
-          path="/supervisor/close/:id"
+          path="/supervisor/cloture/:id"
           element={
-            <Layout>
-              <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+            <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+              <SupervisorLayout>
                 <CloseInternship />
-              </PrivateRoute>
-            </Layout>
+              </SupervisorLayout>
+            </PrivateRoute>
           }
         />
 
@@ -708,10 +707,8 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* DEPARTMENT ROUTES - AVEC LAYOUT DÉPARTEMENT */}
+        {/* DEPARTMENT ROUTES - AVEC DepartmentLayout */}
         {/* ========================================== */}
-
-        {/* Dashboard */}
         <Route
           path="/department"
           element={
@@ -722,8 +719,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* Candidatures */}
         <Route
           path="/department/candidatures"
           element={
@@ -744,8 +739,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* Stages */}
         <Route
           path="/department/interns"
           element={
@@ -766,8 +759,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* Encadrants - ADD ET EDIT */}
         <Route
           path="/department/encadrants"
           element={
@@ -798,8 +789,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* Entretiens */}
         <Route
           path="/department/interviews"
           element={
@@ -810,8 +799,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* Statistiques */}
         <Route
           path="/department/stats"
           element={
@@ -822,8 +809,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* Offres */}
         <Route
           path="/department/create-offer"
           element={

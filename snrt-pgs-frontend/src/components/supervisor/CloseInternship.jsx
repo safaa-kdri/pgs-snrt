@@ -7,85 +7,85 @@ import {
     Paper,
     Typography,
     Grid,
-    TextField,
     Button,
     Alert,
     CircularProgress,
     Divider,
-    Chip,
-    Avatar,
-    Card,
-    CardContent,
-    MenuItem,
     Stepper,
     Step,
     StepLabel,
     StepContent,
-    LinearProgress,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
+    TextField,
+    Chip,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
     ArrowBack,
     CheckCircle,
-    Pending,
     Cancel,
     Description,
-    Download,
-    Send,
     School,
     Work,
     Person,
-    CalendarToday,
-    Assessment,
+    Star,
 } from '@mui/icons-material';
-import { useAuth } from '../../hooks/useAuth';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import api from '../../services/api';
+import { useSelector } from 'react-redux';
 
 // ============================================
-// STYLES
-// ============================================
+// STYLES// ============================================
 
-const CloseCard = styled(Paper)({
+const StyledPaper = styled(Paper)({
     borderRadius: '16px',
     padding: '32px',
     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-    maxWidth: '900px',
-    margin: '0 auto',
+    border: '1px solid #eef1f3',
 });
 
-const SectionTitle = styled(Typography)({
-    fontSize: '18px',
-    fontWeight: 600,
-    color: '#1a2332',
-    marginBottom: '16px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-});
-
-const StepIcon = styled(Box)(({ active, completed }) => ({
+const StepIconWrapper = styled(Box)(({ active, completed }) => ({
     width: 32,
     height: 32,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: completed ? '#22c55e' : active ? '#148aa0' : '#e5e7eb',
+    backgroundColor: completed ? '#22c55e' : active ? '#2d3748' : '#e5e7eb',
     color: completed || active ? '#fff' : '#999',
-    fontSize: '16px',
+    fontSize: '14px',
     fontWeight: 600,
 }));
 
-const StyledTextField = styled(TextField)({
-    '& .MuiOutlinedInput-root': {
-        borderRadius: '10px',
-        backgroundColor: '#fff',
+const InfoRow = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '4px 0',
+    '& .MuiSvgIcon-root': {
+        color: '#687480',
+        fontSize: '18px',
     },
+});
+
+const StatusChip = styled(Chip)(({ status }) => {
+    const colors = {
+        'EnCours': { bg: '#dbeafe', text: '#1d4ed8' },
+        'Termine': { bg: '#d1fae5', text: '#065f46' },
+        'Annule': { bg: '#fee2e2', text: '#991b1b' },
+        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementEnvoye': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EngagementRecu': { bg: '#d1fae5', text: '#065f46' },
+        'EnAttenteValidationDirecteur': { bg: '#fef3c7', text: '#d97706' },
+        'ValideParDirecteur': { bg: '#d1fae5', text: '#065f46' },
+        'DemandeEnvoyee': { bg: '#fef3c7', text: '#d97706' },
+    };
+    const color = colors[status] || colors['EnCours'];
+    return {
+        backgroundColor: color.bg,
+        color: color.text,
+        fontWeight: 500,
+        fontSize: '11px',
+        height: '24px',
+    };
 });
 
 // ============================================
@@ -95,604 +95,393 @@ const StyledTextField = styled(TextField)({
 const CloseInternship = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    const { user } = useAuth();
+    const { user } = useSelector((state) => state.auth);
 
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [success, setSuccess] = useState('');
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    const [openConfirm, setOpenConfirm] = useState(false);
-
-    const [intern, setIntern] = useState(null);
+    const [success, setSuccess] = useState('');
+    const [internship, setInternship] = useState(null);
+    const [student, setStudent] = useState(null);
+    const [offer, setOffer] = useState(null);
+    const [livrables, setLivrables] = useState([]);
+    const [evaluation, setEvaluation] = useState(null);
     const [activeStep, setActiveStep] = useState(0);
-    const [form, setForm] = useState({
-        noteFinale: 0,
-        appreciation: '',
-        commentaires: '',
-        dateCloture: new Date().toISOString().split('T')[0],
-        documents: {
-            rapportValide: false,
-            presentationValide: false,
-            attestationGeneree: false,
-        },
+    const [checklist, setChecklist] = useState({
+        tousLivrablesValides: false,
+        evaluationFaite: false,
+        rapportValide: false,
+        attestationGeneree: false,
     });
+    const [remarqueCloture, setRemarqueCloture] = useState('');
 
     useEffect(() => {
-        fetchInternshipData();
+        fetchData();
     }, [id]);
 
-    const fetchInternshipData = async () => {
+    const fetchData = async () => {
         setLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
+            // ✅ Route correcte : /internships/:id
+            const response = await api.get(`/internships/${id}`);
+            const data = response.data?.data || response.data;
+            setInternship(data);
+            setStudent(data.etudiantId || {});
+            setOffer(data.offreId || {});
+            setLivrables(data.livrables || []);
+            setEvaluation(data.evaluation || null);
 
-            const mockIntern = {
-                id: id || '1',
-                nom: 'EL HASSANI',
-                prenom: 'Youssef',
-                email: 'youssef@test.ma',
-                stage: 'Stage Développement Web',
-                department: 'DSI',
-                encadrant: 'Mohamed CHERKAOUI',
-                startDate: '2026-06-01',
-                endDate: '2026-08-31',
-                progress: 100,
-                livrables: [
-                    { nom: 'Rapport final', depose: true, valide: true },
-                    { nom: 'Présentation', depose: true, valide: true },
-                ],
-            };
+            // Vérifier les conditions
+            const tousValides = (data.livrables || []).every(l => l.valide === true);
+            const evalFaite = !!data.evaluation;
+            const rapportValide = (data.livrables || []).some(l => l.type === 'Rapport' && l.valide === true);
 
-            setIntern(mockIntern);
-            setForm({
-                ...form,
-                dateCloture: new Date().toISOString().split('T')[0],
-                documents: {
-                    rapportValide: true,
-                    presentationValide: true,
-                    attestationGeneree: false,
-                },
+            setChecklist({
+                tousLivrablesValides: tousValides,
+                evaluationFaite: evalFaite,
+                rapportValide: rapportValide,
+                attestationGeneree: false,
             });
 
+            // Déterminer l'étape active
+            if (!tousValides) setActiveStep(0);
+            else if (!evalFaite) setActiveStep(1);
+            else if (!rapportValide) setActiveStep(2);
+            else setActiveStep(3);
+
         } catch (error) {
-            console.error('Erreur chargement:', error);
-            setError('Erreur lors du chargement des données');
+            console.error('Erreur:', error);
+            setError(error.response?.data?.message || 'Erreur de chargement');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleChange = (field, value) => {
-        setForm({ ...form, [field]: value });
-        setError('');
-        setSuccess('');
+    const handleGenerateAttestation = async () => {
+        setSubmitting(true);
+        try {
+            // ✅ Route correcte : /internships/:id/generate-attestation
+            await api.post(`/internships/${id}/generate-attestation`);
+            setChecklist({ ...checklist, attestationGeneree: true });
+            setSuccess('Attestation générée avec succès');
+            fetchData();
+        } catch (error) {
+            console.error('Erreur:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la génération');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
-    const handleDocumentChange = (doc, value) => {
-        setForm({
-            ...form,
-            documents: { ...form.documents, [doc]: value },
+    const handleCloture = async () => {
+        if (!checklist.attestationGeneree) {
+            setError('Veuillez générer l\'attestation avant de clôturer');
+            return;
+        }
+        setSubmitting(true);
+        try {
+            // ✅ Route correcte : /internships/:id/close
+            await api.put(`/internships/${id}/close`, {
+                remarques: remarqueCloture,
+            });
+            setSuccess('Stage clôturé avec succès !');
+            setTimeout(() => navigate('/supervisor/stagiaires'), 2000);
+        } catch (error) {
+            console.error('Erreur:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la clôture');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
         });
     };
 
-    const handleNext = () => {
-        setActiveStep((prev) => prev + 1);
-    };
-
-    const handleBack = () => {
-        setActiveStep((prev) => prev - 1);
-    };
-
-    const handleOpenConfirm = () => {
-        setOpenConfirm(true);
-    };
-
-    const handleCloseConfirm = () => {
-        setOpenConfirm(false);
-    };
-
-    const handleSubmit = async () => {
-        setSaving(true);
-        setError('');
-        setSuccess('');
-
-        try {
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            // TODO: Appel API POST /internships/:id/close
-            console.log('📚 Clôture du stage:', { internId: id, ...form });
-            setSuccess('✅ Stage clôturé avec succès !');
-            setOpenConfirm(false);
-            setActiveStep(3);
-        } catch (error) {
-            console.error('Erreur clôture:', error);
-            setError('❌ Erreur lors de la clôture du stage');
-        } finally {
-            setSaving(false);
-        }
+    const getStatusLabel = (status) => {
+        const labels = {
+            'EnCours': 'En cours',
+            'Termine': 'Terminé',
+            'Annule': 'Annulé',
+            'Cloturee': 'Clôturé',
+            'EngagementEnvoye': 'Engagement envoyé',
+            'EngagementRecu': 'Engagement reçu',
+            'EnAttenteValidationDirecteur': 'En attente validation Directeur',
+            'ValideParDirecteur': 'Validé par Directeur',
+            'DemandeEnvoyee': 'Demande envoyée',
+        };
+        return labels[status] || status;
     };
 
     const steps = [
         {
-            label: 'Vérification des livrables',
-            description: 'Vérifiez que tous les livrables ont été déposés et validés.',
-            icon: <Description />,
+            label: 'Validation des livrables',
+            description: 'Tous les livrables doivent être validés',
+            completed: checklist.tousLivrablesValides,
         },
         {
-            label: 'Évaluation finale',
-            description: 'Saisissez la note finale et votre appréciation.',
-            icon: <Assessment />,
+            label: 'Évaluation du stagiaire',
+            description: 'L\'évaluation doit être complétée',
+            completed: checklist.evaluationFaite,
         },
         {
-            label: 'Documents de clôture',
-            description: 'Générez l\'attestation et les documents de clôture.',
-            icon: <Download />,
+            label: 'Rapport final',
+            description: 'Le rapport de stage doit être validé',
+            completed: checklist.rapportValide,
         },
         {
-            label: 'Clôture terminée',
-            description: 'Le stage a été clôturé avec succès.',
-            icon: <CheckCircle />,
+            label: 'Génération attestation',
+            description: 'L\'attestation de stage doit être générée',
+            completed: checklist.attestationGeneree,
         },
     ];
-
-    const getNoteColor = (note) => {
-        if (note >= 16) return '#22c55e';
-        if (note >= 12) return '#f59e0b';
-        return '#ef4444';
-    };
-
-    const getNoteLabel = (note) => {
-        if (note >= 16) return 'Excellent';
-        if (note >= 14) return 'Très bien';
-        if (note >= 12) return 'Bien';
-        if (note >= 10) return 'Passable';
-        return 'Insuffisant';
-    };
-
-    const formatDate = (dateStr) => {
-        if (!dateStr) return 'Non défini';
-        return format(new Date(dateStr), 'dd MMM yyyy', { locale: fr });
-    };
-
-    const renderStepContent = (step) => {
-        switch (step) {
-            case 0:
-                return (
-                    <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Tous les livrables doivent être déposés et validés avant la clôture.
-                        </Typography>
-                        <Grid container spacing={2}>
-                            {intern?.livrables.map((livrable, idx) => (
-                                <Grid item xs={12} sm={6} key={idx}>
-                                    <Card sx={{ borderRadius: '12px' }}>
-                                        <CardContent>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <Typography variant="body2" fontWeight={500}>
-                                                    {livrable.nom}
-                                                </Typography>
-                                                {livrable.valide ? (
-                                                    <Chip
-                                                        label="Validé"
-                                                        size="small"
-                                                        sx={{ backgroundColor: '#d1fae5', color: '#065f46' }}
-                                                        icon={<CheckCircle sx={{ fontSize: 14 }} />}
-                                                    />
-                                                ) : (
-                                                    <Chip
-                                                        label="En attente"
-                                                        size="small"
-                                                        sx={{ backgroundColor: '#fef3c7', color: '#d97706' }}
-                                                        icon={<Pending sx={{ fontSize: 14 }} />}
-                                                    />
-                                                )}
-                                            </Box>
-                                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                                                {livrable.depose ? 'Déposé' : 'Non déposé'}
-                                            </Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            ))}
-                        </Grid>
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-                            <Button
-                                variant="contained"
-                                onClick={handleNext}
-                                sx={{
-                                    backgroundColor: '#148aa0',
-                                    borderRadius: '10px',
-                                    textTransform: 'none',
-                                    '&:hover': { backgroundColor: '#0b7890' },
-                                }}
-                            >
-                                Continuer
-                            </Button>
-                        </Box>
-                    </Box>
-                );
-
-            case 1:
-                return (
-                    <Box sx={{ mt: 2 }}>
-                        <Grid container spacing={3}>
-                            <Grid item xs={12}>
-                                <Typography variant="body2" color="text.secondary">
-                                    Note finale sur 20
-                                </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 1 }}>
-                                    <Typography variant="h2" sx={{ fontWeight: 700, color: getNoteColor(form.noteFinale) }}>
-                                        {form.noteFinale}
-                                    </Typography>
-                                    <Box sx={{ flex: 1 }}>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="20"
-                                            step="0.5"
-                                            value={form.noteFinale}
-                                            onChange={(e) => handleChange('noteFinale', parseFloat(e.target.value))}
-                                            style={{ width: '100%' }}
-                                        />
-                                    </Box>
-                                    <Typography variant="body2" fontWeight={500}>
-                                        {getNoteLabel(form.noteFinale)}
-                                    </Typography>
-                                </Box>
-                            </Grid>
-                            <Grid item xs={12}>
-                                <StyledTextField
-                                    label="Appréciation générale"
-                                    select
-                                    value={form.appreciation}
-                                    onChange={(e) => handleChange('appreciation', e.target.value)}
-                                    fullWidth
-                                >
-                                    <MenuItem value="excellent">⭐ Excellent - Stage remarquable</MenuItem>
-                                    <MenuItem value="tres_bien">⭐ Très bien - Stage réussi</MenuItem>
-                                    <MenuItem value="bien">⭐ Bien - Stage satisfaisant</MenuItem>
-                                    <MenuItem value="passable">⭐ Passable - Stage correct</MenuItem>
-                                    <MenuItem value="insuffisant">⭐ Insuffisant - Stage à améliorer</MenuItem>
-                                </StyledTextField>
-                            </Grid>
-                            <Grid item xs={12}>
-                                <StyledTextField
-                                    label="Commentaires"
-                                    multiline
-                                    rows={4}
-                                    value={form.commentaires}
-                                    onChange={(e) => handleChange('commentaires', e.target.value)}
-                                    fullWidth
-                                    placeholder="Points forts, points d'amélioration, observations..."
-                                />
-                            </Grid>
-                        </Grid>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-                            <Button
-                                variant="outlined"
-                                onClick={handleBack}
-                                sx={{ borderRadius: '10px', textTransform: 'none' }}
-                            >
-                                Retour
-                            </Button>
-                            <Button
-                                variant="contained"
-                                onClick={handleNext}
-                                disabled={!form.appreciation || form.noteFinale === 0}
-                                sx={{
-                                    backgroundColor: '#148aa0',
-                                    borderRadius: '10px',
-                                    textTransform: 'none',
-                                    '&:hover': { backgroundColor: '#0b7890' },
-                                    '&:disabled': { backgroundColor: '#a0c4cd' },
-                                }}
-                            >
-                                Continuer
-                            </Button>
-                        </Box>
-                    </Box>
-                );
-
-            case 2:
-                return (
-                    <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Générez les documents de clôture du stage.
-                        </Typography>
-                        <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
-                                <Card
-                                    sx={{
-                                        borderRadius: '12px',
-                                        cursor: 'pointer',
-                                        border: form.documents.attestationGeneree ? '2px solid #22c55e' : '1px solid #e5e7eb',
-                                        '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
-                                    }}
-                                    onClick={() => handleDocumentChange('attestationGeneree', !form.documents.attestationGeneree)}
-                                >
-                                    <CardContent>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <Description sx={{ color: form.documents.attestationGeneree ? '#22c55e' : '#999' }} />
-                                            <Box>
-                                                <Typography variant="body2" fontWeight={500}>
-                                                    Attestation de stage
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {form.documents.attestationGeneree ? '✅ Générée' : 'Cliquez pour générer'}
-                                                </Typography>
-                                            </Box>
-                                        </Box>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                                <Card
-                                    sx={{
-                                        borderRadius: '12px',
-                                        cursor: 'pointer',
-                                        border: form.documents.rapportValide ? '2px solid #22c55e' : '1px solid #e5e7eb',
-                                        '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
-                                    }}
-                                    onClick={() => handleDocumentChange('rapportValide', !form.documents.rapportValide)}
-                                >
-                                    <CardContent>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <Description sx={{ color: form.documents.rapportValide ? '#22c55e' : '#999' }} />
-                                            <Box>
-                                                <Typography variant="body2" fontWeight={500}>
-                                                    Validation finale
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {form.documents.rapportValide ? '✅ Validé' : 'À valider'}
-                                                </Typography>
-                                            </Box>
-                                        </Box>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                        </Grid>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-                            <Button
-                                variant="outlined"
-                                onClick={handleBack}
-                                sx={{ borderRadius: '10px', textTransform: 'none' }}
-                            >
-                                Retour
-                            </Button>
-                            <Button
-                                variant="contained"
-                                onClick={handleOpenConfirm}
-                                disabled={!form.documents.attestationGeneree || !form.documents.rapportValide}
-                                sx={{
-                                    backgroundColor: '#22c55e',
-                                    borderRadius: '10px',
-                                    textTransform: 'none',
-                                    '&:hover': { backgroundColor: '#16a34a' },
-                                    '&:disabled': { backgroundColor: '#a0c4cd' },
-                                }}
-                                startIcon={<CheckCircle />}
-                            >
-                                Clôturer le stage
-                            </Button>
-                        </Box>
-                    </Box>
-                );
-
-            case 3:
-                return (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                        <Box sx={{ fontSize: 64, mb: 2 }}>🎉</Box>
-                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#22c55e' }}>
-                            Stage clôturé avec succès !
-                        </Typography>
-                        <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                            Le stage de {intern?.prenom} {intern?.nom} a été clôturé.
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 3 }}>
-                            <Button
-                                variant="outlined"
-                                startIcon={<Description />}
-                                onClick={() => alert('📄 Téléchargement de l\'attestation')}
-                                sx={{ borderRadius: '10px', textTransform: 'none' }}
-                            >
-                                Télécharger attestation
-                            </Button>
-                            <Button
-                                variant="contained"
-                                startIcon={<ArrowBack />}
-                                onClick={() => navigate('/supervisor/interns')}
-                                sx={{
-                                    backgroundColor: '#148aa0',
-                                    borderRadius: '10px',
-                                    textTransform: 'none',
-                                    '&:hover': { backgroundColor: '#0b7890' },
-                                }}
-                            >
-                                Retour à la liste
-                            </Button>
-                        </Box>
-                    </Box>
-                );
-
-            default:
-                return null;
-        }
-    };
 
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={60} thickness={4} sx={{ color: '#148aa0' }} />
+                <CircularProgress size={44} sx={{ color: '#2d3748' }} />
             </Box>
         );
     }
 
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
-            <Button
-                startIcon={<ArrowBack />}
-                onClick={() => navigate(`/supervisor/interns/${id}`)}
-                sx={{ mb: 3, textTransform: 'none', color: '#666' }}
-            >
-                Retour au stagiaire
-            </Button>
+            <Box sx={{ mb: 3 }}>
+                <Button
+                    startIcon={<ArrowBack />}
+                    onClick={() => navigate(`/supervisor/stagiaire/${id}`)}
+                    sx={{ textTransform: 'none', color: '#666' }}
+                >
+                    Retour au stagiaire
+                </Button>
+            </Box>
 
-            <CloseCard>
-                {/* ===== EN-TÊTE ===== */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                    <Avatar
-                        sx={{
-                            width: 56,
-                            height: 56,
-                            backgroundColor: '#22c55e',
-                            fontSize: 24,
-                            fontWeight: 700,
-                            color: '#fff',
-                        }}
-                    >
-                        {intern?.prenom?.[0]}{intern?.nom?.[0]}
-                    </Avatar>
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '12px' }}>{success}</Alert>}
+
+            <StyledPaper>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                     <Box>
-                        <Typography variant="h5" sx={{ fontWeight: 700, color: '#1a2332' }}>
+                        <Typography variant="h5" fontWeight={700} color="#1a2332">
                             Clôture du stage
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            {intern?.stage} - {intern?.department}
+                            {student?.prenom || ''} {student?.nom || ''} • {offer?.titre || 'Stage'}
                         </Typography>
                     </Box>
+                    {internship?.statut && (
+                        <StatusChip label={getStatusLabel(internship.statut)} status={internship.statut} />
+                    )}
                 </Box>
 
                 <Divider sx={{ mb: 3 }} />
 
-                {error && (
-                    <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>
-                        {error}
-                    </Alert>
-                )}
-
-                {success && activeStep === 3 && (
-                    <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>
-                        {success}
-                    </Alert>
-                )}
-
-                {/* ===== INFORMATIONS STAGIAIRE ===== */}
+                {/* Infos stagiaire */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
-                    <Grid item xs={12} sm={4}>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                            <Person sx={{ fontSize: 14, verticalAlign: 'middle' }} /> Stagiaire
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                            {intern?.prenom} {intern?.nom}
-                        </Typography>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <Person />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Stagiaire</Typography>
+                                <Typography variant="body2">{student?.prenom || ''} {student?.nom || ''}</Typography>
+                            </Box>
+                        </InfoRow>
                     </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                            <Work sx={{ fontSize: 14, verticalAlign: 'middle' }} /> Stage
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                            {intern?.stage}
-                        </Typography>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <School />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Université</Typography>
+                                <Typography variant="body2">{student?.universite || 'Non renseignée'}</Typography>
+                            </Box>
+                        </InfoRow>
                     </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                            <CalendarToday sx={{ fontSize: 14, verticalAlign: 'middle' }} /> Période
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                            {formatDate(intern?.startDate)} - {formatDate(intern?.endDate)}
-                        </Typography>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <Work />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Période</Typography>
+                                <Typography variant="body2">
+                                    {formatDate(internship?.dateDebut)} - {formatDate(internship?.dateFin)}
+                                </Typography>
+                            </Box>
+                        </InfoRow>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <Star />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Évaluation</Typography>
+                                <Typography variant="body2">
+                                    {evaluation ? `${evaluation.note || 0}/20` : 'Non évalué'}
+                                </Typography>
+                            </Box>
+                        </InfoRow>
                     </Grid>
                 </Grid>
 
                 <Divider sx={{ mb: 3 }} />
 
-                {/* ===== STEPS ===== */}
-                <Stepper activeStep={activeStep} orientation="vertical">
+                {/* Stepper */}
+                <Stepper activeStep={activeStep} orientation="vertical" sx={{ mb: 4 }}>
                     {steps.map((step, index) => (
-                        <Step key={step.label} active={activeStep === index} completed={activeStep > index}>
+                        <Step key={step.label} active={activeStep === index} completed={step.completed}>
                             <StepLabel
                                 StepIconComponent={() => (
-                                    <StepIcon active={activeStep === index} completed={activeStep > index}>
-                                        {activeStep > index ? <CheckCircle sx={{ fontSize: 16 }} /> : index + 1}
-                                    </StepIcon>
+                                    <StepIconWrapper active={activeStep === index} completed={step.completed}>
+                                        {step.completed ? <CheckCircle sx={{ fontSize: 16 }} /> : index + 1}
+                                    </StepIconWrapper>
                                 )}
-                                sx={{
-                                    '& .MuiStepLabel-label': {
-                                        fontWeight: activeStep === index ? 600 : 400,
-                                        color: activeStep === index ? '#1a2332' : '#999',
-                                    },
-                                }}
                             >
-                                {step.label}
-                                <Typography variant="caption" color="text.secondary" display="block">
+                                <Typography fontWeight={step.completed ? 600 : 400}>
+                                    {step.label}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
                                     {step.description}
                                 </Typography>
                             </StepLabel>
                             <StepContent>
-                                {renderStepContent(index)}
+                                <Box sx={{ mt: 1 }}>
+                                    {index === 0 && (
+                                        <Box>
+                                            <Typography variant="body2" sx={{ mb: 2 }}>
+                                                {livrables.length === 0 ? (
+                                                    'Aucun livrable déposé'
+                                                ) : (
+                                                    <Box>
+                                                        {livrables.map((l, idx) => (
+                                                            <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                                                <Description sx={{ fontSize: 16, color: '#687480' }} />
+                                                                <Typography variant="body2">
+                                                                    {l.nom || 'Sans nom'}
+                                                                </Typography>
+                                                                <Chip
+                                                                    label={l.valide ? '✅ Validé' : l.statut === 'Rejete' ? '❌ Rejeté' : '⏳ En attente'}
+                                                                    size="small"
+                                                                    sx={{
+                                                                        backgroundColor: l.valide ? '#d1fae5' : l.statut === 'Rejete' ? '#fee2e2' : '#fef3c7',
+                                                                        color: l.valide ? '#065f46' : l.statut === 'Rejete' ? '#991b1b' : '#d97706',
+                                                                    }}
+                                                                />
+                                                            </Box>
+                                                        ))}
+                                                    </Box>
+                                                )}
+                                            </Typography>
+                                            {!step.completed && (
+                                                <Alert severity="warning" sx={{ borderRadius: '10px' }}>
+                                                    Certains livrables sont encore en attente de validation
+                                                </Alert>
+                                            )}
+                                        </Box>
+                                    )}
+                                    {index === 1 && (
+                                        <Box>
+                                            {!step.completed ? (
+                                                <Alert severity="warning" sx={{ borderRadius: '10px' }}>
+                                                    L'évaluation du stagiaire n'a pas encore été réalisée
+                                                </Alert>
+                                            ) : (
+                                                <Alert severity="success" sx={{ borderRadius: '10px' }}>
+                                                    Évaluation réalisée : {evaluation?.note || 0}/20
+                                                </Alert>
+                                            )}
+                                        </Box>
+                                    )}
+                                    {index === 2 && (
+                                        <Box>
+                                            {!step.completed ? (
+                                                <Alert severity="warning" sx={{ borderRadius: '10px' }}>
+                                                    Le rapport de stage n'a pas encore été validé
+                                                </Alert>
+                                            ) : (
+                                                <Alert severity="success" sx={{ borderRadius: '10px' }}>
+                                                    Rapport validé
+                                                </Alert>
+                                            )}
+                                        </Box>
+                                    )}
+                                    {index === 3 && (
+                                        <Box>
+                                            {!step.completed ? (
+                                                <Box>
+                                                    <Alert severity="info" sx={{ borderRadius: '10px', mb: 2 }}>
+                                                        Générez l'attestation de stage avant la clôture
+                                                    </Alert>
+                                                    <Button
+                                                        variant="contained"
+                                                        onClick={handleGenerateAttestation}
+                                                        disabled={submitting}
+                                                        sx={{
+                                                            backgroundColor: '#2d3748',
+                                                            borderRadius: '10px',
+                                                            textTransform: 'none',
+                                                            '&:hover': { backgroundColor: '#1a202c' },
+                                                        }}
+                                                    >
+                                                        {submitting ? <CircularProgress size={24} color="inherit" /> : 'Générer l\'attestation'}
+                                                    </Button>
+                                                </Box>
+                                            ) : (
+                                                <Alert severity="success" sx={{ borderRadius: '10px' }}>
+                                                    Attestation générée
+                                                </Alert>
+                                            )}
+                                        </Box>
+                                    )}
+                                </Box>
                             </StepContent>
                         </Step>
                     ))}
                 </Stepper>
-            </CloseCard>
 
-            {/* ===== DIALOG DE CONFIRMATION ===== */}
-            <Dialog
-                open={openConfirm}
-                onClose={handleCloseConfirm}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: '16px', padding: '8px' },
-                }}
-            >
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CheckCircle sx={{ color: '#22c55e' }} />
-                    Confirmer la clôture
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body1">
-                        Êtes-vous sûr de vouloir clôturer le stage de{' '}
-                        <strong>{intern?.prenom} {intern?.nom}</strong> ?
+                <Divider sx={{ mb: 3 }} />
+
+                {/* Remarque de clôture */}
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                        Remarque de clôture (optionnelle)
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        Cette action est irréversible. L'attestation de stage sera générée automatiquement.
-                    </Typography>
-                    <Box sx={{ mt: 2, p: 2, backgroundColor: '#f7f7f7', borderRadius: '10px' }}>
-                        <Typography variant="body2" fontWeight={500}>
-                            📊 Récapitulatif :
-                        </Typography>
-                        <Typography variant="body2">
-                            Note finale : <strong>{form.noteFinale}/20</strong>
-                        </Typography>
-                        <Typography variant="body2">
-                            Appréciation : <strong>{form.appreciation}</strong>
-                        </Typography>
-                    </Box>
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
+                    <TextField
+                        value={remarqueCloture}
+                        onChange={(e) => setRemarqueCloture(e.target.value)}
+                        fullWidth
+                        multiline
+                        rows={3}
+                        placeholder="Ajoutez une remarque finale..."
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                    />
+                </Box>
+
+                {/* Boutons */}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                     <Button
-                        onClick={handleCloseConfirm}
+                        variant="outlined"
+                        onClick={() => navigate(`/supervisor/stagiaire/${id}`)}
                         sx={{ borderRadius: '10px', textTransform: 'none' }}
-                        disabled={saving}
                     >
                         Annuler
                     </Button>
                     <Button
                         variant="contained"
-                        onClick={handleSubmit}
-                        disabled={saving}
+                        onClick={handleCloture}
+                        disabled={!checklist.attestationGeneree || submitting}
                         sx={{
-                            backgroundColor: '#22c55e',
+                            backgroundColor: checklist.attestationGeneree ? '#22c55e' : '#999',
                             borderRadius: '10px',
                             textTransform: 'none',
-                            '&:hover': { backgroundColor: '#16a34a' },
-                            '&:disabled': { backgroundColor: '#a0c4cd' },
+                            '&:hover': { backgroundColor: checklist.attestationGeneree ? '#16a34a' : '#999' },
                         }}
                     >
-                        {saving ? <CircularProgress size={24} color="inherit" /> : 'Confirmer la clôture'}
+                        {submitting ? <CircularProgress size={24} color="inherit" /> : 'Clôturer le stage'}
                     </Button>
-                </DialogActions>
-            </Dialog>
+                </Box>
+            </StyledPaper>
         </Container>
     );
 };

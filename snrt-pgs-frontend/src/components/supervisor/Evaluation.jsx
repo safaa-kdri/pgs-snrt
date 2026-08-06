@@ -7,72 +7,82 @@ import {
     Paper,
     Typography,
     Grid,
-    TextField,
     Button,
+    TextField,
+    Rating,
     Alert,
     CircularProgress,
-    Divider,
-    Chip,
-    Avatar,
-    Rating,
-    Slider,
-    MenuItem,
     Card,
     CardContent,
+    Divider,
+    Chip,
+    MenuItem,
+    Select,
+    FormControl,
+    InputLabel,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
     ArrowBack,
+    Star,
     Save,
-    Assessment,
-    Person,
     School,
     Work,
-    Star,
+    Person,
+    CalendarToday,
 } from '@mui/icons-material';
-import { useAuth } from '../../hooks/useAuth';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import api from '../../services/api';
+import { useSelector } from 'react-redux';
 
 // ============================================
 // STYLES
 // ============================================
 
-const EvaluationCard = styled(Paper)({
+const StyledPaper = styled(Paper)({
     borderRadius: '16px',
     padding: '32px',
     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-    maxWidth: '900px',
-    margin: '0 auto',
+    border: '1px solid #eef1f3',
 });
 
-const SectionTitle = styled(Typography)({
-    fontSize: '18px',
-    fontWeight: 600,
-    color: '#1a2332',
-    marginBottom: '16px',
+const InfoRow = styled(Box)({
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-});
-
-const CompetenceItem = styled(Box)({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 16px',
-    backgroundColor: '#f7f7f7',
-    borderRadius: '10px',
-    marginBottom: '8px',
-    flexWrap: 'wrap',
     gap: '12px',
+    padding: '4px 0',
+    '& .MuiSvgIcon-root': {
+        color: '#687480',
+        fontSize: '18px',
+    },
 });
 
-const StyledTextField = styled(TextField)({
-    '& .MuiOutlinedInput-root': {
-        borderRadius: '10px',
-        backgroundColor: '#fff',
+const CompetenceCard = styled(Card)({
+    borderRadius: '12px',
+    padding: '16px 20px',
+    border: '1px solid #eef1f3',
+    boxShadow: 'none',
+    transition: 'all 0.2s ease',
+    '&:hover': {
+        borderColor: '#2d3748',
+        backgroundColor: '#f7f8fa',
     },
+});
+
+const StatusChip = styled(Chip)(({ status }) => {
+    const colors = {
+        'EnCours': { bg: '#dbeafe', text: '#1d4ed8' },
+        'Termine': { bg: '#d1fae5', text: '#065f46' },
+        'Annule': { bg: '#fee2e2', text: '#991b1b' },
+        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
+    };
+    const color = colors[status] || colors['EnCours'];
+    return {
+        backgroundColor: color.bg,
+        color: color.text,
+        fontWeight: 500,
+        fontSize: '11px',
+        height: '24px',
+    };
 });
 
 // ============================================
@@ -82,338 +92,349 @@ const StyledTextField = styled(TextField)({
 const Evaluation = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    const { user } = useAuth();
+    const { user } = useSelector((state) => state.auth);
 
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [success, setSuccess] = useState('');
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    const [intern, setIntern] = useState(null);
-
-    const [form, setForm] = useState({
+    const [success, setSuccess] = useState('');
+    const [internship, setInternship] = useState(null);
+    const [student, setStudent] = useState(null);
+    const [offer, setOffer] = useState(null);
+    const [existingEvaluation, setExistingEvaluation] = useState(null);
+    
+    const [evaluationData, setEvaluationData] = useState({
         note: 0,
         commentaires: '',
         competences: [
-            { nom: 'Qualité du travail', note: 0, commentaire: '' },
-            { nom: 'Autonomie', note: 0, commentaire: '' },
-            { nom: 'Esprit d\'équipe', note: 0, commentaire: '' },
-            { nom: 'Communication', note: 0, commentaire: '' },
-            { nom: 'Progression', note: 0, commentaire: '' },
+            { nom: 'Autonomie', niveau: 'Intermediaire', note: 0 },
+            { nom: 'Qualité du travail', niveau: 'Intermediaire', note: 0 },
+            { nom: 'Relationnel', niveau: 'Intermediaire', note: 0 },
+            { nom: 'Technique', niveau: 'Intermediaire', note: 0 },
+            { nom: 'Adaptabilité', niveau: 'Intermediaire', note: 0 },
         ],
-        recommandation: 'positive',
+        pointsForts: '',
+        pointsFaibles: '',
+        recommandations: '',
     });
 
+    const niveauOptions = ['Debutant', 'Intermediaire', 'Avance', 'Expert'];
+
     useEffect(() => {
-        fetchInternData();
+        fetchData();
     }, [id]);
 
-    const fetchInternData = async () => {
+    const fetchData = async () => {
         setLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
-
-            const mockIntern = {
-                id: id || '1',
-                nom: 'EL HASSANI',
-                prenom: 'Youssef',
-                email: 'youssef@test.ma',
-                stage: 'Stage Développement Web',
-                department: 'DSI',
-                startDate: '2026-06-01',
-                endDate: '2026-08-31',
-                encadrant: 'Mohamed CHERKAOUI',
-            };
-
-            setIntern(mockIntern);
-
-            // Pré-remplir les notes si une évaluation existe déjà
-            // setForm({ ...form, note: 16, commentaires: 'Bon travail...' });
-
+            // ✅ Route correcte : /internships/:id
+            const response = await api.get(`/internships/${id}`);
+            const data = response.data?.data || response.data;
+            setInternship(data);
+            setStudent(data.etudiantId || {});
+            setOffer(data.offreId || {});
+            
+            if (data.evaluation) {
+                setExistingEvaluation(data.evaluation);
+                setEvaluationData({
+                    note: data.evaluation.note || 0,
+                    commentaires: data.evaluation.commentaires || '',
+                    competences: data.evaluation.competencesEvaluees || evaluationData.competences,
+                    pointsForts: data.evaluation.pointsForts || '',
+                    pointsFaibles: data.evaluation.pointsFaibles || '',
+                    recommandations: data.evaluation.recommandations || '',
+                });
+            }
         } catch (error) {
-            console.error('Erreur chargement:', error);
-            setError('Erreur lors du chargement des données');
+            console.error('Erreur:', error);
+            setError(error.response?.data?.message || 'Erreur de chargement');
         } finally {
             setLoading(false);
         }
     };
 
     const handleChange = (field, value) => {
-        setForm({ ...form, [field]: value });
-        setError('');
-        setSuccess('');
+        setEvaluationData({ ...evaluationData, [field]: value });
     };
 
     const handleCompetenceChange = (index, field, value) => {
-        const newCompetences = [...form.competences];
+        const newCompetences = [...evaluationData.competences];
         newCompetences[index][field] = value;
-        setForm({ ...form, competences: newCompetences });
+        setEvaluationData({ ...evaluationData, competences: newCompetences });
     };
 
-    const handleSave = async () => {
-        setSaving(true);
-        setError('');
-        setSuccess('');
-
-        // Validation
-        if (form.note < 10 && form.recommandation === 'positive') {
-            setError('La note est inférieure à 10 mais la recommandation est positive.');
-            setSaving(false);
+    const handleSubmit = async () => {
+        if (evaluationData.note === 0) {
+            setError('Veuillez attribuer une note');
             return;
         }
-
+        
+        setSubmitting(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            // TODO: Appel API POST /internships/:id/evaluate
-            console.log('📝 Évaluation sauvegardée:', { internId: id, ...form });
-            setSuccess('✅ Évaluation sauvegardée avec succès !');
+            // ✅ Route correcte : /internships/:id/evaluate
+            await api.put(`/internships/${id}/evaluate`, evaluationData);
+            setSuccess('Évaluation enregistrée avec succès');
+            setTimeout(() => navigate('/supervisor/stagiaires'), 1500);
         } catch (error) {
-            console.error('Erreur sauvegarde:', error);
-            setError('❌ Erreur lors de la sauvegarde de l\'évaluation');
+            console.error('Erreur:', error);
+            setError(error.response?.data?.message || 'Erreur lors de l\'enregistrement');
         } finally {
-            setSaving(false);
+            setSubmitting(false);
         }
     };
 
-    const getNoteColor = (note) => {
-        if (note >= 16) return '#22c55e';
-        if (note >= 12) return '#f59e0b';
-        return '#ef4444';
-    };
-
-    const getNoteLabel = (note) => {
-        if (note >= 16) return 'Excellent';
-        if (note >= 14) return 'Très bien';
-        if (note >= 12) return 'Bien';
-        if (note >= 10) return 'Passable';
-        return 'Insuffisant';
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+        });
     };
 
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <CircularProgress size={60} thickness={4} sx={{ color: '#148aa0' }} />
+                <CircularProgress size={44} sx={{ color: '#2d3748' }} />
             </Box>
-        );
-    }
-
-    if (!intern) {
-        return (
-            <Container maxWidth="md" sx={{ py: 4 }}>
-                <Alert severity="error" sx={{ borderRadius: '12px' }}>
-                    Stagiaire non trouvé
-                </Alert>
-                <Button
-                    startIcon={<ArrowBack />}
-                    onClick={() => navigate('/supervisor/interns')}
-                    sx={{ mt: 2 }}
-                >
-                    Retour à la liste
-                </Button>
-            </Container>
         );
     }
 
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
-            <Button
-                startIcon={<ArrowBack />}
-                onClick={() => navigate(`/supervisor/interns/${id}`)}
-                sx={{ mb: 3, textTransform: 'none', color: '#666' }}
-            >
-                Retour au stagiaire
-            </Button>
+            <Box sx={{ mb: 3 }}>
+                <Button
+                    startIcon={<ArrowBack />}
+                    onClick={() => navigate(`/supervisor/stagiaire/${id}`)}
+                    sx={{ textTransform: 'none', color: '#666' }}
+                >
+                    Retour au stagiaire
+                </Button>
+            </Box>
 
-            <EvaluationCard>
-                {/* ===== EN-TÊTE ===== */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                    <Avatar
-                        sx={{
-                            width: 56,
-                            height: 56,
-                            backgroundColor: '#148aa0',
-                            fontSize: 24,
-                            fontWeight: 700,
-                            color: '#fff',
-                        }}
-                    >
-                        {intern.prenom[0]}{intern.nom[0]}
-                    </Avatar>
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '12px' }}>{success}</Alert>}
+
+            <StyledPaper>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                     <Box>
-                        <Typography variant="h5" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                            Évaluation de {intern.prenom} {intern.nom}
+                        <Typography variant="h5" fontWeight={700} color="#1a2332">
+                            {existingEvaluation ? 'Modifier l\'évaluation' : 'Évaluation du stagiaire'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            {intern.stage} - {intern.department}
+                            {student?.prenom || ''} {student?.nom || ''} • {offer?.titre || 'Stage'}
                         </Typography>
                     </Box>
+                    {internship?.statut && (
+                        <StatusChip label={internship.statut} status={internship.statut} />
+                    )}
                 </Box>
 
                 <Divider sx={{ mb: 3 }} />
 
-                {error && (
-                    <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>
-                        {error}
-                    </Alert>
-                )}
-
-                {success && (
-                    <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>
-                        {success}
-                    </Alert>
-                )}
-
-                {/* ===== NOTE GLOBALE ===== */}
-                <SectionTitle>
-                    <Assessment sx={{ color: '#4f46e5' }} />
-                    Note globale
-                </SectionTitle>
-
-                <Box sx={{ mb: 4 }}>
-                    <Grid container spacing={3} alignItems="center">
-                        <Grid item xs={12} sm={6}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography variant="h2" sx={{ fontWeight: 700, color: getNoteColor(form.note) }}>
-                                        {form.note}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        /20
-                                    </Typography>
-                                </Box>
-                                <Box>
-                                    <Typography variant="h6" sx={{ color: getNoteColor(form.note) }}>
-                                        {getNoteLabel(form.note)}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Note globale du stagiaire
-                                    </Typography>
-                                </Box>
+                {/* Infos stagiaire */}
+                <Grid container spacing={2} sx={{ mb: 4 }}>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <Person />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Stagiaire</Typography>
+                                <Typography variant="body2">{student?.prenom || ''} {student?.nom || ''}</Typography>
                             </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                            <Slider
-                                value={form.note}
-                                onChange={(e, val) => handleChange('note', val)}
-                                min={0}
-                                max={20}
-                                step={0.5}
-                                marks={[
-                                    { value: 0, label: '0' },
-                                    { value: 10, label: '10' },
-                                    { value: 20, label: '20' },
-                                ]}
-                                sx={{
-                                    '& .MuiSlider-track': {
-                                        backgroundColor: getNoteColor(form.note),
-                                    },
-                                    '& .MuiSlider-thumb': {
-                                        backgroundColor: getNoteColor(form.note),
-                                    },
-                                }}
-                            />
-                        </Grid>
+                        </InfoRow>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <School />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Université</Typography>
+                                <Typography variant="body2">{student?.universite || 'Non renseignée'}</Typography>
+                            </Box>
+                        </InfoRow>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <Work />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Stage</Typography>
+                                <Typography variant="body2">{offer?.titre || 'Sans titre'}</Typography>
+                            </Box>
+                        </InfoRow>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <InfoRow>
+                            <CalendarToday />
+                            <Box>
+                                <Typography variant="caption" color="text.secondary">Période</Typography>
+                                <Typography variant="body2">
+                                    {formatDate(internship?.dateDebut)} - {formatDate(internship?.dateFin)}
+                                </Typography>
+                            </Box>
+                        </InfoRow>
+                    </Grid>
+                </Grid>
+
+                <Divider sx={{ mb: 3 }} />
+
+                {/* Note */}
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                        Note finale (sur 20)
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <TextField
+                            type="number"
+                            value={evaluationData.note}
+                            onChange={(e) => handleChange('note', Math.min(20, Math.max(0, Number(e.target.value))))}
+                            InputProps={{ inputProps: { min: 0, max: 20, step: 0.5 } }}
+                            sx={{ width: 120 }}
+                            helperText={evaluationData.note > 0 ? `${Math.round((evaluationData.note / 20) * 5 * 10) / 10}/5` : ''}
+                        />
+                        <Rating
+                            value={Math.min(evaluationData.note / 4, 5)}
+                            readOnly
+                            precision={0.5}
+                            size="large"
+                        />
+                    </Box>
+                </Box>
+
+                {/* Compétences */}
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                        Compétences évaluées (sur 5)
+                    </Typography>
+                    <Grid container spacing={2}>
+                        {evaluationData.competences.map((comp, idx) => (
+                            <Grid item xs={12} sm={6} key={idx}>
+                                <CompetenceCard>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                                        <Typography variant="body2" sx={{ minWidth: 100, fontWeight: 500 }}>
+                                            {comp.nom}
+                                        </Typography>
+                                        <FormControl size="small" sx={{ minWidth: 120 }}>
+                                            <InputLabel>Niveau</InputLabel>
+                                            <Select
+                                                value={comp.niveau || 'Intermediaire'}
+                                                onChange={(e) => handleCompetenceChange(idx, 'niveau', e.target.value)}
+                                                label="Niveau"
+                                            >
+                                                {niveauOptions.map((n) => (
+                                                    <MenuItem key={n} value={n}>{n}</MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                        <TextField
+                                            type="number"
+                                            value={comp.note}
+                                            onChange={(e) => handleCompetenceChange(idx, 'note', Math.min(5, Math.max(0, Number(e.target.value))))}
+                                            size="small"
+                                            sx={{ width: 70 }}
+                                            InputProps={{ inputProps: { min: 0, max: 5, step: 0.5 } }}
+                                        />
+                                        <Rating
+                                            value={comp.note || 0}
+                                            onChange={(e, v) => handleCompetenceChange(idx, 'note', v || 0)}
+                                            precision={0.5}
+                                            size="small"
+                                        />
+                                    </Box>
+                                </CompetenceCard>
+                            </Grid>
+                        ))}
                     </Grid>
                 </Box>
 
-                {/* ===== COMPÉTENCES ===== */}
-                <SectionTitle>
-                    <Star sx={{ color: '#f59e0b' }} />
-                    Évaluation des compétences
-                </SectionTitle>
+                {/* Points forts / Points faibles */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid item xs={12} sm={6}>
+                        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                            Points forts
+                        </Typography>
+                        <TextField
+                            value={evaluationData.pointsForts}
+                            onChange={(e) => handleChange('pointsForts', e.target.value)}
+                            fullWidth
+                            multiline
+                            rows={2}
+                            placeholder="Points forts du stagiaire..."
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                            Points faibles
+                        </Typography>
+                        <TextField
+                            value={evaluationData.pointsFaibles}
+                            onChange={(e) => handleChange('pointsFaibles', e.target.value)}
+                            fullWidth
+                            multiline
+                            rows={2}
+                            placeholder="Points à améliorer..."
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                        />
+                    </Grid>
+                </Grid>
 
-                {form.competences.map((comp, index) => (
-                    <CompetenceItem key={index}>
-                        <Box sx={{ minWidth: '120px' }}>
-                            <Typography variant="body2" fontWeight={500}>
-                                {comp.nom}
-                            </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                            <Slider
-                                value={comp.note}
-                                onChange={(e, val) => handleCompetenceChange(index, 'note', val)}
-                                min={0}
-                                max={20}
-                                step={0.5}
-                                sx={{ width: '120px' }}
-                            />
-                            <Typography variant="body2" fontWeight={600} sx={{ minWidth: '30px' }}>
-                                {comp.note}
-                            </Typography>
-                            <StyledTextField
-                                placeholder="Commentaire"
-                                size="small"
-                                value={comp.commentaire}
-                                onChange={(e) => handleCompetenceChange(index, 'commentaire', e.target.value)}
-                                sx={{ width: '200px' }}
-                            />
-                        </Box>
-                    </CompetenceItem>
-                ))}
+                {/* Recommandations */}
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                        Recommandations
+                    </Typography>
+                    <TextField
+                        value={evaluationData.recommandations}
+                        onChange={(e) => handleChange('recommandations', e.target.value)}
+                        fullWidth
+                        multiline
+                        rows={2}
+                        placeholder="Recommandations pour l'étudiant..."
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                    />
+                </Box>
 
-                {/* ===== COMMENTAIRES ===== */}
-                <SectionTitle sx={{ mt: 3 }}>
-                    <Person sx={{ color: '#8b5cf6' }} />
-                    Commentaires généraux
-                </SectionTitle>
+                {/* Commentaires */}
+                <Box sx={{ mb: 4 }}>
+                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+                        Commentaires généraux
+                    </Typography>
+                    <TextField
+                        value={evaluationData.commentaires}
+                        onChange={(e) => handleChange('commentaires', e.target.value)}
+                        fullWidth
+                        multiline
+                        rows={3}
+                        placeholder="Commentaires sur le stage..."
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                    />
+                </Box>
 
-                <StyledTextField
-                    label="Commentaires sur le stagiaire"
-                    multiline
-                    rows={4}
-                    value={form.commentaires}
-                    onChange={(e) => handleChange('commentaires', e.target.value)}
-                    fullWidth
-                    placeholder="Points forts, points d'amélioration, observations générales..."
-                    sx={{ mb: 3 }}
-                />
-
-                {/* ===== RECOMMANDATION ===== */}
-                <SectionTitle>
-                    <Work sx={{ color: '#22c55e' }} />
-                    Recommandation
-                </SectionTitle>
-
-                <StyledTextField
-                    select
-                    label="Recommandation"
-                    value={form.recommandation}
-                    onChange={(e) => handleChange('recommandation', e.target.value)}
-                    fullWidth
-                    sx={{ mb: 3 }}
-                >
-                    <MenuItem value="positive">✅ Positive - Recommandé</MenuItem>
-                    <MenuItem value="neutral">➖ Neutre - Sans opinion</MenuItem>
-                    <MenuItem value="negative">❌ Négative - Non recommandé</MenuItem>
-                </StyledTextField>
-
-                {/* ===== BOUTONS ===== */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+                {/* Boutons */}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                     <Button
                         variant="outlined"
-                        onClick={() => navigate(`/supervisor/interns/${id}`)}
+                        onClick={() => navigate(`/supervisor/stagiaire/${id}`)}
                         sx={{ borderRadius: '10px', textTransform: 'none' }}
-                        disabled={saving}
                     >
                         Annuler
                     </Button>
                     <Button
                         variant="contained"
-                        startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Save />}
-                        onClick={handleSave}
-                        disabled={saving}
+                        onClick={handleSubmit}
+                        disabled={submitting}
                         sx={{
-                            backgroundColor: '#148aa0',
+                            backgroundColor: '#2d3748',
                             borderRadius: '10px',
                             textTransform: 'none',
-                            '&:hover': { backgroundColor: '#0b7890' },
-                            '&:disabled': { backgroundColor: '#a0c4cd' },
+                            '&:hover': { backgroundColor: '#1a202c' },
                         }}
                     >
-                        {saving ? 'Sauvegarde...' : '💾 Enregistrer l\'évaluation'}
+                        {submitting ? <CircularProgress size={24} color="inherit" /> : 
+                            existingEvaluation ? 'Mettre à jour' : 'Enregistrer'}
                     </Button>
                 </Box>
-            </EvaluationCard>
+            </StyledPaper>
         </Container>
     );
 };

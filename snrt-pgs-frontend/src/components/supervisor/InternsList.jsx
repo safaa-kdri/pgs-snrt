@@ -12,7 +12,6 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Button,
     TextField,
     Chip,
     Avatar,
@@ -21,22 +20,21 @@ import {
     CircularProgress,
     InputAdornment,
     Tooltip,
-    LinearProgress,
+    MenuItem,
+    Alert,
+    Pagination,
+    Card,
+    CardContent,
 } from '@mui/material';
+import { styled, alpha } from '@mui/material/styles';
 import {
     Search,
     Visibility,
-    Refresh,
-    FilterList,
-    School,
-    Assessment,
-    CheckCircle,
-    Pending,
-    Cancel,
+    Description,
     TrendingUp,
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
-import { useAuth } from '../../hooks/useAuth';
+import { useSelector } from 'react-redux';
+import api from '../../services/api';
 
 // ============================================
 // STYLES
@@ -54,16 +52,22 @@ const PageHeader = styled(Box)({
 const StyledTableCell = styled(TableCell)({
     fontWeight: 600,
     color: '#1a2332',
+    fontSize: '13px',
 });
 
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        active: { bg: '#d1fae5', text: '#065f46' },
-        pending: { bg: '#fef3c7', text: '#d97706' },
-        completed: { bg: '#dbeafe', text: '#1d4ed8' },
-        cancelled: { bg: '#fee2e2', text: '#991b1b' },
+        'EnCours': { bg: '#dbeafe', text: '#1d4ed8' },
+        'Termine': { bg: '#d1fae5', text: '#065f46' },
+        'Annule': { bg: '#fee2e2', text: '#991b1b' },
+        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementEnvoye': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EngagementRecu': { bg: '#d1fae5', text: '#065f46' },
+        'EnAttenteValidationDirecteur': { bg: '#fef3c7', text: '#d97706' },
+        'ValideParDirecteur': { bg: '#d1fae5', text: '#065f46' },
+        'DemandeEnvoyee': { bg: '#fef3c7', text: '#d97706' },
     };
-    const color = colors[status] || colors.pending;
+    const color = colors[status] || colors['EnCours'];
     return {
         backgroundColor: color.bg,
         color: color.text,
@@ -73,19 +77,54 @@ const StatusChip = styled(Chip)(({ status }) => {
     };
 });
 
+const StatCard = styled(Card)(({ active, color }) => ({
+    borderRadius: '10px',
+    border: `1px solid ${active ? color : '#eef1f3'}`,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    backgroundColor: active ? alpha(color, 0.05) : '#ffffff',
+    boxShadow: active ? `0 4px 12px ${alpha(color, 0.15)}` : 'none',
+    '&:hover': {
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        transform: 'translateY(-2px)',
+    },
+}));
+
+const FiltersContainer = styled(Paper)({
+    padding: '16px 20px',
+    marginBottom: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#fafbfc',
+    border: '1px solid #eef1f3',
+});
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
 const InternsList = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user } = useSelector((state) => state.auth);
 
     const [loading, setLoading] = useState(true);
     const [interns, setInterns] = useState([]);
     const [filteredInterns, setFilteredInterns] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+
+    const [stats, setStats] = useState({
+        total: 0,
+        enCours: 0,
+        termines: 0,
+        annules: 0,
+    });
+
+    const limit = 10;
 
     useEffect(() => {
         fetchInterns();
@@ -97,82 +136,48 @@ const InternsList = () => {
 
     const fetchInterns = async () => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 600));
+            // ✅ Route correcte : /internships/my-internships
+            const response = await api.get('/internships/my-internships');
+            
+            let data = [];
+            if (response.data?.data) {
+                data = response.data.data;
+            } else if (Array.isArray(response.data)) {
+                data = response.data;
+            }
 
-            const mockInterns = [
-                {
-                    id: '1',
-                    nom: 'EL HASSANI',
-                    prenom: 'Youssef',
-                    email: 'youssef@test.ma',
-                    stage: 'Stage Développement Web',
-                    department: 'DSI',
-                    progress: 75,
-                    status: 'active',
-                    startDate: '2026-06-01',
-                    endDate: '2026-08-31',
-                    evaluation: { note: null, status: 'pending' },
-                },
-                {
-                    id: '2',
-                    nom: 'BENNANI',
-                    prenom: 'Fatima',
-                    email: 'fatima@test.ma',
-                    stage: 'Stage Data Science',
-                    department: 'DSI',
-                    progress: 100,
-                    status: 'completed',
-                    startDate: '2026-03-01',
-                    endDate: '2026-05-31',
-                    evaluation: { note: 18, status: 'done' },
-                },
-                {
-                    id: '3',
-                    nom: 'ALAMI',
-                    prenom: 'Ahmed',
-                    email: 'ahmed@test.ma',
-                    stage: 'Stage Cybersécurité',
-                    department: 'DSI',
-                    progress: 45,
-                    status: 'active',
-                    startDate: '2026-07-01',
-                    endDate: '2026-09-30',
-                    evaluation: { note: null, status: 'pending' },
-                },
-                {
-                    id: '4',
-                    nom: 'CHERKAOUI',
-                    prenom: 'Mohamed',
-                    email: 'mohamed@test.ma',
-                    stage: 'Stage DevOps',
-                    department: 'Technique',
-                    progress: 90,
-                    status: 'pending',
-                    startDate: '2026-05-15',
-                    endDate: '2026-08-15',
-                    evaluation: { note: null, status: 'pending' },
-                },
-                {
-                    id: '5',
-                    nom: 'ALAOUI',
-                    prenom: 'Khadija',
-                    email: 'khadija@test.ma',
-                    stage: 'Stage Marketing Digital',
-                    department: 'Marketing',
-                    progress: 30,
-                    status: 'cancelled',
-                    startDate: '2026-06-15',
-                    endDate: '2026-08-15',
-                    evaluation: { note: null, status: 'cancelled' },
-                },
-            ];
+            const formattedData = data.map((intern) => ({
+                ...intern,
+                _id: intern._id || intern.id,
+                etudiant: intern.etudiantId || intern.etudiant || {},
+                offre: intern.offreId || intern.offre || {},
+                statut: intern.statut || 'EnCours',
+                livrables: intern.livrables || [],
+            }));
 
-            setInterns(mockInterns);
-            setFilteredInterns(mockInterns);
+            setInterns(formattedData);
+            setFilteredInterns(formattedData);
+            setTotal(formattedData.length || 0);
+
+            const totalPages = Math.ceil(formattedData.length / limit) || 1;
+            setTotalPages(totalPages);
+
+            setStats({
+                total: formattedData.length || 0,
+                enCours: formattedData.filter(i => i.statut === 'EnCours').length,
+                termines: formattedData.filter(i => i.statut === 'Termine' || i.statut === 'Cloturee').length,
+                annules: formattedData.filter(i => i.statut === 'Annule').length,
+            });
 
         } catch (error) {
             console.error('Erreur chargement stagiaires:', error);
+            setError(error.response?.data?.message || 'Erreur de chargement');
+            setInterns([]);
+            setFilteredInterns([]);
+            setTotal(0);
+            setTotalPages(1);
         } finally {
             setLoading(false);
         }
@@ -181,75 +186,123 @@ const InternsList = () => {
     const filterInterns = () => {
         let filtered = [...interns];
 
+        if (statusFilter !== 'all') {
+            filtered = filtered.filter((i) => i.statut === statusFilter);
+        }
+
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(
                 (i) =>
-                    i.nom.toLowerCase().includes(term) ||
-                    i.prenom.toLowerCase().includes(term) ||
-                    i.stage.toLowerCase().includes(term) ||
-                    i.department.toLowerCase().includes(term)
+                    (i.etudiant?.nom || '').toLowerCase().includes(term) ||
+                    (i.etudiant?.prenom || '').toLowerCase().includes(term) ||
+                    (i.offre?.titre || '').toLowerCase().includes(term) ||
+                    (i.etudiant?.email || '').toLowerCase().includes(term)
             );
         }
 
-        if (statusFilter !== 'all') {
-            filtered = filtered.filter((i) => i.status === statusFilter);
-        }
-
+        setTotal(filtered.length);
         setFilteredInterns(filtered);
-    };
 
-    const getInitials = (nom, prenom) => {
-        return `${prenom[0]}${nom[0]}`.toUpperCase();
+        const totalPages = Math.ceil(filtered.length / limit) || 1;
+        setTotalPages(totalPages);
+        if (page > totalPages) {
+            setPage(1);
+        }
     };
 
     const getStatusLabel = (status) => {
-        switch (status) {
-            case 'active': return 'Actif';
-            case 'pending': return 'En attente';
-            case 'completed': return 'Terminé';
-            case 'cancelled': return 'Annulé';
-            default: return 'Inconnu';
-        }
+        const labels = {
+            'EnCours': 'En cours',
+            'Termine': 'Terminé',
+            'Annule': 'Annulé',
+            'Cloturee': 'Clôturé',
+            'EngagementEnvoye': 'Engagement envoyé',
+            'EngagementRecu': 'Engagement reçu',
+            'EnAttenteValidationDirecteur': 'En attente validation Directeur',
+            'ValideParDirecteur': 'Validé par Directeur',
+            'DemandeEnvoyee': 'Demande envoyée',
+        };
+        return labels[status] || status;
     };
 
-    const getProgressColor = (progress) => {
-        if (progress >= 80) return '#22c55e';
-        if (progress >= 50) return '#f59e0b';
-        return '#ef4444';
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
     };
+
+    const getInitials = (nom, prenom) => {
+        if (!nom && !prenom) return '?';
+        return `${(prenom || '')[0] || ''}${(nom || '')[0] || ''}`.toUpperCase() || '?';
+    };
+
+    const isCardActive = (statutKey) => {
+        if (statutKey === 'all') return statusFilter === 'all';
+        return statusFilter === statutKey;
+    };
+
+    const handleStatusFilterChange = (newStatus) => {
+        setStatusFilter(newStatus);
+        setPage(1);
+    };
+
+    const handlePageChange = (event, value) => {
+        setPage(value);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const getPaginatedData = () => {
+        const start = (page - 1) * limit;
+        const end = start + limit;
+        return filteredInterns.slice(start, end);
+    };
+
+    const paginatedData = getPaginatedData();
+
+    const statusOptions = [
+        { value: 'all', label: 'Tous les statuts' },
+        { value: 'EnCours', label: 'En cours' },
+        { value: 'Termine', label: 'Terminé' },
+        { value: 'Annule', label: 'Annulé' },
+        { value: 'Cloturee', label: 'Clôturé' },
+    ];
+
+    if (loading && interns.length === 0) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+                <CircularProgress size={44} sx={{ color: '#2d3748' }} />
+            </Box>
+        );
+    }
 
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
-            {/* ===== EN-TÊTE ===== */}
+            {/* ===== EN-TETE ===== */}
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        👥 Mes stagiaires
+                        Mes stagiaires
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         {filteredInterns.length} stagiaire(s) trouvé(s)
+                        {statusFilter !== 'all' && ` • Filtre par : ${getStatusLabel(statusFilter)}`}
                     </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchInterns}
-                        disabled={loading}
-                        sx={{ borderRadius: '12px', textTransform: 'none' }}
-                    >
-                        Rafraîchir
-                    </Button>
                 </Box>
             </PageHeader>
 
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
+
             {/* ===== FILTRES ===== */}
-            <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
+            <FiltersContainer>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12} sm={7}>
                         <TextField
-                            placeholder="Rechercher..."
+                            placeholder="Rechercher par nom, offre..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -269,47 +322,82 @@ const InternsList = () => {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={5}>
                         <TextField
                             select
                             label="Statut"
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
+                            onChange={(e) => handleStatusFilterChange(e.target.value)}
                             size="small"
                             fullWidth
                             sx={{
-                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: '10px',
+                                    backgroundColor: '#fff',
+                                },
                             }}
                         >
-                            <MenuItem value="all">Tous les statuts</MenuItem>
-                            <MenuItem value="active">Actif</MenuItem>
-                            <MenuItem value="pending">En attente</MenuItem>
-                            <MenuItem value="completed">Terminé</MenuItem>
-                            <MenuItem value="cancelled">Annulé</MenuItem>
+                            {statusOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
                         </TextField>
                     </Grid>
-                    <Grid item xs={12} sm={2}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<FilterList />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                setStatusFilter('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
                 </Grid>
-            </Paper>
+            </FiltersContainer>
+
+            {/* ===== STATS RAPIDES ===== */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} sm={3}>
+                    <StatCard
+                        active={isCardActive('all')}
+                        color="#2d3748"
+                        onClick={() => handleStatusFilterChange('all')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="text.secondary">Total</Typography>
+                            <Typography variant="h6" fontWeight={700}>{stats.total}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <StatCard
+                        active={isCardActive('EnCours')}
+                        color="#1d4ed8"
+                        onClick={() => handleStatusFilterChange('EnCours')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="#1d4ed8">En cours</Typography>
+                            <Typography variant="h6" fontWeight={700} color="#1d4ed8">{stats.enCours}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <StatCard
+                        active={isCardActive('Termine')}
+                        color="#065f46"
+                        onClick={() => handleStatusFilterChange('Termine')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="#065f46">Terminés</Typography>
+                            <Typography variant="h6" fontWeight={700} color="#065f46">{stats.termines}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <StatCard
+                        active={isCardActive('Annule')}
+                        color="#991b1b"
+                        onClick={() => handleStatusFilterChange('Annule')}
+                    >
+                        <CardContent sx={{ py: 1.5, px: 2 }}>
+                            <Typography variant="caption" color="#991b1b">Annulés</Typography>
+                            <Typography variant="h6" fontWeight={700} color="#991b1b">{stats.annules}</Typography>
+                        </CardContent>
+                    </StatCard>
+                </Grid>
+            </Grid>
 
             {/* ===== TABLEAU ===== */}
             <TableContainer
@@ -321,35 +409,32 @@ const InternsList = () => {
                         <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
                             <StyledTableCell>Stagiaire</StyledTableCell>
                             <StyledTableCell>Stage</StyledTableCell>
-                            <StyledTableCell>Département</StyledTableCell>
-                            <StyledTableCell>Progression</StyledTableCell>
+                            <StyledTableCell>Début</StyledTableCell>
+                            <StyledTableCell>Fin</StyledTableCell>
+                            <StyledTableCell>Livrables</StyledTableCell>
                             <StyledTableCell>Statut</StyledTableCell>
                             <StyledTableCell align="center">Actions</StyledTableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {loading ? (
+                        {paginatedData.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                                    <CircularProgress size={40} sx={{ color: '#148aa0' }} />
-                                </TableCell>
-                            </TableRow>
-                        ) : filteredInterns.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
-                                        Aucun stagiaire trouvé
+                                        {statusFilter !== 'all'
+                                            ? `Aucun stagiaire avec le statut "${getStatusLabel(statusFilter)}"`
+                                            : 'Aucun stagiaire trouvé'}
                                     </Typography>
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredInterns.map((intern) => (
-                                <TableRow key={intern.id} hover>
+                            paginatedData.map((intern) => (
+                                <TableRow key={intern._id || intern.id} hover>
                                     <TableCell>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                             <Avatar
                                                 sx={{
-                                                    backgroundColor: '#148aa0',
+                                                    backgroundColor: '#2d3748',
                                                     width: 36,
                                                     height: 36,
                                                     fontSize: 14,
@@ -357,58 +442,54 @@ const InternsList = () => {
                                                     color: '#fff',
                                                 }}
                                             >
-                                                {getInitials(intern.nom, intern.prenom)}
+                                                {getInitials(
+                                                    intern.etudiant?.nom,
+                                                    intern.etudiant?.prenom
+                                                )}
                                             </Avatar>
                                             <Box>
                                                 <Typography variant="body2" fontWeight={600}>
-                                                    {intern.prenom} {intern.nom}
+                                                    {intern.etudiant?.prenom || ''} {intern.etudiant?.nom || ''}
                                                 </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {intern.email}
+                                                <Typography variant="caption" color="text.secondary" display="block">
+                                                    {intern.etudiant?.email || ''}
                                                 </Typography>
                                             </Box>
                                         </Box>
                                     </TableCell>
                                     <TableCell>
-                                        <Typography variant="body2">{intern.stage}</Typography>
+                                        <Typography variant="body2">
+                                            {intern.offre?.titre || 'Stage sans titre'}
+                                        </Typography>
                                     </TableCell>
                                     <TableCell>
-                                        <Chip
-                                            label={intern.department}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: '#e0e7ff',
-                                                color: '#4338ca',
-                                                fontWeight: 500,
-                                            }}
-                                        />
+                                        <Typography variant="body2" color="text.secondary">
+                                            {formatDate(intern.dateDebut)}
+                                        </Typography>
                                     </TableCell>
                                     <TableCell>
-                                        <Box sx={{ width: '100%', minWidth: 100 }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                                <Typography variant="caption" fontWeight={500}>
-                                                    {intern.progress}%
-                                                </Typography>
-                                            </Box>
-                                            <LinearProgress
-                                                variant="determinate"
-                                                value={intern.progress}
+                                        <Typography variant="body2" color="text.secondary">
+                                            {formatDate(intern.dateFin)}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Tooltip title={`${intern.livrables?.length || 0} livrable(s)`}>
+                                            <Chip
+                                                label={intern.livrables?.length || 0}
+                                                size="small"
+                                                icon={<Description sx={{ fontSize: 14 }} />}
                                                 sx={{
-                                                    height: 6,
-                                                    borderRadius: 3,
-                                                    backgroundColor: '#e5e7eb',
-                                                    '& .MuiLinearProgress-bar': {
-                                                        backgroundColor: getProgressColor(intern.progress),
-                                                        borderRadius: 3,
-                                                    },
+                                                    backgroundColor: '#f3e8ff',
+                                                    color: '#6b21a8',
+                                                    fontWeight: 500,
                                                 }}
                                             />
-                                        </Box>
+                                        </Tooltip>
                                     </TableCell>
                                     <TableCell>
                                         <StatusChip
-                                            label={getStatusLabel(intern.status)}
-                                            status={intern.status}
+                                            label={getStatusLabel(intern.statut)}
+                                            status={intern.statut}
                                             size="small"
                                         />
                                     </TableCell>
@@ -416,19 +497,10 @@ const InternsList = () => {
                                         <Tooltip title="Voir le détail">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => navigate(`/supervisor/interns/${intern.id}`)}
-                                                sx={{ color: '#148aa0' }}
+                                                onClick={() => navigate(`/supervisor/stagiaire/${intern._id || intern.id}`)}
+                                                sx={{ color: '#2d3748' }}
                                             >
                                                 <Visibility fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Évaluer">
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => navigate(`/supervisor/evaluate/${intern.id}`)}
-                                                sx={{ color: '#f59e0b' }}
-                                            >
-                                                <Assessment fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
                                     </TableCell>
@@ -438,6 +510,23 @@ const InternsList = () => {
                     </TableBody>
                 </Table>
             </TableContainer>
+
+            {/* ===== PAGINATION ===== */}
+            {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                    <Pagination
+                        count={totalPages}
+                        page={page}
+                        onChange={handlePageChange}
+                        sx={{
+                            '& .MuiPaginationItem-root.Mui-selected': {
+                                backgroundColor: '#2d3748',
+                                color: '#ffffff',
+                            },
+                        }}
+                    />
+                </Box>
+            )}
         </Container>
     );
 };

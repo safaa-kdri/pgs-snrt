@@ -4,6 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const mongoSanitize = require('express-mongo-sanitize');
+const path = require('path'); // ✅ AJOUT IMPORTANT
 
 const connectDB = require('./src/config/database');
 const { CONFIG, assertRequiredEnv } = require('./src/config/constants');
@@ -23,14 +24,7 @@ const notificationRoutes = require('./src/routes/notificationRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const studentRoutes = require('./src/routes/studentRoutes');
 const internshipRoutes = require('./src/routes/internshipRoutes');
-//const settingsRoutes = require('./src/routes/settingsRoutes');
-// BUGFIX (code mort) : resultsRoutes existait (routes + controller complets,
-// getResults/getResultDetail lisent bien documentsConcours.ResultatConcours
-// deja alimente par offerController.uploadConcoursDocument) mais n'etait
-// jamais monte ici - la fonctionnalite etait 100% inaccessible depuis
-// l'exterieur.
 const resultsRoutes = require('./src/routes/resultsRoutes');
-// ✅ AJOUT DES ROUTES PÉRIODES
 const periodRoutes = require('./src/routes/periodRoutes');
 
 assertRequiredEnv();
@@ -48,7 +42,7 @@ app.use(helmet());
 if (CONFIG.nodeEnv !== 'production') {
   app.use(cors({ origin: true, credentials: true }));
 } else {
-  app.use(cors({ origin: CONFIG.clientUrl, credentials: true })); // credentials: indispensable pour les cookies HttpOnly
+  app.use(cors({ origin: CONFIG.clientUrl, credentials: true }));
 }
 
 // --- Parsers ---
@@ -59,11 +53,15 @@ app.use(cookieParser());
 // --- Protection contre les injections NoSQL (OWASP) ---
 app.use(mongoSanitize());
 
-// --- Fichiers uploades (documents de candidature) ---
-// NB : servir ces fichiers necessite que l'utilisateur soit authentifie et
-// autorise a y acceder (IDOR) ; a durcir avant mise en production (cf.
-// documentController.getDocumentById pour le controle d'acces cote donnees).
-app.use('/uploads/documents', express.static(require('path').join(__dirname, 'uploads/documents')));
+// =============================================
+// ✅ FICHIERS UPLOADS - EXPOSITION DES DOSSIERS
+// =============================================
+app.use('/uploads/documents', express.static(path.join(__dirname, 'uploads/documents')));
+app.use('/uploads/rapports', express.static(path.join(__dirname, 'uploads/rapports')));
+app.use('/uploads/engagements', express.static(path.join(__dirname, 'uploads/engagements')));
+app.use('/uploads/livrables', express.static(path.join(__dirname, 'uploads/livrables')));
+app.use('/uploads/conventions', express.static(path.join(__dirname, 'uploads/conventions')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- Logs HTTP (dev) ---
 if (CONFIG.nodeEnv !== 'production') {
@@ -73,40 +71,34 @@ if (CONFIG.nodeEnv !== 'production') {
 // --- Healthcheck ---
 app.get('/api/v1/health', (req, res) => res.status(200).json({ success: true, status: 'up' }));
 
-// --- Routes (perimetre Badr : auth, offres, entretiens, dashboard/stats) ---
+// =============================================
+// ✅ ROUTES API
+// =============================================
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/offers', offerRoutes);
 app.use('/api/v1/interviews', interviewRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/results', resultsRoutes);
-
-// --- Routes (perimetre Mohammed : candidatures, departements, documents,
-// notifications, utilisateurs) ---
 app.use('/api/v1/applications', applicationRoutes);
 app.use('/api/v1/departments', departmentRoutes);
 app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/users', userRoutes);
-
-// ✅ ROUTES DES PÉRIODES (ajouté ici)
 app.use('/api/v1/periods', periodRoutes);
-
-// === Routes Logs (Admin uniquement) ===
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/internships', internshipRoutes);
 
-// app.use('/api/v1/settings', settingsRoutes);
-
-// D'autres routers (internshipRoutes...) seront montes ici au
-// fur et a mesure de leur integration par le reste de l'equipe.
-
-// --- 404 ---
+// =============================================
+// ✅ 404 - TOUJOURS EN DERNIER
+// =============================================
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route introuvable : ${req.method} ${req.originalUrl}` });
 });
 
-// --- Gestion globale des erreurs (doit rester le dernier middleware) ---
+// =============================================
+// ✅ Gestion globale des erreurs
+// =============================================
 app.use(errorHandler);
 
 // -----------------------------------------------------------------------------
@@ -114,8 +106,6 @@ app.use(errorHandler);
 // -----------------------------------------------------------------------------
 async function start() {
   await connectDB();
-  
-  // ✅ Initialiser GridFS après la connexion MongoDB
   initGridFS();
 
   const server = app.listen(CONFIG.port, () => {
