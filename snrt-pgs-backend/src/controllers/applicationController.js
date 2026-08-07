@@ -1,4 +1,6 @@
 // src/controllers/applicationController.js
+// ✅ CORRECTION : Ajout de la transition EnAnalyse -> Acceptee + vérification du rôle
+
 const Application = require('../models/Application');
 const Document = require('../models/Document');
 const Offer = require('../models/Offer');
@@ -72,12 +74,13 @@ async function notifyStudentApplicationSubmitted(application) {
 
 const STATUTS = Object.values(APPLICATION_STATUS);
 
+// ✅ CORRECTION : Ajouter la transition EnAnalyse -> Acceptee
 const TRANSITIONS_AUTORISEES = {
     [APPLICATION_STATUS.BROUILLON]: [APPLICATION_STATUS.SOUMISE],
     [APPLICATION_STATUS.SOUMISE]: [APPLICATION_STATUS.EN_ANALYSE, APPLICATION_STATUS.REFUSEE],
     [APPLICATION_STATUS.EN_ANALYSE]: [
         APPLICATION_STATUS.ENTRETIEN,
-        APPLICATION_STATUS.ACCEPTEE,
+        APPLICATION_STATUS.ACCEPTEE,  // ✅ AJOUTÉ
         APPLICATION_STATUS.REFUSEE,
     ],
     [APPLICATION_STATUS.ENTRETIEN]: [APPLICATION_STATUS.ACCEPTEE, APPLICATION_STATUS.REFUSEE],
@@ -383,11 +386,14 @@ exports.submitApplication = async (req, res) => {
 
 exports.changeApplicationStatus = async (req, res) => {
     try {
-   
-        if (!STAFF_TREATMENT_ROLES.includes(req.user?.role)) {
+        // ✅ CORRECTION : Vérifier explicitement le rôle
+        const userRole = req.user?.role;
+        const allowedRoles = ['RH', 'Departement', 'Administrateur'];
+        
+        if (!allowedRoles.includes(userRole)) {
             return res.status(403).json({
                 success: false,
-                message: "Seuls le RH, le departement ou un administrateur peuvent modifier le statut d'une candidature"
+                message: "Vous n'avez pas les droits necessaires pour cette action. Rôle requis: RH, Departement ou Administrateur."
             });
         }
 
@@ -408,7 +414,6 @@ exports.changeApplicationStatus = async (req, res) => {
                 message: 'Candidature non trouvée'
             });
         }
-
 
         try {
             await assertDepartmentOwnsOffer(req, application.offreId);
@@ -431,11 +436,13 @@ exports.changeApplicationStatus = async (req, res) => {
         application.traiteurId = req.user?._id;
         application.updatedBy = req.user?._id;
 
+        if (!application.historique) application.historique = [];
         application.historique.push({
             ancienStatut,
             nouveauStatut: statut,
             commentaire,
-            auteurId: req.user?._id
+            auteurId: req.user?._id,
+            date: new Date()
         });
 
         await application.save();
@@ -598,7 +605,7 @@ exports.addDocumentToApplication = async (req, res) => {
 };
 
 // ============================================
-// ✅ NOUVEAU : RÉCUPÉRER LES CANDIDATURES DU DÉPARTEMENT
+// ✅ RÉCUPÉRER LES CANDIDATURES DU DÉPARTEMENT
 // ============================================
 exports.getDepartmentApplications = async (req, res) => {
     try {

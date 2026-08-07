@@ -1,4 +1,6 @@
 // src/controllers/userController.js
+// ✅ CORRECTION : Restreindre ce que le département peut créer + fonction getEncadrantsByDepartment
+
 const UtilisateurInterne = require('../models/UtilisateurInterne');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const Role = require('../models/Role');
@@ -6,6 +8,7 @@ const Department = require('../models/Department');
 const { hashPassword } = require('../utils/argon2');
 const { validatePasswordPolicy } = require('../utils/validators');
 const userLookup = require('../utils/userLookup');
+const { ROLES } = require('../config/constants');
 
 const getUserModel = (type) => {
     try {
@@ -16,17 +19,67 @@ const getUserModel = (type) => {
 };
 
 // ============================================
-// CREATE
+// CREATE INTERNAL USER - AVEC RESTRICTIONS
 // ============================================
 
 exports.createInternalUser = async (req, res) => {
     try {
+        // ✅ Vérifier que l'utilisateur a le droit
+        const userRole = req.user?.role;
+        const isAdmin = userRole === ROLES.ADMIN;
+        const isDepartment = userRole === ROLES.DEPARTEMENT;
+
+        console.log('🔍 [createInternalUser] Rôle utilisateur:', userRole);
+        console.log('🔍 [createInternalUser] isAdmin:', isAdmin);
+        console.log('🔍 [createInternalUser] isDepartment:', isDepartment);
+
+        if (!isAdmin && !isDepartment) {
+            return res.status(403).json({
+                success: false,
+                message: "Vous n'avez pas les droits necessaires pour cette action."
+            });
+        }
+
         validatePasswordPolicy(req.body.motDePasse, 'interne');
+
+        // ✅ Vérifier que le rôle existe
+        const role = await Role.findById(req.body.roleId);
+        if (!role) {
+            return res.status(404).json({
+                success: false,
+                message: 'Rôle non trouvé'
+            });
+        }
+
+        console.log('🔍 [createInternalUser] Rôle demandé:', role.nom);
+
+        // ✅ Si c'est un département qui crée, il ne peut créer que des Encadrants
+        if (isDepartment && role.nom !== 'Encadrant') {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous ne pouvez créer que des utilisateurs avec le rôle "Encadrant"'
+            });
+        }
+
+        // ✅ Si c'est un département, le département est forcé
+        let departementId = req.body.departementId;
+        if (isDepartment) {
+            // Forcer le département de l'utilisateur connecté
+            departementId = req.user.departementId;
+            if (!departementId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Votre compte n\'est rattaché à aucun département'
+                });
+            }
+            console.log('🔍 [createInternalUser] Département forcé:', departementId);
+        }
 
         const motDePasseHash = await hashPassword(req.body.motDePasse);
         const user = await UtilisateurInterne.create({
             ...req.body,
             motDePasse: motDePasseHash,
+            departementId: departementId,
             createdBy: req.user?._id
         });
 
@@ -41,6 +94,7 @@ exports.createInternalUser = async (req, res) => {
             data: userResponse
         });
     } catch (error) {
+        console.error('❌ [createInternalUser] Erreur:', error);
         const statusCode = error.statusCode || 500;
         return res.status(statusCode).json({
             success: false,
@@ -50,6 +104,10 @@ exports.createInternalUser = async (req, res) => {
         });
     }
 };
+
+// ============================================
+// CREATE EXTERNAL USER
+// ============================================
 
 exports.createExternalUser = async (req, res) => {
     try {
@@ -83,7 +141,65 @@ exports.createExternalUser = async (req, res) => {
 };
 
 // ============================================
-// GET ALL - ✅ MODIFIÉ AVEC FILTRE DÉPARTEMENT
+// RÉCUPÉRER LES ENCADRANTS DU DÉPARTEMENT
+// ============================================
+
+exports.getEncadrantsByDepartment = async (req, res) => {
+    try {
+        const { departementId } = req.user;
+
+        console.log('🔍 [getEncadrantsByDepartment] departementId:', departementId);
+
+        if (!departementId) {
+            return res.status(400).json({
+                success: false,
+                message: "Votre compte n'est rattaché à aucun département."
+            });
+        }
+
+        // ✅ Récupérer le rôle "Encadrant"
+        const role = await Role.findOne({ nom: 'Encadrant' });
+        if (!role) {
+            console.log('❌ [getEncadrantsByDepartment] Rôle "Encadrant" non trouvé');
+            return res.status(404).json({
+                success: false,
+                message: 'Rôle "Encadrant" non trouvé'
+            });
+        }
+
+        console.log('🔍 [getEncadrantsByDepartment] roleId:', role._id);
+
+        // ✅ Récupérer les encadrants du département (sans vérifier le type)
+        const encadrants = await UtilisateurInterne.find({
+            roleId: role._id,
+            departementId: departementId,
+            actif: true,
+            isDeleted: { $ne: true }
+        })
+        .select('-motDePasse')
+        .populate('roleId', 'nom')
+        .populate('departementId', 'nom')
+        .sort({ createdAt: -1 });
+
+        console.log(`📥 [getEncadrantsByDepartment] ${encadrants.length} encadrants trouvés`);
+
+        return res.status(200).json({
+            success: true,
+            count: encadrants.length,
+            data: encadrants
+        });
+    } catch (error) {
+        console.error('❌ [getEncadrantsByDepartment] Erreur:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération des encadrants',
+            error: error.message
+        });
+    }
+};
+
+// ============================================
+// GET ALL
 // ============================================
 
 exports.getAllUsers = async (req, res) => {
