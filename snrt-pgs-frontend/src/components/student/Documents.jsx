@@ -1,4 +1,6 @@
 // src/components/student/Documents.jsx
+// ✅ CORRECTION : Sélecteur de type avec tous les documents requis
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -24,6 +26,11 @@ import {
     DialogContent,
     DialogActions,
     LinearProgress,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    FormHelperText,
 } from '@mui/material';
 import {
     Refresh,
@@ -89,6 +96,22 @@ const UploadZone = styled(Box)({
     },
 });
 
+// ✅ TYPES DE DOCUMENTS COMPLETS
+const DOCUMENT_TYPES = [
+    { value: 'Photo', label: 'Photo d\'identité' },
+    { value: 'LettreMotivation', label: 'Lettre de motivation' },
+    { value: 'CV', label: 'CV' },
+    { value: 'AttestationScolarite', label: 'Attestation de Scolarité' },
+    { value: 'LettreRecommandation', label: 'Lettre de recommandation' },
+    { value: 'CIN', label: 'Copie CIN' },
+    { value: 'Assurance', label: 'Assurance' },
+    { value: 'FicheEngagement', label: 'Fiche d\'Engagement' },
+    { value: 'Convention', label: 'Convention' },
+    { value: 'ReleveNotes', label: 'Relevé de notes' },
+    { value: 'Attestation', label: 'Attestation' },
+    { value: 'Autre', label: 'Autre' },
+];
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -101,9 +124,11 @@ const Documents = () => {
     const [documents, setDocuments] = useState([]);
     const [openUploadDialog, setOpenUploadDialog] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
+    const [selectedType, setSelectedType] = useState('');
     const [uploading, setUploading] = useState(false);
     const [success, setSuccess] = useState('');
     const [error, setError] = useState('');
+    const [typeError, setTypeError] = useState('');
 
     useEffect(() => {
         fetchDocuments();
@@ -127,7 +152,7 @@ const Documents = () => {
 
     const getFileIcon = (nom) => {
         if (nom?.endsWith('.pdf')) return <PictureAsPdf sx={{ color: '#ef4444' }} />;
-        if (nom?.endsWith('.png') || nom?.endsWith('.jpg') || nom?.endsWith('.jpeg')) {
+        if (nom?.endsWith('.png') || nom?.endsWith('.jpg') || nom?.endsWith('.jpeg') || nom?.endsWith('.gif')) {
             return <Image sx={{ color: '#22c55e' }} />;
         }
         return <Description sx={{ color: '#4f46e5' }} />;
@@ -142,30 +167,30 @@ const Documents = () => {
         return labels[status] || status;
     };
 
-    // ✅ buildFileHref - POUR LE TÉLÉCHARGEMENT UNIQUEMENT
+    const getTypeLabel = (type) => {
+        const found = DOCUMENT_TYPES.find(t => t.value === type);
+        return found ? found.label : type;
+    };
+
     const buildFileHref = (doc) => {
         if (!doc) return null;
-        
         const apiRoot = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
         
         if (doc.gridFsId) {
             return `${apiRoot}/api/v1/documents/file/${doc.gridFsId}`;
         }
-        
         if (doc.url) {
             if (doc.url.startsWith('/')) {
                 return `${apiRoot}${doc.url}`;
             }
             return doc.url;
         }
-        
         if (doc.chemin) {
             if (doc.chemin.startsWith('/')) {
                 return `${apiRoot}${doc.chemin}`;
             }
             return doc.chemin;
         }
-        
         return null;
     };
 
@@ -173,21 +198,36 @@ const Documents = () => {
         const file = event.target.files[0];
         if (file) {
             setSelectedFile(file);
+            setSelectedType('');
+            setTypeError('');
             setOpenUploadDialog(true);
         }
     };
 
     const handleUploadConfirm = async () => {
         if (!selectedFile) return;
+        
+        // ✅ Vérifier que le type est sélectionné
+        if (!selectedType) {
+            setTypeError('Veuillez sélectionner un type de document');
+            return;
+        }
 
         setUploading(true);
         setError('');
         setSuccess('');
+        setTypeError('');
 
         try {
             const formData = new FormData();
             formData.append('document', selectedFile);
-            formData.append('type', 'Autre');
+            formData.append('type', selectedType);
+
+            console.log('📤 [Documents] Upload:', {
+                nom: selectedFile.name,
+                type: selectedType,
+                taille: selectedFile.size
+            });
 
             const response = await api.post('/documents', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
@@ -199,10 +239,11 @@ const Documents = () => {
                 setDocuments([uploadedDoc, ...documents]);
             }
 
-            setSuccess('✅ Document uploadé avec succès !');
+            setSuccess(`✅ Document uploadé avec succès ! (${getTypeLabel(selectedType)})`);
             setOpenUploadDialog(false);
             setSelectedFile(null);
-            setTimeout(() => setSuccess(''), 3000);
+            setSelectedType('');
+            setTimeout(() => setSuccess(''), 4000);
 
         } catch (error) {
             console.error('Erreur upload:', error);
@@ -224,7 +265,6 @@ const Documents = () => {
         }
     };
 
-    // ✅ Téléchargement UNIQUEMENT
     const handleDownloadDocument = (doc) => {
         if (!doc) return;
         const href = buildFileHref(doc);
@@ -361,11 +401,11 @@ const Documents = () => {
                                     </TableCell>
                                     <TableCell>
                                         <Chip
-                                            label={doc.type}
+                                            label={getTypeLabel(doc.type)}
                                             size="small"
                                             sx={{
-                                                backgroundColor: '#e0e7ff',
-                                                color: '#4338ca',
+                                                backgroundColor: doc.type === 'Photo' ? '#fce4ec' : '#e0e7ff',
+                                                color: doc.type === 'Photo' ? '#c62828' : '#4338ca',
                                                 fontWeight: 500,
                                             }}
                                         />
@@ -417,7 +457,12 @@ const Documents = () => {
             {/* ===== DIALOG DE CONFIRMATION UPLOAD ===== */}
             <Dialog
                 open={openUploadDialog}
-                onClose={() => setOpenUploadDialog(false)}
+                onClose={() => {
+                    setOpenUploadDialog(false);
+                    setSelectedFile(null);
+                    setSelectedType('');
+                    setTypeError('');
+                }}
                 maxWidth="sm"
                 fullWidth
                 PaperProps={{
@@ -437,11 +482,37 @@ const Documents = () => {
                             </Typography>
                         </Box>
                     </Box>
+
+                    {/* ✅ SÉLECTEUR DE TYPE DE DOCUMENT */}
+                    <FormControl fullWidth sx={{ mt: 2 }} error={!!typeError}>
+                        <InputLabel>Type de document *</InputLabel>
+                        <Select
+                            value={selectedType}
+                            onChange={(e) => {
+                                setSelectedType(e.target.value);
+                                setTypeError('');
+                            }}
+                            label="Type de document *"
+                        >
+                            {DOCUMENT_TYPES.map((type) => (
+                                <MenuItem key={type.value} value={type.value}>
+                                    {type.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                        {typeError && <FormHelperText>{typeError}</FormHelperText>}
+                    </FormControl>
+
                     {uploading && <LinearProgress sx={{ mt: 2, borderRadius: 4 }} />}
                 </DialogContent>
                 <DialogActions sx={{ p: 2, pt: 0 }}>
                     <Button
-                        onClick={() => setOpenUploadDialog(false)}
+                        onClick={() => {
+                            setOpenUploadDialog(false);
+                            setSelectedFile(null);
+                            setSelectedType('');
+                            setTypeError('');
+                        }}
                         sx={{ borderRadius: '10px', textTransform: 'none' }}
                         disabled={uploading}
                     >
@@ -450,7 +521,7 @@ const Documents = () => {
                     <Button
                         variant="contained"
                         onClick={handleUploadConfirm}
-                        disabled={uploading}
+                        disabled={uploading || !selectedType}
                         sx={{
                             backgroundColor: '#148aa0',
                             borderRadius: '10px',

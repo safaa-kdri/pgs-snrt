@@ -269,7 +269,7 @@ const MyOffers = () => {
     const handleSubmitOffer = async (offer) => {
         try {
             await api.put(`/offers/${offer._id || offer.id}/submit`);
-            setSuccess('✅ Offre soumise pour validation');
+            setSuccess('Offre soumise pour validation');
             fetchOffers();
         } catch (error) {
             console.error('❌ Erreur soumission:', error);

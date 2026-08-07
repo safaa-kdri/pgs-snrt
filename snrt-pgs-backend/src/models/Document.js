@@ -1,4 +1,6 @@
 // src/models/Document.js
+// ✅ CORRECTION : Ajouter tous les types de documents
+
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
 
@@ -10,12 +12,26 @@ const DocumentSchema = new mongoose.Schema({
     },
     nomStocke: {
         type: String,
-        required: true, // ✅ Ce champ est requis
+        required: true,
         trim: true
     },
     type: {
         type: String,
-        enum: ['CV', 'LettreMotivation', 'Convention', 'Attestation', 'ReleveNotes', 'Autre'],
+        // ✅ TOUS LES TYPES DE DOCUMENTS
+        enum: [
+            'CV',
+            'LettreMotivation',
+            'LettreRecommandation',
+            'AttestationScolarite',
+            'Attestation',
+            'ReleveNotes',
+            'Convention',
+            'Photo',
+            'CIN',
+            'Assurance',
+            'FicheEngagement',
+            'Autre'
+        ],
         required: true
     },
     mimeType: {

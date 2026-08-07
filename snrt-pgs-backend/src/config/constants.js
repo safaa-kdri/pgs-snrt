@@ -1,4 +1,6 @@
 // src/config/constants.js
+// ✅ AJOUTER LA CONSTANTE DOCUMENT_TYPES
+
 require('dotenv').config();
 
 const ROLES = Object.freeze({
@@ -62,6 +64,22 @@ const PASSWORD_MIN_LENGTH = Object.freeze({
   interne: 20,
 });
 
+// ✅ AJOUT : TYPES DE DOCUMENTS
+const DOCUMENT_TYPES = Object.freeze([
+  'CV',
+  'LettreMotivation',
+  'LettreRecommandation',
+  'AttestationScolarite',
+  'Attestation',
+  'ReleveNotes',
+  'Convention',
+  'Photo',
+  'CIN',
+  'Assurance',
+  'FicheEngagement',
+  'Autre'
+]);
+
 const CONFIG = Object.freeze({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 5000,
@@ -71,10 +89,8 @@ const CONFIG = Object.freeze({
 
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
-    // ✅ AUGMENTER LA DURÉE DU TOKEN D'ACCÈS (ex: 24h pour les étudiants)
     accessExpires: process.env.JWT_ACCESS_EXPIRES || '24h',
     refreshSecret: process.env.JWT_REFRESH_SECRET,
-    // ✅ AUGMENTER LA DURÉE DU REFRESH TOKEN (ex: 30 jours)
     refreshExpires: process.env.JWT_REFRESH_EXPIRES || '30d',
     preAuthSecret: process.env.JWT_PREAUTH_SECRET,
     preAuthExpires: process.env.JWT_PREAUTH_EXPIRES || '5m',
@@ -138,8 +154,9 @@ module.exports = {
   SKILL_CATEGORIES,
   CONCOURS_DOCUMENT_TYPES,
   APPLICATION_STATUS,
-  REFUSAL_REASONS,  // ✅ EXPORT DE LA NOUVELLE CONSTANTE
+  REFUSAL_REASONS,
   PASSWORD_MIN_LENGTH,
+  DOCUMENT_TYPES, // ✅ EXPORT DE LA NOUVELLE CONSTANTE
   CONFIG,
   assertRequiredEnv,
 };
