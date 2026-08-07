@@ -241,41 +241,67 @@ const RhDashboard = () => {
         setError('');
         try {
             const response = await api.get('/dashboard/rh');
+            
+            console.log('📥 Dashboard RH - Réponse brute:', response.data);
+            
             const data = response.data?.data || response.data || {};
             
-            const total = data.candidatures?.total || 0;
-            const traitees = (data.candidatures?.acceptees || 0) + (data.candidatures?.refusees || 0);
+            const offres = data.offres || {};
+            const candidatures = data.candidatures || {};
+            const stages = data.stages || {};
+            
+            // ✅ Calcul correct de "enAttente" = soumises + enAnalyse
+            const enAttente = (candidatures.soumises || 0) + (candidatures.enAnalyse || 0);
+            
+            console.log('📥 enAttente calculé:', enAttente);
+            console.log('📥 soumises:', candidatures.soumises);
+            console.log('📥 enAnalyse:', candidatures.enAnalyse);
+            
+            const totalCandidatures = candidatures.total || 0;
+            const acceptees = candidatures.acceptees || 0;
+            const refusees = candidatures.refusees || 0;
+            const traitees = acceptees + refusees;
             
             setStats({
-                offres: data.offres || { total: 0, enAttente: 0, publiees: 0 },
-                candidatures: data.candidatures || { total: 0, enAttente: 0, acceptees: 0, refusees: 0 },
-                stages: data.stages || { total: 0, enCours: 0, termines: 0 },
-                entretiens: data.entretiens || 0,
+                offres: {
+                    total: offres.total || 0,
+                    enAttente: offres.enAttente || 0,
+                    publiees: offres.publiees || 0
+                },
+                candidatures: {
+                    total: totalCandidatures,
+                    enAttente: enAttente,
+                    acceptees: acceptees,
+                    refusees: refusees
+                },
+                stages: {
+                    total: stages.total || 0,
+                    enCours: stages.enCours || 0,
+                    termines: stages.termines || 0
+                },
+                entretiens: data.entretiens || data.entretiensAVenir || 0,
                 recentActivities: data.recentActivities || [],
                 applicationsList: data.applicationsList || [],
-                progression: { traitees, total },
+                progression: { 
+                    traitees: traitees, 
+                    total: totalCandidatures || 1
+                },
             });
+            
+            setError('');
+            
         } catch (err) {
-            console.error('Erreur chargement dashboard RH:', err);
-            setError(err.response?.data?.message || 'Erreur de chargement');
+            console.error('❌ Erreur chargement dashboard RH:', err);
+            setError(err.response?.data?.message || 'Erreur de chargement des données');
+            
             setStats({
-                offres: { total: 24, enAttente: 5, publiees: 15 },
-                candidatures: { total: 89, enAttente: 23, acceptees: 42, refusees: 24 },
-                stages: { total: 32, enCours: 15, termines: 17 },
-                entretiens: 8,
-                recentActivities: [
-                    { id: '1', title: 'Candidature acceptee', description: 'Youssef EL HASSANI', date: 'Il y a 2h' },
-                    { id: '2', title: 'Offre validee', description: 'Stage CyberSecurite', date: 'Il y a 4h' },
-                    { id: '3', title: 'Entretien planifie', description: 'Stage Communication', date: 'Il y a 1j' },
-                    { id: '4', title: 'Convention generee', description: 'Sofia BENNANI', date: 'Il y a 2j' },
-                ],
-                applicationsList: [
-                    { id: '1', candidat: 'Youssef EL HASSANI', offre: 'Stage Developpement Web', statut: 'EnAnalyse', date: new Date().toISOString() },
-                    { id: '2', candidat: 'Fatima BENNANI', offre: 'Stage Data Science', statut: 'Entretien', date: new Date(Date.now() - 86400000).toISOString() },
-                    { id: '3', candidat: 'Ahmed ALAMI', offre: 'Stage CyberSecurite', statut: 'Soumise', date: new Date(Date.now() - 172800000).toISOString() },
-                    { id: '4', candidat: 'Sofia CHERKAOUI', offre: 'Stage DevOps', statut: 'Acceptee', date: new Date(Date.now() - 259200000).toISOString() },
-                ],
-                progression: { traitees: 66, total: 93 },
+                offres: { total: 0, enAttente: 0, publiees: 0 },
+                candidatures: { total: 0, enAttente: 0, acceptees: 0, refusees: 0 },
+                stages: { total: 0, enCours: 0, termines: 0 },
+                entretiens: 0,
+                recentActivities: [],
+                applicationsList: [],
+                progression: { traitees: 0, total: 1 },
             });
         } finally {
             setLoading(false);
@@ -321,6 +347,7 @@ const RhDashboard = () => {
     };
 
     const getActivityIcon = (title) => {
+        if (!title) return '•';
         if (title.includes('acceptee')) return '✓';
         if (title.includes('validee')) return '📋';
         if (title.includes('planifie')) return '📅';
@@ -329,7 +356,7 @@ const RhDashboard = () => {
         return '•';
     };
 
-    // ✅ 3 CARTES UNIQUEMENT
+    // ✅ 3 CARTES
     const statCards = [
         {
             label: 'Candidatures à traiter',
@@ -367,6 +394,7 @@ const RhDashboard = () => {
         );
     }
 
+    // ✅ Calcul de la progression
     const progressPercent = stats.progression.total > 0 
         ? Math.round((stats.progression.traitees / stats.progression.total) * 100) 
         : 0;
@@ -379,7 +407,7 @@ const RhDashboard = () => {
                 </Alert>
             )}
 
-            {/* ===== EN-TETE AVEC SALUTATION ===== */}
+            {/* ===== EN-TETE ===== */}
             <HeaderSection>
                 <HeaderLeft>
                     <Greeting>
@@ -475,11 +503,11 @@ const RhDashboard = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {stats.applicationsList.length > 0 ? (
+                            {stats.applicationsList && stats.applicationsList.length > 0 ? (
                                 stats.applicationsList.map((app) => {
                                     const statusColor = getStatusColor(app.statut);
                                     return (
-                                        <TableRow key={app.id} hover>
+                                        <TableRow key={app.id || app._id} hover>
                                             <TableCell>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                                     <Avatar
@@ -506,7 +534,7 @@ const RhDashboard = () => {
                                             </TableCell>
                                             <TableCell>
                                                 <Typography variant="body2" color="text.secondary">
-                                                    {formatDate(app.date)}
+                                                    {formatDate(app.date || app.createdAt)}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell>
@@ -520,7 +548,7 @@ const RhDashboard = () => {
                                                 <Tooltip title="Voir le detail">
                                                     <IconButton
                                                         size="small"
-                                                        onClick={() => navigate(`/rh/application/${app.id}`)}
+                                                        onClick={() => navigate(`/rh/application/${app.id || app._id}`)}
                                                         sx={{ color: '#2d3748' }}
                                                     >
                                                         <Visibility fontSize="small" />
@@ -558,23 +586,23 @@ const RhDashboard = () => {
             {/* ===== ACTIVITES RECENTES ===== */}
             <ActivityCard>
                 <SectionTitle>Activites recentes</SectionTitle>
-                {stats.recentActivities.length > 0 ? (
+                {stats.recentActivities && stats.recentActivities.length > 0 ? (
                     <Box>
                         {stats.recentActivities.map((activity) => (
-                            <ActivityItem key={activity.id}>
+                            <ActivityItem key={activity.id || activity._id}>
                                 <ActivityIcon>
                                     {getActivityIcon(activity.title)}
                                 </ActivityIcon>
                                 <Box sx={{ flex: 1 }}>
                                     <Typography variant="body2" fontWeight={500} color="#1a2332">
-                                        {activity.title}
+                                        {activity.title || 'Activité'}
                                     </Typography>
                                     <Typography variant="caption" display="block" color="#687480">
-                                        {activity.description}
+                                        {activity.description || ''}
                                     </Typography>
                                 </Box>
                                 <Typography variant="caption" color="#9aa4ac">
-                                    {activity.date}
+                                    {activity.date || activity.createdAt ? formatDate(activity.date || activity.createdAt) : ''}
                                 </Typography>
                             </ActivityItem>
                         ))}

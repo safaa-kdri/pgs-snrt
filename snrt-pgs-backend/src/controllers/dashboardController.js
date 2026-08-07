@@ -38,8 +38,9 @@ async function applicationStatsFor(filter) {
     ApplicationModel.countDocuments({ ...filter, statut: APPLICATION_STATUS.REFUSEE }),
   ]);
   const tauxAcceptation = total > 0 ? Number(((acceptees / total) * 100).toFixed(1)) : 0;
+  const enAttente = soumises + enAnalyse;
 
-  return { total, soumises, enAnalyse, entretien, acceptees, refusees, tauxAcceptation };
+  return { total, soumises, enAnalyse, entretien, acceptees, refusees, enAttente, tauxAcceptation };
 }
 
 // ============================================
@@ -65,6 +66,21 @@ async function entretiensAVenirCount() {
 }
 
 // ============================================
+// HELPERS
+// ============================================
+function getStatusLabel(status) {
+  const labels = {
+    [APPLICATION_STATUS.BROUILLON]: 'Brouillon',
+    [APPLICATION_STATUS.SOUMISE]: 'Soumise',
+    [APPLICATION_STATUS.EN_ANALYSE]: 'En analyse',
+    [APPLICATION_STATUS.ENTRETIEN]: 'Entretien',
+    [APPLICATION_STATUS.ACCEPTEE]: 'Acceptée',
+    [APPLICATION_STATUS.REFUSEE]: 'Refusée',
+  };
+  return labels[status] || status;
+}
+
+// ============================================
 // DASHBOARD ÉTUDIANT
 // ============================================
 async function buildStudentDashboard(userId) {
@@ -79,28 +95,17 @@ async function buildStudentDashboard(userId) {
 }
 
 // ============================================
-// DASHBOARD DÉPARTEMENT ✅ NOUVEAU
+// DASHBOARD DÉPARTEMENT
 // ============================================
 async function buildDepartmentDashboard(req) {
   const { id: userId, departementId } = req.user;
   
-  // ✅ Récupérer les IDs des offres du département
   const offerIds = await Offer.find({ departementId }).distinct('_id');
   
-  // ✅ Stats des candidatures du département
-  const candidatures = await applicationStatsFor({ 
-    offreId: { $in: offerIds } 
-  });
-  
-  // ✅ Stats des stages du département
-  const stages = await internshipStatsFor({ 
-    offreId: { $in: offerIds } 
-  });
-  
-  // ✅ Stats des offres du département
+  const candidatures = await applicationStatsFor({ offreId: { $in: offerIds } });
+  const stages = await internshipStatsFor({ offreId: { $in: offerIds } });
   const offres = await offerStatsFor({ departementId });
   
-  // ✅ Entretiens à venir pour les candidatures du département
   const ApplicationModel = getModelSafe('Application');
   const appIds = ApplicationModel 
     ? (await ApplicationModel.find({ offreId: { $in: offerIds } }).select('_id')).map(a => a._id)
@@ -111,7 +116,6 @@ async function buildDepartmentDashboard(req) {
     date: { $gte: new Date() }
   });
   
-  // ✅ Dernières candidatures du département
   const dernieresCandidatures = ApplicationModel
     ? await ApplicationModel.find({ offreId: { $in: offerIds } })
         .populate('etudiantId', 'nom prenom email')
@@ -120,7 +124,6 @@ async function buildDepartmentDashboard(req) {
         .limit(5)
     : [];
   
-  // ✅ Dernières activités (ex: changements de statut récents)
   const recentActivities = ApplicationModel
     ? await ApplicationModel.find({ offreId: { $in: offerIds } })
         .populate('etudiantId', 'nom prenom')
@@ -129,12 +132,11 @@ async function buildDepartmentDashboard(req) {
         .limit(10)
     : [];
   
-  // ✅ Nombre d'encadrants dans le département
   const UtilisateurInterne = getModelSafe('UtilisateurInterne');
   const encadrants = UtilisateurInterne
     ? await UtilisateurInterne.countDocuments({ 
         departementId: departementId,
-        roleId: { $ne: null } // À ajuster selon votre modèle
+        roleId: { $ne: null }
       })
     : 0;
 
@@ -161,7 +163,7 @@ async function buildDepartmentDashboard(req) {
 }
 
 // ============================================
-// DASHBOARD RH
+// DASHBOARD RH ✅ CORRIGÉ
 // ============================================
 async function buildRhDashboard() {
   const [offres, candidatures, stages, entretiensAVenir] = await Promise.all([
@@ -170,7 +172,56 @@ async function buildRhDashboard() {
     internshipStatsFor({}),
     entretiensAVenirCount(),
   ]);
-  return { offres, candidatures, stages, entretiensAVenir };
+  
+  // Récupérer les dernières candidatures et activités
+  const ApplicationModel = getModelSafe('Application');
+  let dernieresCandidatures = [];
+  let recentActivities = [];
+  
+  if (ApplicationModel) {
+    // Dernières candidatures (5)
+    const apps = await ApplicationModel.find({})
+      .populate('etudiantId', 'nom prenom email')
+      .populate('offreId', 'titre')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+    
+    dernieresCandidatures = apps.map(a => ({
+      id: a._id,
+      candidat: a.etudiantId ? `${a.etudiantId.prenom} ${a.etudiantId.nom}` : 'Candidat',
+      offre: a.offreId?.titre || 'Offre sans titre',
+      statut: a.statut,
+      date: a.createdAt,
+    }));
+    
+    // Activités récentes (10)
+    const activities = await ApplicationModel.find({})
+      .populate('etudiantId', 'nom prenom')
+      .populate('offreId', 'titre')
+      .sort({ updatedAt: -1 })
+      .limit(10)
+      .lean();
+    
+    recentActivities = activities.map(a => ({
+      id: a._id,
+      title: `Candidature ${getStatusLabel(a.statut)}`,
+      description: `${a.etudiantId?.prenom || ''} ${a.etudiantId?.nom || ''} — ${a.offreId?.titre || ''}`,
+      date: a.updatedAt,
+    }));
+  }
+  
+  return { 
+    offres, 
+    candidatures: {
+      ...candidatures,
+      enAttente: (candidatures.soumises || 0) + (candidatures.enAnalyse || 0)
+    }, 
+    stages, 
+    entretiensAVenir,
+    applicationsList: dernieresCandidatures,
+    recentActivities: recentActivities,
+  };
 }
 
 // ============================================
@@ -213,21 +264,6 @@ async function buildDefaultDashboard() {
     internshipStatsFor({}),
   ]);
   return { offres, candidatures, stages };
-}
-
-// ============================================
-// HELPERS
-// ============================================
-function getStatusLabel(status) {
-  const labels = {
-    [APPLICATION_STATUS.BROUILLON]: 'Brouillon',
-    [APPLICATION_STATUS.SOUMISE]: 'Soumise',
-    [APPLICATION_STATUS.EN_ANALYSE]: 'En analyse',
-    [APPLICATION_STATUS.ENTRETIEN]: 'Entretien',
-    [APPLICATION_STATUS.ACCEPTEE]: 'Acceptée',
-    [APPLICATION_STATUS.REFUSEE]: 'Refusée',
-  };
-  return labels[status] || status;
 }
 
 // ============================================
