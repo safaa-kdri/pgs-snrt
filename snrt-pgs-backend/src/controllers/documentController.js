@@ -1,9 +1,26 @@
 // src/controllers/documentController.js
+// ✅ CORRECTION : Ajouter la logique de changement de statut de l'application
+
 const Document = require('../models/Document');
 const Application = require('../models/Application');
+const Notification = require('../models/Notification');
+const Offer = require('../models/Offer');
+const UtilisateurExterne = require('../models/UtilisateurExterne');
 const gridfsService = require('../services/gridfsService');
-const { ROLES } = require('../config/constants');
+const { ROLES, APPLICATION_STATUS } = require('../config/constants');
 const logger = require('../utils/logger');
+
+// ============================================
+// HELPERS
+// ============================================
+
+async function fetchApplicationParties(application) {
+    const [student, offer] = await Promise.all([
+        UtilisateurExterne.findById(application.etudiantId).select('email nom prenom'),
+        Offer.findById(application.offreId).select('titre'),
+    ]);
+    return { student, offer };
+}
 
 // ============================================
 // UPLOAD - Stocker dans GridFS
@@ -36,15 +53,14 @@ exports.uploadDocument = async (req, res) => {
             req.file.mimetype
         );
 
-        // ✅ Vérifier que gridfsFile a bien un _id
         if (!gridfsFile || !gridfsFile._id) {
             throw new Error('Erreur lors de l\'upload vers GridFS');
         }
 
-        // ✅ Créer le document avec tous les champs requis
+        // ✅ Créer le document
         const document = await Document.create({
             nomOriginal: req.file.originalname,
-            nomStocke: req.file.originalname, // ✅ AJOUTÉ - nomStocke requis
+            nomStocke: req.file.originalname,
             type: type || 'Autre',
             mimeType: req.file.mimetype,
             taille: req.file.size,
@@ -244,7 +260,7 @@ exports.getDocumentById = async (req, res) => {
 };
 
 // ============================================
-// VÉRIFIER UN DOCUMENT (RH)
+// ✅ VÉRIFIER UN DOCUMENT (RH) - AVEC CHANGEMENT DE STATUT AUTOMATIQUE
 // ============================================
 exports.verifyDocument = async (req, res) => {
     try {
@@ -258,6 +274,7 @@ exports.verifyDocument = async (req, res) => {
             });
         }
 
+        // ✅ Mettre à jour le document
         document.statut = statut || 'Valide';
         document.commentaire = commentaire || '';
         document.isVerified = statut === 'Valide';
@@ -265,6 +282,67 @@ exports.verifyDocument = async (req, res) => {
         document.verifiedAt = new Date();
 
         await document.save();
+
+        // ✅ Si le document est validé et associé à une application
+        if (statut === 'Valide' && document.applicationId) {
+            const application = await Application.findById(document.applicationId)
+                .populate('documents');
+            
+            if (application) {
+                // ✅ Vérifier si tous les documents sont validés
+                const documents = await Document.find({
+                    _id: { $in: application.documents }
+                });
+                
+                const allVerified = documents.every(doc => doc.isVerified === true);
+                const hasDocuments = documents.length > 0;
+
+                // ✅ Si tous les documents sont validés, changer le statut
+                if (allVerified && hasDocuments) {
+                    const ancienStatut = application.statut;
+                    
+                    // ✅ Changer le statut selon le workflow
+                    if (ancienStatut === 'Soumise') {
+                        application.statut = 'EnAnalyse';
+                    } else if (ancienStatut === 'EnAnalyse') {
+                        application.statut = 'Acceptee';
+                    }
+                    
+                    application.traiteurId = req.user?._id;
+                    
+                    // ✅ Ajouter à l'historique
+                    if (!application.historique) application.historique = [];
+                    application.historique.push({
+                        date: new Date(),
+                        ancienStatut: ancienStatut,
+                        nouveauStatut: application.statut,
+                        commentaire: 'Tous les documents ont été validés par le RH',
+                        auteurId: req.user?._id
+                    });
+
+                    await application.save();
+
+                    // ✅ Notifier l'étudiant
+                    try {
+                        const { student, offer } = await fetchApplicationParties(application);
+                        if (student) {
+                            await Notification.create({
+                                type: 'InApp',
+                                titre: 'Documents validés',
+                                message: `Tous vos documents pour "${offer?.titre || 'l\'offre'}" ont été validés par le RH. Votre candidature est maintenant en analyse.`,
+                                lien: `/candidatures/${application._id}`,
+                                userId: student._id,
+                                userModel: 'UtilisateurExterne',
+                            });
+                        }
+                    } catch (notifError) {
+                        logger.warn(`[Document] Notification non envoyée: ${notifError.message}`);
+                    }
+
+                    logger.info(`[Document] Application ${application._id} passée de ${ancienStatut} à ${application.statut}`);
+                }
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -275,7 +353,112 @@ exports.verifyDocument = async (req, res) => {
         logger.error(`Erreur verifyDocument: ${error.message}`);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la vérification'
+            message: 'Erreur lors de la vérification',
+            error: error.message
+        });
+    }
+};
+
+// ============================================
+// ✅ NOUVEAU : VALIDER TOUS LES DOCUMENTS D'UNE APPLICATION
+// ============================================
+exports.validateAllDocuments = async (req, res) => {
+    try {
+        const { applicationId } = req.params;
+        
+        // ✅ Vérifier que l'utilisateur est RH
+        if (req.user?.role !== ROLES.RH && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: 'Seul le RH peut valider les documents'
+            });
+        }
+
+        const application = await Application.findById(applicationId)
+            .populate('documents');
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Candidature non trouvée'
+            });
+        }
+
+        // ✅ Vérifier que tous les documents existent
+        if (!application.documents || application.documents.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aucun document à valider'
+            });
+        }
+
+        // ✅ Valider tous les documents
+        const documentIds = application.documents.map(doc => doc._id);
+        await Document.updateMany(
+            { _id: { $in: documentIds } },
+            { 
+                $set: { 
+                    isVerified: true, 
+                    statut: 'Valide',
+                    verifiedBy: req.user?._id,
+                    verifiedAt: new Date()
+                } 
+            }
+        );
+
+        // ✅ Changer le statut de l'application
+        const ancienStatut = application.statut;
+        
+        if (ancienStatut === 'Soumise') {
+            application.statut = 'EnAnalyse';
+        } else if (ancienStatut === 'EnAnalyse') {
+            application.statut = 'Acceptee';
+        }
+        
+        application.traiteurId = req.user?._id;
+        
+        if (!application.historique) application.historique = [];
+        application.historique.push({
+            date: new Date(),
+            ancienStatut: ancienStatut,
+            nouveauStatut: application.statut,
+            commentaire: 'Tous les documents ont été validés par le RH',
+            auteurId: req.user?._id
+        });
+
+        await application.save();
+
+        // ✅ Notifier l'étudiant
+        try {
+            const { student, offer } = await fetchApplicationParties(application);
+            if (student) {
+                await Notification.create({
+                    type: 'InApp',
+                    titre: 'Documents validés',
+                    message: `Tous vos documents pour "${offer?.titre || 'l\'offre'}" ont été validés par le RH. Votre candidature est maintenant en analyse.`,
+                    lien: `/candidatures/${application._id}`,
+                    userId: student._id,
+                    userModel: 'UtilisateurExterne',
+                });
+            }
+        } catch (notifError) {
+            logger.warn(`[Document] Notification non envoyée: ${notifError.message}`);
+        }
+
+        logger.info(`[Document] Tous les documents de l'application ${application._id} validés, statut: ${application.statut}`);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Tous les documents ont été validés avec succès',
+            data: application
+        });
+
+    } catch (error) {
+        logger.error(`Erreur validateAllDocuments: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la validation',
+            error: error.message
         });
     }
 };

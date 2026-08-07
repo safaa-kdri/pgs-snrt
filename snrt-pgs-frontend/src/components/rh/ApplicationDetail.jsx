@@ -396,27 +396,23 @@ const ApplicationDetail = () => {
     setGenerating(true);
     try {
       if (decision === "accepter") {
-        await api.post(
-          `/internships/applications/${application._id}/validate`,
-          { decision: "accepte" },
+        //  Appeler la route pour valider tous les documents
+        await api.patch(
+          `/documents/application/${application._id}/validate-all`,
         );
-
-        const blob = await pdfService.generateEngagementConfidentialite(
-          application._id,
-        );
-        pdfService.downloadPDF(blob, "Engagement_Confidentialite.pdf");
 
         setSuccess(
-          "Candidature acceptée. Engagement de confidentialité généré.",
+          " Tous les documents ont été validés. Candidature transmise en analyse.",
         );
         setDialogAction("");
         fetchApplicationDetail();
       } else {
-        await api.post(
-          `/internships/applications/${application._id}/validate`,
-          { decision: "refuse", motif: comment || "Non spécifié" },
-        );
-        setSuccess("Candidature refusée");
+        //  Refus des documents
+        await api.patch(`/documents/${application._id}/verify`, {
+          statut: "Refuse",
+          commentaire: comment || "Non conforme",
+        });
+        setSuccess("❌ Documents refusés");
         setDialogAction("");
         fetchApplicationDetail();
       }
@@ -426,22 +422,6 @@ const ApplicationDetail = () => {
     } finally {
       setGenerating(false);
       handleCloseDialog();
-    }
-  };
-
-  const handleSendEngagement = async () => {
-    setGenerating(true);
-    try {
-      await api.post(
-        `/internships/${internship?._id || application._id}/send-engagement`,
-      );
-      setSuccess("Engagement envoyé à l'étudiant");
-      fetchApplicationDetail();
-    } catch (error) {
-      console.error("Erreur envoi:", error);
-      setError(error.response?.data?.message || "Erreur lors de l'envoi");
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -587,7 +567,7 @@ const ApplicationDetail = () => {
                               display="block"
                             >
                               {docType}
-                              {doc.isVerified && " • ✅ Vérifié"}
+                              {doc.isVerified && " •  Vérifié"}
                             </Typography>
                           </Box>
                         </Box>
@@ -1099,7 +1079,7 @@ const ApplicationDetail = () => {
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {cleanDocumentType(doc.type)}
-                        {doc.isVerified && " • ✅"}
+                        {doc.isVerified && " • "}
                       </Typography>
                     </Box>
                     <Tooltip title="Voir">

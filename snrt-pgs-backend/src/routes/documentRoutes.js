@@ -1,4 +1,6 @@
 // src/routes/documentRoutes.js
+// ✅ AJOUTER LA ROUTE validate-all
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -39,5 +41,8 @@ router.get('/file/:fileId/preview', documentController.previewDocument);
 router.get('/:id', documentController.getDocumentById);
 router.delete('/:id', documentController.deleteDocument);
 router.patch('/:id/verify', documentController.verifyDocument);
+
+// ✅ NOUVELLE ROUTE : Valider tous les documents d'une application
+router.patch('/application/:applicationId/validate-all', documentController.validateAllDocuments);
 
 module.exports = router;
