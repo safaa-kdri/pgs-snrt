@@ -124,11 +124,9 @@ const DocumentCard = styled(Paper)({
 const ConventionStatusChip = styled(Chip)(({ statut }) => {
     const colors = {
         'NonGeneree': { bg: '#e5e7eb', text: '#6b7280' },
-        'Generee': { bg: '#dbeafe', text: '#1d4ed8' },
-        'EnvoyeeEtudiant': { bg: '#fef3c7', text: '#d97706' },
-        'DeposeeEtudiant': { bg: '#f3e8ff', text: '#6b21a8' },
+        'DeposeeEtudiant': { bg: '#fef3c7', text: '#d97706' },
         'SigneeRH': { bg: '#dbeafe', text: '#1d4ed8' },
-        'Validee': { bg: '#d1fae5', text: '#065f46' },
+        'EnvoyeeEtudiant': { bg: '#d1fae5', text: '#065f46' },
         'Cloturee': { bg: '#d1fae5', text: '#065f46' },
     };
     const color = colors[statut] || colors['NonGeneree'];
@@ -170,7 +168,7 @@ const ApplicationDetailStudent = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [tabValue, setTabValue] = useState(0);
-    const [conventionFile, setConventionFile] = useState(null);
+    const [convention, setConvention] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
@@ -190,16 +188,13 @@ const ApplicationDetailStudent = () => {
             let data = response.data.data || response.data;
             setApplication(data);
 
-            // ✅ Récupérer le stage associé
             if (data._id) {
                 try {
                     const stageRes = await api.get(`/internships/application/${data._id}`);
                     if (stageRes.data?.data) {
                         setInternship(stageRes.data.data);
-                        
-                        // ✅ Récupérer la convention si elle existe
                         if (stageRes.data.data.convention) {
-                            setConventionFile(stageRes.data.data.convention);
+                            setConvention(stageRes.data.data.convention);
                         }
                     }
                 } catch (e) {
@@ -207,7 +202,6 @@ const ApplicationDetailStudent = () => {
                 }
             }
 
-            // ✅ Ajouter historique par défaut
             if (data && (!data.historique || data.historique.length === 0)) {
                 const defaultHistory = [];
                 const isSubmitted = data.statut !== 'Brouillon';
@@ -249,7 +243,7 @@ const ApplicationDetailStudent = () => {
 
     const handleDownloadConvention = async () => {
         try {
-            const response = await api.get(`/internships/${internship?._id}/convention/download`, {
+            const response = await api.get(`/internships/conventions/${internship?._id}/download`, {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -293,10 +287,9 @@ const ApplicationDetailStudent = () => {
 
             if (response.data?.success) {
                 setSuccess('✅ Convention déposée avec succès !');
-                setConventionFile(response.data.data);
+                setConvention(response.data.data);
                 setOpenDialog(false);
                 setSelectedFile(null);
-                // Rafraîchir les données
                 fetchApplicationDetail();
             }
         } catch (error) {
@@ -310,11 +303,9 @@ const ApplicationDetailStudent = () => {
     const getConventionStatusLabel = (statut) => {
         const labels = {
             'NonGeneree': 'Non générée',
-            'Generee': 'Générée par le RH',
-            'EnvoyeeEtudiant': 'Envoyée à l\'étudiant',
             'DeposeeEtudiant': 'Déposée par l\'étudiant',
             'SigneeRH': 'Signée par le RH',
-            'Validee': 'Validée',
+            'EnvoyeeEtudiant': 'Envoyée à l\'étudiant',
             'Cloturee': 'Clôturée',
         };
         return labels[statut] || statut;
@@ -322,7 +313,7 @@ const ApplicationDetailStudent = () => {
 
     const getConventionStatusIcon = (statut) => {
         switch (statut) {
-            case 'Validee':
+            case 'EnvoyeeEtudiant':
             case 'Cloturee':
                 return <CheckCircle sx={{ color: '#22c55e' }} />;
             case 'DeposeeEtudiant':
@@ -359,6 +350,24 @@ const ApplicationDetailStudent = () => {
             hour: '2-digit',
             minute: '2-digit',
         });
+    };
+
+    const cleanDocumentType = (type) => {
+        if (!type) return 'Autre';
+        const typeMap = {
+            'CV': 'CV',
+            'LettreMotivation': 'Lettre de motivation',
+            'LettreRecommandation': 'Lettre de recommandation',
+            'ReleveNotes': 'Relevé de notes',
+            'Attestation': 'Attestation',
+            'Convention': 'Convention',
+            'Photo': "Photo d'identité",
+            'CIN': 'Copie CIN',
+            'Assurance': 'Assurance',
+            'FicheDemandeStage': 'Fiche de demande de stage',
+            'Autre': 'Autre',
+        };
+        return typeMap[type] || 'Autre';
     };
 
     const buildFileHref = (doc) => {
@@ -476,7 +485,7 @@ const ApplicationDetailStudent = () => {
                                     secondary={
                                         <>
                                             <Typography variant="caption" color="text.secondary" display="block">
-                                                {doc.type || 'Non spécifié'} • {doc.isVerified ? 'Validé' : 'En attente'}
+                                                {cleanDocumentType(doc.type)} • {doc.isVerified ? 'Validé' : 'En attente'}
                                             </Typography>
                                             <Typography variant="caption" color="text.secondary" display="block">
                                                 {doc.dateUpload ? formatDate(doc.dateUpload) : 'Date non spécifiée'}
@@ -510,11 +519,16 @@ const ApplicationDetailStudent = () => {
         );
     };
 
-    // ✅ NOUVEAU : RENDER CONVENTION
+    // ✅ RENDER CONVENTION - CORRIGÉ
     const renderConvention = () => {
-        const convention = conventionFile || internship?.convention || {};
-        const statut = convention.statut || 'NonGeneree';
-        const isDeposee = statut === 'DeposeeEtudiant' || statut === 'SigneeRH' || statut === 'Validee' || statut === 'Cloturee';
+        const conventionData = convention || internship?.convention || {};
+        const statut = conventionData.statut || 'NonGeneree';
+
+        // Vérifier si la convention est déposée
+        const isDeposee = statut === 'DeposeeEtudiant' || statut === 'SigneeRH' || statut === 'EnvoyeeEtudiant' || statut === 'Cloturee';
+
+        // Vérifier si l'étudiant peut déposer (convention envoyée par RH ou en attente)
+        const canDeposit = statut === 'NonGeneree' || statut === 'DeposeeEtudiant';
 
         return (
             <Box>
@@ -527,40 +541,37 @@ const ApplicationDetailStudent = () => {
                                 Statut : {getConventionStatusLabel(statut)}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                                {statut === 'NonGeneree' && 'La convention n\'a pas encore été générée par le RH'}
-                                {statut === 'Generee' && 'La convention a été générée, en attente d\'envoi'}
-                                {statut === 'EnvoyeeEtudiant' && 'La convention vous a été envoyée, veuillez la signer et la déposer'}
-                                {statut === 'DeposeeEtudiant' && 'Votre convention signée a été déposée, en attente de validation RH'}
-                                {statut === 'SigneeRH' && 'La convention a été signée par le RH, en attente de validation finale'}
-                                {statut === 'Validee' && '✅ Convention validée, vous pouvez la télécharger'}
-                                {statut === 'Cloturee' && '🏁 Convention clôturée'}
+                                {statut === 'NonGeneree' && 'Aucune convention déposée. Vous pouvez déposer votre convention.'}
+                                {statut === 'DeposeeEtudiant' && '✅ Votre convention a été déposée. En attente de signature RH.'}
+                                {statut === 'SigneeRH' && '📝 La convention a été signée par le RH. En attente d\'envoi.'}
+                                {statut === 'EnvoyeeEtudiant' && '✅ La convention signée vous a été envoyée. Vous pouvez la télécharger.'}
+                                {statut === 'Cloturee' && '🏁 Convention clôturée.'}
                             </Typography>
                         </Box>
                     </Box>
                 </Card>
 
-                {/* Télécharger la convention (si générée) */}
-                {(statut === 'Generee' || statut === 'EnvoyeeEtudiant' || statut === 'DeposeeEtudiant' || 
-                  statut === 'SigneeRH' || statut === 'Validee' || statut === 'Cloturee') && (
+                {/* Télécharger la convention (si signée et envoyée) */}
+                {(statut === 'EnvoyeeEtudiant' || statut === 'Cloturee') && (
                     <Button
-                        variant="outlined"
+                        variant="contained"
                         startIcon={<Download />}
                         onClick={handleDownloadConvention}
-                        sx={{ mb: 2, borderRadius: '10px', textTransform: 'none' }}
+                        sx={{ mb: 2, borderRadius: '10px', textTransform: 'none', backgroundColor: '#148aa0' }}
                     >
-                        Télécharger la convention
+                        Télécharger la convention signée
                     </Button>
                 )}
 
-                {/* Déposer la convention signée */}
-                {statut === 'EnvoyeeEtudiant' && !isDeposee && (
+                {/* Déposer la convention (si non déposée) */}
+                {canDeposit && (
                     <>
                         <Divider sx={{ my: 3 }} />
                         <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                            📤 Déposer ma convention signée
+                            📤 Déposer ma convention
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Téléchargez le PDF de votre convention signée.
+                            Téléchargez votre convention de stage fournie par votre établissement.
                         </Typography>
 
                         <UploadZone onClick={() => document.getElementById('convention-upload')?.click()}>
@@ -573,7 +584,7 @@ const ApplicationDetailStudent = () => {
                             />
                             <Upload sx={{ fontSize: 40, color: '#148aa0' }} />
                             <Typography variant="body1" sx={{ mt: 1, color: '#1a2332' }}>
-                                Cliquez pour sélectionner votre convention signée
+                                Cliquez pour sélectionner votre convention
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                                 Format PDF uniquement, max 5MB
@@ -582,8 +593,8 @@ const ApplicationDetailStudent = () => {
                     </>
                 )}
 
-                {/* Convention déposée */}
-                {isDeposee && conventionFile && (
+                {/* Convention déposée - affichage */}
+                {isDeposee && convention && (
                     <>
                         <Divider sx={{ my: 3 }} />
                         <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
@@ -594,10 +605,10 @@ const ApplicationDetailStudent = () => {
                                 <PictureAsPdf sx={{ color: '#ef4444', fontSize: 24 }} />
                                 <Box>
                                     <Typography variant="body2" fontWeight={500}>
-                                        {conventionFile.nomOriginal || 'Convention_signee.pdf'}
+                                        {convention.nomOriginal || 'Convention.pdf'}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        Déposé le {formatDate(conventionFile.dateDepot || conventionFile.dateUpload)}
+                                        Déposé le {formatDate(convention.dateDepot)}
                                     </Typography>
                                 </Box>
                             </Box>
@@ -606,7 +617,7 @@ const ApplicationDetailStudent = () => {
                                     <IconButton
                                         size="small"
                                         onClick={() => {
-                                            const href = buildFileHref(conventionFile);
+                                            const href = buildFileHref(convention);
                                             if (href) window.open(href, '_blank');
                                         }}
                                         sx={{ color: '#2d3748' }}
@@ -617,7 +628,7 @@ const ApplicationDetailStudent = () => {
                                 <Tooltip title="Télécharger">
                                     <IconButton
                                         size="small"
-                                        onClick={() => handleDownloadDocument(conventionFile)}
+                                        onClick={() => handleDownloadDocument(convention)}
                                         sx={{ color: '#4f46e5' }}
                                     >
                                         <Download fontSize="small" />
@@ -625,19 +636,13 @@ const ApplicationDetailStudent = () => {
                                 </Tooltip>
                             </Box>
                         </DocumentCard>
-
-                        {statut === 'Validee' && (
-                            <Alert severity="success" sx={{ mt: 2, borderRadius: '10px' }}>
-                                ✅ Votre convention a été validée par le RH. Vous pouvez la télécharger.
-                            </Alert>
-                        )}
                     </>
                 )}
 
-                {/* Message si non générée */}
-                {statut === 'NonGeneree' && (
-                    <Alert severity="info" sx={{ borderRadius: '10px' }}>
-                        La convention de stage sera générée prochainement par le service RH.
+                {/* Message si déjà envoyée */}
+                {statut === 'EnvoyeeEtudiant' && (
+                    <Alert severity="success" sx={{ mt: 2, borderRadius: '10px' }}>
+                        ✅ Votre convention a été signée par le RH. Téléchargez-la ci-dessus.
                     </Alert>
                 )}
             </Box>
@@ -671,7 +676,7 @@ const ApplicationDetailStudent = () => {
                 </Box>
                 {uploading && <LinearProgress sx={{ mt: 2, borderRadius: 4 }} />}
                 <Alert severity="info" sx={{ mt: 2, borderRadius: '10px' }}>
-                    Vérifiez que le fichier est bien votre convention de stage signée.
+                    Vérifiez que le fichier est bien votre convention de stage.
                 </Alert>
             </DialogContent>
             <DialogActions sx={{ p: 2, pt: 0 }}>
@@ -775,7 +780,6 @@ const ApplicationDetailStudent = () => {
                         iconPosition="start"
                         label={`Documents (${documents.length})`}
                     />
-                    {/* ✅ NOUVEAU TAB CONVENTION - Uniquement si éligible */}
                     {isConventionVisible && (
                         <StyledTab
                             icon={<FileCopy sx={{ fontSize: 20 }} />}
@@ -788,12 +792,10 @@ const ApplicationDetailStudent = () => {
                 <Box sx={{ p: 3 }}>
                     {tabValue === 0 && renderHistorique()}
                     {tabValue === 1 && renderDocuments()}
-                    {/* ✅ NOUVEAU TAB CONVENTION */}
                     {tabValue === 2 && isConventionVisible && renderConvention()}
                 </Box>
             </Paper>
 
-            {/* Dialog upload */}
             {renderUploadDialog()}
         </Container>
     );

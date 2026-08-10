@@ -36,17 +36,17 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
-// ✅ CORRIGÉ - Mapping des types de documents
+// ✅ MAPPING DES TYPES DE DOCUMENTS - CORRIGÉ
 const mapDocumentType = (docId) => {
     const mapping = {
-        photo: 'Photo',                              // ✅ CORRIGÉ
+        photo: 'Photo',
         lettre_motivation: 'LettreMotivation',
         cv: 'CV',
         attestation_scolarite: 'Attestation',
-        lettre_recommandation: 'LettreRecommandation',  // ✅ CORRIGÉ
-        cin: 'CIN',                                  // ✅ CORRIGÉ
-        assurance: 'Assurance',                      // ✅ CORRIGÉ
-        fiche_engagement: 'Convention',
+        lettre_recommandation: 'LettreRecommandation',
+        cin: 'CIN',
+        assurance: 'Assurance',
+        fiche_engagement: 'FicheDemandeStage',  // ✅ Changé de 'Convention' à 'FicheDemandeStage'
     };
     return mapping[docId] || 'Autre';
 };
@@ -179,7 +179,7 @@ const REQUIRED_DOCUMENTS = [
     { id: 'lettre_recommandation', label: "Lettre de recommandation de l'Institut", required: true, icon: <Assignment /> },
     { id: 'cin', label: 'Copie CIN', required: true, icon: <Badge /> },
     { id: 'assurance', label: 'Assurance', required: true, icon: <HealthAndSafety /> },
-    { id: 'fiche_engagement', label: "Fiche d'Engagement", required: true, icon: <Receipt /> },
+    { id: 'fiche_engagement', label: "Fiche de demande de stage", required: true, icon: <Receipt /> },
 ];
 
 // ============================================
@@ -248,7 +248,7 @@ const ApplyPage = () => {
     const handleDownloadFiche = () => {
         const link = document.createElement('a');
         link.href = '/documents/fiche_engagement.pdf';
-        link.download = 'Fiche_Engagement_SNRT.pdf';
+        link.download = 'Fiche_Demande_Stage_SNRT.pdf';
         link.click();
     };
 
@@ -463,24 +463,25 @@ const ApplyPage = () => {
                 </Alert>
             )}
 
+            {/* ✅ SECTION FICHE DE DEMANDE DE STAGE */}
             <SectionCard>
                 <SectionHeader>
                     <SectionTitle>
                         <Receipt sx={{ color: '#148aa0' }} />
-                        Fiche d'Engagement
+                        Fiche de demande de stage
                     </SectionTitle>
                 </SectionHeader>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Téléchargez la fiche d'engagement, imprimez-la, signez-la, puis téléchargez-la scannée.
+                    Téléchargez la fiche de demande de stage, imprimez-la, signez-la, puis téléchargez-la scannée.
                 </Typography>
                 
                 {uploadedDocuments['fiche_engagement'] ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, backgroundColor: '#f0fdf4', borderRadius: '10px' }}>
                         <CheckCircle sx={{ color: '#22c55e' }} />
                         <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
-                            {uploadedDocuments['fiche_engagement'].nomOriginal || 'Fiche d\'engagement'}
+                            {uploadedDocuments['fiche_engagement'].nomOriginal || 'Fiche de demande de stage'}
                         </Typography>
-                        <Tooltip title="Télécharger la fiche d'engagement">
+                        <Tooltip title="Télécharger la fiche de demande de stage">
                             <IconButton size="small" onClick={() => handleDownloadDocument(uploadedDocuments['fiche_engagement'])} sx={{ color: '#4f46e5' }}>
                                 <Download fontSize="small" />
                             </IconButton>
@@ -494,11 +495,12 @@ const ApplyPage = () => {
                         startIcon={<Download />}
                         onClick={handleDownloadFiche}
                     >
-                        Télécharger la Fiche d'Engagement
+                        Télécharger la fiche de demande de stage
                     </DownloadButton>
                 )}
             </SectionCard>
 
+            {/* ✅ SECTION PIÈCES À FOURNIR */}
             <SectionCard>
                 <SectionHeader>
                     <SectionTitle>

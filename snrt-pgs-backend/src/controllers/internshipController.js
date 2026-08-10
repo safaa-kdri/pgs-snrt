@@ -917,7 +917,7 @@ exports.sendEngagementToStudent = async (req, res) => {
 };
 
 // ============================================
-// ✅ AFFECTER UN ENCADRANT
+// AFFECTER UN ENCADRANT
 // ============================================
 exports.assignSupervisor = async (req, res) => {
     try {
@@ -996,7 +996,7 @@ exports.assignSupervisor = async (req, res) => {
 };
 
 // ============================================
-// ✅ RÉCUPÉRER LES STAGES DU DÉPARTEMENT
+// RÉCUPÉRER LES STAGES DU DÉPARTEMENT
 // ============================================
 exports.getDepartmentInternships = async (req, res) => {
     try {
@@ -1081,7 +1081,7 @@ exports.getDepartmentInternships = async (req, res) => {
 };
 
 // ============================================
-// ✅ CONSULTER LE RAPPORT DE STAGE
+// CONSULTER LE RAPPORT DE STAGE
 // ============================================
 exports.getInternshipReport = async (req, res) => {
     try {
@@ -1135,7 +1135,7 @@ exports.getInternshipReport = async (req, res) => {
 };
 
 // ============================================
-// ✅ DÉFINIR LE SUJET DU STAGE (DÉPARTEMENT)
+// DÉFINIR LE SUJET DU STAGE (DÉPARTEMENT)
 // ============================================
 exports.defineSubject = async (req, res) => {
     try {
@@ -1168,6 +1168,258 @@ exports.defineSubject = async (req, res) => {
         });
     } catch (error) {
         logger.error(`Erreur defineSubject: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// ============================================
+// CONVENTION - GESTION COMPLÈTE
+// ============================================
+
+// 1. ÉTUDIANT - DÉPOSER SA CONVENTION
+// ============================================
+exports.depotConvention = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aucun fichier fourni'
+            });
+        }
+
+        const internship = await Internship.findById(id)
+            .populate('etudiantId')
+            .populate('offreId');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        if (internship.etudiantId._id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'êtes pas autorisé à déposer une convention pour ce stage'
+            });
+        }
+
+        if (internship.statut !== 'EnCours' && internship.statut !== 'Acceptee') {
+            return res.status(400).json({
+                success: false,
+                message: 'Le stage n\'est pas dans un état permettant le dépôt de convention'
+            });
+        }
+
+        internship.convention = {
+            nomOriginal: file.originalname,
+            chemin: file.path,
+            statut: 'DeposeeEtudiant',
+            dateDepot: new Date(),
+            signedByRH: false,
+        };
+
+        await internship.save();
+
+        logger.info(`Convention déposée pour le stage ${id} par ${req.user.email}`);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Convention déposée avec succès',
+            data: internship.convention
+        });
+
+    } catch (error) {
+        logger.error(`Erreur depotConvention: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// 2. RH - RÉCUPÉRER TOUTES LES CONVENTIONS DÉPOSÉES
+// ============================================
+exports.getDeposeesConventions = async (req, res) => {
+    try {
+        const conventions = await Internship.find({
+            'convention.statut': 'DeposeeEtudiant'
+        })
+            .populate('etudiantId', 'nom prenom email')
+            .populate('offreId', 'titre typeStage')
+            .populate('encadrantId', 'nom prenom')
+            .sort({ 'convention.dateDepot': -1 });
+
+        return res.status(200).json({
+            success: true,
+            count: conventions.length,
+            data: conventions
+        });
+
+    } catch (error) {
+        logger.error(`Erreur getDeposeesConventions: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// 3. RH - SIGNER LA CONVENTION
+// ============================================
+exports.signConvention = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { signature } = req.body;
+
+        if (!signature) {
+            return res.status(400).json({
+                success: false,
+                message: 'La signature est obligatoire'
+            });
+        }
+
+        const internship = await Internship.findById(id)
+            .populate('etudiantId')
+            .populate('offreId');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        if (!internship.convention || internship.convention.statut !== 'DeposeeEtudiant') {
+            return res.status(400).json({
+                success: false,
+                message: 'Aucune convention déposée en attente de signature'
+            });
+        }
+
+        internship.convention.statut = 'SigneeRH';
+        internship.convention.signatureRH = signature;
+        internship.convention.signedByRH = true;
+        internship.convention.dateSignatureRH = new Date();
+        internship.convention.signeePar = req.user._id;
+
+        await internship.save();
+
+        logger.info(`Convention signée par RH pour le stage ${id}`);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Convention signée avec succès',
+            data: internship.convention
+        });
+
+    } catch (error) {
+        logger.error(`Erreur signConvention: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// 4. RH - ENVOYER LA CONVENTION SIGNÉE À L'ÉTUDIANT
+// ============================================
+exports.sendConventionToStudent = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const internship = await Internship.findById(id)
+            .populate('etudiantId')
+            .populate('offreId');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        if (!internship.convention || internship.convention.statut !== 'SigneeRH') {
+            return res.status(400).json({
+                success: false,
+                message: 'La convention n\'a pas encore été signée par le RH'
+            });
+        }
+
+        internship.convention.statut = 'EnvoyeeEtudiant';
+        internship.convention.dateEnvoi = new Date();
+
+        await internship.save();
+
+        logger.info(`Convention envoyée à l'étudiant pour le stage ${id}`);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Convention envoyée à l\'étudiant avec succès'
+        });
+
+    } catch (error) {
+        logger.error(`Erreur sendConventionToStudent: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// 5. ÉTUDIANT - TÉLÉCHARGER LA CONVENTION SIGNÉE
+// ============================================
+exports.downloadConvention = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const internship = await Internship.findById(id)
+            .populate('etudiantId');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        if (internship.etudiantId._id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'êtes pas autorisé à télécharger cette convention'
+            });
+        }
+
+        if (!internship.convention || internship.convention.statut !== 'EnvoyeeEtudiant') {
+            return res.status(400).json({
+                success: false,
+                message: 'La convention n\'est pas encore disponible au téléchargement'
+            });
+        }
+
+        const filePath = internship.convention.chemin;
+        if (!filePath) {
+            return res.status(404).json({
+                success: false,
+                message: 'Fichier de convention non trouvé'
+            });
+        }
+
+        res.download(filePath, 'Convention_Stage_Signee.pdf', (err) => {
+            if (err) {
+                logger.error(`Erreur téléchargement convention: ${err.message}`);
+            }
+        });
+
+    } catch (error) {
+        logger.error(`Erreur downloadConvention: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: error.message

@@ -259,6 +259,7 @@ const ApplicationDetail = () => {
     return <InsertDriveFile sx={{ color: "#4f46e5", fontSize: 20 }} />;
   };
 
+  // ✅ MODIFICATION ICI : Ajout de FicheDemandeStage
   const cleanDocumentType = (type) => {
     if (!type) return "Autre";
     const typeMap = {
@@ -271,6 +272,7 @@ const ApplicationDetail = () => {
       Photo: "Photo d'identité",
       CIN: "Copie CIN",
       Assurance: "Assurance",
+      FicheDemandeStage: "Fiche de demande de stage",
       Autre: "Autre",
     };
     return typeMap[type] || "Autre";
@@ -396,7 +398,6 @@ const ApplicationDetail = () => {
     setGenerating(true);
     try {
       if (decision === "accepter") {
-        //  Appeler la route pour valider tous les documents
         await api.patch(
           `/documents/application/${application._id}/validate-all`,
         );
@@ -407,7 +408,6 @@ const ApplicationDetail = () => {
         setDialogAction("");
         fetchApplicationDetail();
       } else {
-        //  Refus des documents
         await api.patch(`/documents/${application._id}/verify`, {
           statut: "Refuse",
           commentaire: comment || "Non conforme",

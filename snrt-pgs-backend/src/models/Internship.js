@@ -66,6 +66,43 @@ const InternshipSchema = new mongoose.Schema({
             ref: 'UtilisateurInterne'
         }
     }],
+    // src/models/Internship.js
+
+convention: {
+    nomOriginal: {
+        type: String,
+        trim: true
+    },
+    chemin: {
+        type: String
+    },
+    statut: {
+        type: String,
+        enum: ['NonGeneree', 'DeposeeEtudiant', 'SigneeRH', 'EnvoyeeEtudiant', 'Cloturee'],
+        default: 'NonGeneree'
+    },
+    dateDepot: {
+        type: Date
+    },
+    dateSignatureRH: {
+        type: Date
+    },
+    dateEnvoi: {
+        type: Date
+    },
+    signatureRH: {
+        type: String,
+        trim: true
+    },
+    signedByRH: {
+        type: Boolean,
+        default: false
+    },
+    signeePar: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'UtilisateurInterne'
+    }
+},
     
     evaluation: {
         dateEvaluation: Date,

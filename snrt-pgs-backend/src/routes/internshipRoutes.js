@@ -9,7 +9,7 @@ const multer = require('multer');
 const path = require('path');
 
 // ============================================
-// CONFIGURATION MULTER POUR L'UPLOAD
+// CONFIGURATION MULTER POUR L'UPLOAD ENGAGEMENT
 // ============================================
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -36,23 +36,47 @@ const upload = multer({
 });
 
 // ============================================
+// CONFIGURATION MULTER POUR LA CONVENTION
+// ============================================
+const conventionStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/conventions/');
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'convention_' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const conventionFilter = (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+    } else {
+        cb(new Error('Seuls les fichiers PDF sont acceptés'), false);
+    }
+};
+
+const uploadConvention = multer({
+    storage: conventionStorage,
+    fileFilter: conventionFilter,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+});
+
+// ============================================
 // Toutes les routes nécessitent une authentification
 // ============================================
 router.use(authenticate());
 router.use(logRequest);
 
 // ============================================
-// ✅ ROUTES POUR LE DÉPARTEMENT
+// ROUTES POUR LE DÉPARTEMENT
 // ============================================
-
-// Récupérer les stages du département
 router.get(
     '/department',
     authorize(ROLES.DEPARTEMENT),
     internshipController.getDepartmentInternships
 );
 
-// Affecter un encadrant (Département)
 router.put(
     '/:id/assign-supervisor',
     authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
@@ -60,7 +84,6 @@ router.put(
     internshipController.assignSupervisor
 );
 
-// Définir le sujet du stage (Département)
 router.put(
     '/:id/define-subject',
     authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
@@ -68,7 +91,6 @@ router.put(
     internshipController.defineSubject
 );
 
-// Consulter le rapport de stage (Département)
 router.get(
     '/:id/report',
     authorize(ROLES.DEPARTEMENT, ROLES.ENCADRANT, ROLES.RH, ROLES.ADMIN),
@@ -116,10 +138,8 @@ router.post(
 );
 
 // ============================================
-// ✅ ROUTES RH - GESTION DES CANDIDATURES ET STAGES
+// ROUTES RH - GESTION DES CANDIDATURES ET STAGES
 // ============================================
-
-// Valider les documents de candidature
 router.post(
     '/applications/:applicationId/validate',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -127,7 +147,6 @@ router.post(
     internshipController.validateApplicationDocuments
 );
 
-// Envoyer la demande au Directeur
 router.post(
     '/:id/send-to-directeur',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -135,7 +154,6 @@ router.post(
     internshipController.sendToDirecteur
 );
 
-// Envoyer la fiche signée à l'étudiant
 router.post(
     '/:id/send-fiche-signee',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -143,7 +161,6 @@ router.post(
     internshipController.sendFicheSigneeToStudent
 );
 
-// Générer l'attestation
 router.post(
     '/:id/generate-attestation',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -152,10 +169,8 @@ router.post(
 );
 
 // ============================================
-// ✅ ROUTES RH - GÉNÉRATION ET ENVOI DE DOCUMENTS
+// ROUTES RH - GÉNÉRATION ET ENVOI DE DOCUMENTS
 // ============================================
-
-// Générer l'engagement de confidentialité (téléchargement)
 router.get(
     '/:id/generate-engagement',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -163,7 +178,6 @@ router.get(
     internshipController.generateEngagementConfidentialite
 );
 
-// Envoyer l'engagement à l'étudiant par email
 router.post(
     '/:id/send-engagement',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -171,7 +185,6 @@ router.post(
     internshipController.sendEngagementToStudent
 );
 
-// Générer la demande de stage pour le Directeur (téléchargement)
 router.get(
     '/:id/generate-demande-stage',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -180,15 +193,60 @@ router.get(
 );
 
 // ============================================
-// ✅ ROUTES ÉTUDIANT - DÉPOT DES DOCUMENTS
+// ROUTES ÉTUDIANT - DÉPOT DES DOCUMENTS
 // ============================================
-
-// Déposer l'engagement de confidentialité signé
 router.post(
     '/:id/upload-engagement',
     upload.single('document'),
     logAction('INTERNSHIP_UPLOAD_ENGAGEMENT'),
     internshipController.uploadEngagementConfidentialite
+);
+
+// ============================================
+// ROUTES CONVENTION - GESTION COMPLÈTE
+// ============================================
+
+// 1. Étudiant dépose sa convention
+router.post(
+    '/:id/convention/depot',
+    authenticate(),
+    authorize(ROLES.ETUDIANT),
+    uploadConvention.single('convention'),
+    logAction('CONVENTION_DEPOT_ETUDIANT'),
+    internshipController.depotConvention
+);
+
+// 2. RH récupère toutes les conventions déposées
+router.get(
+    '/conventions/deposees',
+    authenticate(),
+    authorize(ROLES.RH, ROLES.ADMIN),
+    internshipController.getDeposeesConventions
+);
+
+// 3. RH signe la convention
+router.post(
+    '/conventions/:id/sign',
+    authenticate(),
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('CONVENTION_SIGNEE_RH'),
+    internshipController.signConvention
+);
+
+// 4. RH renvoie la convention signée à l'étudiant
+router.post(
+    '/conventions/:id/send-to-student',
+    authenticate(),
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('CONVENTION_ENVOYEE_ETUDIANT'),
+    internshipController.sendConventionToStudent
+);
+
+// 5. Étudiant télécharge la convention signée
+router.get(
+    '/conventions/:id/download',
+    authenticate(),
+    internshipController.downloadConvention
 );
 
 module.exports = router;

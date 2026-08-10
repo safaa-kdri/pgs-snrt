@@ -1,6 +1,4 @@
 // src/models/Document.js
-// ✅ CORRECTION : Ajouter tous les types de documents
-
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
 
@@ -17,7 +15,6 @@ const DocumentSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        // ✅ TOUS LES TYPES DE DOCUMENTS
         enum: [
             'CV',
             'LettreMotivation',
@@ -30,6 +27,7 @@ const DocumentSchema = new mongoose.Schema({
             'CIN',
             'Assurance',
             'FicheEngagement',
+            'FicheDemandeStage',
             'Autre'
         ],
         required: true

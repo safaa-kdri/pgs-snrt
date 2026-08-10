@@ -1,5 +1,5 @@
 // src/components/rh/GenerateConvention.jsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -14,22 +14,19 @@ import {
     Grid,
     TextField,
     Divider,
-    Stepper,
-    Step,
-    StepLabel,
-    StepContent,
     Chip,
     IconButton,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    Avatar,
-    List,
-    ListItem,
-    ListItemIcon,
-    ListItemText,
-    ListItemAvatar,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Tooltip,
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import {
@@ -37,27 +34,13 @@ import {
     Description,
     ArrowBack,
     CheckCircle,
-    Print,
-    Search,
-    FileCopy,
-    DoneAll,
-    Person,
-    Work,
-    CalendarToday,
-    Email,
-    School,
-    Event,
-    Upload,
     Visibility,
     Send,
     Edit,
     Cancel,
     PictureAsPdf,
     InsertDriveFile,
-    Image,
-    RemoveRedEye,
-    CloudUpload,
-    Check,
+    Refresh,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -81,125 +64,41 @@ const StyledCard = styled(Card)({
     border: '1px solid #eef1f3',
 });
 
-const StepIconWrapper = styled(Box)(({ active, completed }) => ({
-    width: 32,
-    height: 32,
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: completed ? '#22c55e' : active ? '#2d3748' : '#e5e7eb',
-    color: completed || active ? '#fff' : '#999',
-    fontSize: '16px',
-    fontWeight: 600,
-}));
-
-const InfoRow = styled(Box)({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '6px 0',
-    '& .MuiSvgIcon-root': {
-        color: '#2d3748',
-        fontSize: '18px',
-    },
-});
-
-const SearchContainer = styled(Box)({
-    display: 'flex',
-    gap: '16px',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
-});
-
-const InfoPaper = styled(Paper)({
-    padding: '20px 24px',
-    backgroundColor: '#fafbfc',
-    borderRadius: '10px',
-    border: '1px solid #eef1f3',
-});
-
-const ActionButtons = styled(Box)({
-    display: 'flex',
-    gap: '12px',
-    flexWrap: 'wrap',
-    marginTop: '16px',
-});
-
-const StatusChipStyled = styled(Chip)(({ status }) => {
+const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        'EnCours': { bg: '#d1fae5', text: '#065f46' },
+        'DeposeeEtudiant': { bg: '#fef3c7', text: '#d97706' },
+        'SigneeRH': { bg: '#dbeafe', text: '#1d4ed8' },
+        'EnvoyeeEtudiant': { bg: '#d1fae5', text: '#065f46' },
         'Cloturee': { bg: '#d1fae5', text: '#065f46' },
-        'Acceptee': { bg: '#d1fae5', text: '#065f46' },
-        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
-        'EnAttente': { bg: '#dbeafe', text: '#1d4ed8' },
-        'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
     };
-    const color = colors[status] || colors['EnAttente'];
+    const color = colors[status] || colors['DeposeeEtudiant'];
     return {
         backgroundColor: color.bg,
         color: color.text,
-        fontWeight: 600,
-        fontSize: '12px',
-        height: '28px',
-        padding: '0 14px',
+        fontWeight: 500,
+        fontSize: '11px',
+        height: '24px',
     };
 });
 
-const SummaryPaper = styled(Paper)({
-    marginTop: '24px',
-    padding: '24px',
-    borderRadius: '12px',
-    backgroundColor: '#fafbfc',
-    border: '1px solid #eef1f3',
-});
-
-const TagChip = styled(Chip)({
-    backgroundColor: '#e0e7ff',
-    color: '#4338ca',
-    '&.purple': {
-        backgroundColor: '#f3e8ff',
-        color: '#6b21a8',
-    },
-    '&.orange': {
-        backgroundColor: '#fef3c7',
-        color: '#d97706',
-    },
-    '&.green': {
-        backgroundColor: '#d1fae5',
-        color: '#065f46',
-    },
-    '&.red': {
-        backgroundColor: '#fee2e2',
-        color: '#991b1b',
-    },
-});
-
-const PrimaryButton = styled(Button)(({ disabled, color }) => ({
-    backgroundColor: disabled ? '#999999' : (color === 'success' ? '#22c55e' : '#2d3748'),
+const PrimaryButton = styled(Button)({
+    backgroundColor: '#2d3748',
     color: '#ffffff',
     borderRadius: '10px',
     textTransform: 'none',
-    padding: '10px 24px',
-    '&:hover': {
-        backgroundColor: disabled ? '#999999' : (color === 'success' ? '#16a34a' : '#1a202c'),
-    },
-    '&:disabled': {
-        backgroundColor: '#999999',
-        color: '#ffffff',
-    },
-}));
+    padding: '8px 20px',
+    '&:hover': { backgroundColor: '#1a202c' },
+    '&:disabled': { backgroundColor: '#999999' },
+});
 
-const SecondaryButton = styled(Button)({
+const SuccessButton = styled(Button)({
+    backgroundColor: '#22c55e',
+    color: '#ffffff',
     borderRadius: '10px',
-    borderColor: '#2d3748',
-    color: '#2d3748',
     textTransform: 'none',
-    padding: '10px 24px',
-    '&:hover': {
-        borderColor: '#1a202c',
-        backgroundColor: alpha('#2d3748', 0.04),
-    },
+    padding: '8px 20px',
+    '&:hover': { backgroundColor: '#16a34a' },
+    '&:disabled': { backgroundColor: '#999999' },
 });
 
 const OutlinedButton = styled(Button)({
@@ -207,47 +106,10 @@ const OutlinedButton = styled(Button)({
     borderColor: '#d0d4d8',
     color: '#6b7280',
     textTransform: 'none',
-    padding: '10px 24px',
+    padding: '8px 20px',
     '&:hover': {
         borderColor: '#2d3748',
         backgroundColor: alpha('#2d3748', 0.04),
-    },
-});
-
-const DocumentCard = styled(Paper)({
-    padding: '16px 20px',
-    borderRadius: '12px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    border: '1px solid #eef1f3',
-    marginBottom: '12px',
-    '&:hover': {
-        backgroundColor: '#fafbfc',
-    },
-});
-
-const DocumentIcon = styled(Box)({
-    width: 40,
-    height: 40,
-    borderRadius: '8px',
-    backgroundColor: '#e8edf0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: '12px',
-    '& .MuiSvgIcon-root': {
-        color: '#2d3748',
-        fontSize: 20,
-    },
-});
-
-const EmptyState = styled(Box)({
-    textAlign: 'center',
-    padding: '40px 20px',
-    '& .MuiSvgIcon-root': {
-        fontSize: 48,
-        color: '#ccc',
     },
 });
 
@@ -258,211 +120,55 @@ const EmptyState = styled(Box)({
 const GenerateConvention = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const fileInputRef = useRef(null);
 
     const [loading, setLoading] = useState(false);
-    const [uploading, setUploading] = useState(false);
     const [success, setSuccess] = useState('');
     const [error, setError] = useState('');
-    const [internshipId, setInternshipId] = useState('');
-    const [internshipData, setInternshipData] = useState(null);
-    const [activeStep, setActiveStep] = useState(0);
-    const [conventionFile, setConventionFile] = useState(null);
+    const [conventions, setConventions] = useState([]);
+    const [selectedConvention, setSelectedConvention] = useState(null);
     const [signDialogOpen, setSignDialogOpen] = useState(false);
     const [signature, setSignature] = useState('');
+    const [processing, setProcessing] = useState(false);
 
-    // ✅ Vérifier les conditions
-    const isEligible = internshipData && 
-        internshipData.statut === 'EnCours' && 
-        internshipData.applicationStatut === 'Acceptee';
+    useEffect(() => {
+        fetchConventions();
+    }, []);
 
-    const steps = [
-        {
-            label: 'Rechercher le stage',
-            description: 'Saisissez l\'ID du stage pour charger les données',
-            icon: <Search />,
-        },
-        {
-            label: 'Vérifier les informations',
-            description: 'Confirmez les données et vérifiez les conditions',
-            icon: <DoneAll />,
-        },
-        {
-            label: 'Gérer la convention',
-            description: 'Ajoutez votre signature et réenvoyez la convention',
-            icon: <FileCopy />,
-        },
-    ];
-
-    const fetchInternshipData = async () => {
-        if (!internshipId) {
-            setError('Veuillez saisir l\'ID du stage');
-            return;
-        }
-
+    const fetchConventions = async () => {
         setLoading(true);
         setError('');
-        setSuccess('');
-        setConventionFile(null);
-
         try {
-            const response = await api.get(`/internships/${internshipId}`);
-            if (response.data?.data) {
-                const data = response.data.data;
-                
-                // ✅ Récupérer le statut de l'application
-                let applicationStatut = 'EnAttente';
-                try {
-                    if (data.applicationId) {
-                        const appResponse = await api.get(`/applications/${data.applicationId}`);
-                        if (appResponse.data?.data) {
-                            applicationStatut = appResponse.data.data.statut || 'EnAttente';
-                        }
-                    }
-                } catch (appError) {
-                    console.warn('Erreur chargement application:', appError);
-                }
-
-                setInternshipData({
-                    ...data,
-                    applicationStatut,
-                });
-                
-                // ✅ Vérifier si une convention existe déjà
-                if (data.conventionFile) {
-                    setConventionFile(data.conventionFile);
-                }
-
-                setSuccess('Données du stage chargées avec succès');
-                
-                // ✅ Si le stage est éligible, passer à l'étape 2
-                if (data.statut === 'EnCours' && applicationStatut === 'Acceptee') {
-                    setActiveStep(2);
-                } else {
-                    setActiveStep(1);
-                }
-            } else {
-                setError('Stage non trouvé');
-            }
+            const response = await api.get('/internships/conventions/deposees');
+            const data = response.data?.data || [];
+            setConventions(data);
         } catch (error) {
-            console.error('Erreur chargement stage:', error);
-            setError(error.response?.data?.message || 'Erreur lors du chargement');
+            console.error('Erreur chargement conventions:', error);
+            setError('Erreur lors du chargement des conventions');
+            setConventions([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleFileUpload = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        // ✅ Vérifier le type de fichier
-        if (file.type !== 'application/pdf') {
-            setError('Seul le format PDF est accepté');
-            return;
-        }
-
-        // ✅ Vérifier la taille (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            setError('Le fichier ne doit pas dépasser 5MB');
-            return;
-        }
-
-        setUploading(true);
-        setError('');
-
-        try {
-            const formData = new FormData();
-            formData.append('convention', file);
-            formData.append('internshipId', internshipId);
-
-            const response = await api.post(`/internships/${internshipId}/convention`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-
-            if (response.data?.data) {
-                setConventionFile(response.data.data);
-                setSuccess('Convention déposée avec succès');
-            }
-        } catch (error) {
-            console.error('Erreur upload:', error);
-            setError(error.response?.data?.message || 'Erreur lors du dépôt');
-        } finally {
-            setUploading(false);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-        }
-    };
-
-    const handleAddSignature = async () => {
-        if (!signature.trim()) {
-            setError('Veuillez saisir votre signature');
-            return;
-        }
-
-        setLoading(true);
-        setError('');
-
-        try {
-            const response = await api.post(`/internships/${internshipId}/sign-convention`, {
-                signature: signature,
-                signedBy: user?.id,
-            });
-
-            if (response.data?.success) {
-                setSuccess('Signature ajoutée avec succès');
-                setSignDialogOpen(false);
-                setSignature('');
-                fetchInternshipData();
-            }
-        } catch (error) {
-            console.error('Erreur signature:', error);
-            setError(error.response?.data?.message || 'Erreur lors de l\'ajout de la signature');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSendToStudent = async () => {
-        setLoading(true);
-        setError('');
-
-        try {
-            const response = await api.post(`/internships/${internshipId}/send-convention`);
-
-            if (response.data?.success) {
-                setSuccess('Convention envoyée à l\'étudiant avec succès');
-                fetchInternshipData();
-            }
-        } catch (error) {
-            console.error('Erreur envoi:', error);
-            setError(error.response?.data?.message || 'Erreur lors de l\'envoi');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleReset = () => {
-        setInternshipId('');
-        setInternshipData(null);
-        setActiveStep(0);
-        setConventionFile(null);
-        setSuccess('');
-        setError('');
+    const getStatusLabel = (status) => {
+        const labels = {
+            'DeposeeEtudiant': 'Déposée par l\'étudiant',
+            'SigneeRH': 'Signée par RH',
+            'EnvoyeeEtudiant': 'Envoyée à l\'étudiant',
+            'Cloturee': 'Clôturée',
+        };
+        return labels[status] || status;
     };
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
         return new Date(dateStr).toLocaleDateString('fr-FR', {
             day: '2-digit',
-            month: 'long',
+            month: 'short',
             year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
         });
-    };
-
-    const getStatusChip = (status) => {
-        return <StatusChipStyled label={status || 'En cours'} status={status} size="small" />;
     };
 
     const getFileIcon = (file) => {
@@ -473,13 +179,6 @@ const GenerateConvention = () => {
             return <PictureAsPdf sx={{ color: '#ef4444' }} />;
         }
         return <InsertDriveFile />;
-    };
-
-    const getFileSize = (size) => {
-        if (!size) return 'Taille inconnue';
-        if (size < 1024) return `${size} B`;
-        if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-        return `${(size / (1024 * 1024)).toFixed(1)} MB`;
     };
 
     const buildFileHref = (file) => {
@@ -499,393 +198,235 @@ const GenerateConvention = () => {
         return null;
     };
 
+    const handleViewConvention = (convention) => {
+        const href = buildFileHref(convention.convention);
+        if (href) {
+            window.open(href, '_blank');
+        } else {
+            setError('Impossible de visualiser cette convention');
+        }
+    };
+
+    const handleOpenSignDialog = (convention) => {
+        setSelectedConvention(convention);
+        setSignature('');
+        setSignDialogOpen(true);
+    };
+
+    const handleCloseSignDialog = () => {
+        setSignDialogOpen(false);
+        setSelectedConvention(null);
+        setSignature('');
+    };
+
+    const handleSignConvention = async () => {
+        if (!signature.trim()) {
+            setError('Veuillez saisir votre signature');
+            return;
+        }
+
+        setProcessing(true);
+        setError('');
+
+        try {
+            await api.post(`/internships/conventions/${selectedConvention._id}/sign`, {
+                signature: signature,
+            });
+
+            setSuccess('Convention signée avec succès');
+            handleCloseSignDialog();
+            fetchConventions();
+        } catch (error) {
+            console.error('Erreur signature:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la signature');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleSendToStudent = async (convention) => {
+        if (!window.confirm(`Envoyer la convention signée à ${convention.etudiantId?.prenom || ''} ${convention.etudiantId?.nom || ''} ?`)) {
+            return;
+        }
+
+        setProcessing(true);
+        setError('');
+
+        try {
+            await api.post(`/internships/conventions/${convention._id}/send-to-student`);
+
+            setSuccess('Convention envoyée à l\'étudiant avec succès');
+            fetchConventions();
+        } catch (error) {
+            console.error('Erreur envoi:', error);
+            setError(error.response?.data?.message || 'Erreur lors de l\'envoi');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <Container maxWidth="xl" sx={{ py: 4 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+                    <CircularProgress size={44} sx={{ color: '#2d3748' }} />
+                </Box>
+            </Container>
+        );
+    }
+
     return (
-        <Container maxWidth="md" sx={{ py: 4 }}>
+        <Container maxWidth="xl" sx={{ py: 4 }}>
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        Gestion de la convention
+                        Gestion des conventions
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Vérifiez et gérez la convention de stage
+                        {conventions.length} convention(s) déposée(s) par les étudiants
                     </Typography>
                 </Box>
-                <Button
-                    startIcon={<ArrowBack />}
-                    onClick={() => navigate('/rh')}
-                    sx={{ color: '#6b7280', textTransform: 'none' }}
-                >
-                    Retour
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<Refresh />}
+                        onClick={fetchConventions}
+                        sx={{ borderRadius: '10px', textTransform: 'none' }}
+                    >
+                        Rafraîchir
+                    </Button>
+                    <Button
+                        startIcon={<ArrowBack />}
+                        onClick={() => navigate('/rh')}
+                        sx={{ color: '#6b7280', textTransform: 'none' }}
+                    >
+                        Retour
+                    </Button>
+                </Box>
             </PageHeader>
 
             {error && (
-                <Alert 
-                    severity="error" 
-                    sx={{ mb: 3, borderRadius: '10px' }} 
-                    onClose={() => setError('')}
-                >
+                <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }} onClose={() => setError('')}>
                     {error}
                 </Alert>
             )}
             {success && (
-                <Alert 
-                    severity="success" 
-                    sx={{ mb: 3, borderRadius: '10px' }} 
-                    onClose={() => setSuccess('')}
-                >
+                <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }} onClose={() => setSuccess('')}>
                     {success}
                 </Alert>
             )}
 
             <StyledCard>
-                <CardContent sx={{ p: 4 }}>
-                    <Stepper activeStep={activeStep} orientation="vertical">
-                        {steps.map((step, index) => (
-                            <Step key={step.label} active={activeStep === index} completed={activeStep > index}>
-                                <StepLabel
-                                    StepIconComponent={() => (
-                                        <StepIconWrapper active={activeStep === index} completed={activeStep > index}>
-                                            {activeStep > index ? <CheckCircle sx={{ fontSize: 16 }} /> : index + 1}
-                                        </StepIconWrapper>
-                                    )}
-                                    sx={{
-                                        '& .MuiStepLabel-label': {
-                                            fontWeight: activeStep === index ? 600 : 400,
-                                            color: activeStep === index ? '#2d3748' : '#999',
-                                        },
-                                    }}
-                                >
-                                    {step.label}
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                        {step.description}
-                                    </Typography>
-                                </StepLabel>
-                                <StepContent>
-                                    {/* ÉTAPE 0 : RECHERCHE */}
-                                    {index === 0 && (
-                                        <Box sx={{ mt: 1 }}>
-                                            <SearchContainer>
-                                                <TextField
-                                                    label="ID du stage *"
-                                                    value={internshipId}
-                                                    onChange={(e) => setInternshipId(e.target.value)}
-                                                    placeholder="Entrez l'ID du stage"
-                                                    sx={{ flex: 2, minWidth: '200px' }}
-                                                    disabled={loading || activeStep > 0}
-                                                    InputLabelProps={{ shrink: true }}
-                                                    InputProps={{
-                                                        sx: { borderRadius: '10px' },
-                                                    }}
+                <CardContent sx={{ p: 3 }}>
+                    {conventions.length === 0 ? (
+                        <Box sx={{ textAlign: 'center', py: 6 }}>
+                            <Description sx={{ fontSize: 48, color: '#d1d5db' }} />
+                            <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>
+                                Aucune convention déposée
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Les conventions apparaîtront ici lorsque les étudiants les déposeront.
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <TableContainer>
+                            <Table>
+                                <TableHead>
+                                    <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
+                                        <TableCell sx={{ fontWeight: 600 }}>Étudiant</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>Stage</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>Date de dépôt</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>Statut</TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {conventions.map((conv) => (
+                                        <TableRow key={conv._id} hover>
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight={500}>
+                                                    {conv.etudiantId?.prenom || ''} {conv.etudiantId?.nom || ''}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {conv.etudiantId?.email || ''}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2">
+                                                    {conv.offreId?.titre || 'Stage sans titre'}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {conv.offreId?.typeStage || ''}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2">
+                                                    {formatDate(conv.convention?.dateDepot)}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <StatusChip
+                                                    label={getStatusLabel(conv.convention?.statut)}
+                                                    status={conv.convention?.statut}
+                                                    size="small"
                                                 />
-                                                <PrimaryButton
-                                                    startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <Search />}
-                                                    onClick={fetchInternshipData}
-                                                    disabled={loading || !internshipId || activeStep > 0}
-                                                >
-                                                    {loading ? 'Chargement...' : 'Rechercher'}
-                                                </PrimaryButton>
-                                            </SearchContainer>
-                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                                                Exemple : 67f8a1b2c3d4e5f6g7h8i9j0
-                                            </Typography>
-                                        </Box>
-                                    )}
+                                            </TableCell>
+                                            <TableCell align="center">
+                                                <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                                                    <Tooltip title="Voir la convention">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleViewConvention(conv)}
+                                                            sx={{ color: '#2d3748' }}
+                                                        >
+                                                            <Visibility fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
 
-                                    {/* ÉTAPE 1 : VÉRIFICATION DES INFORMATIONS */}
-                                    {index === 1 && internshipData && (
-                                        <Box sx={{ mt: 1 }}>
-                                            <InfoPaper>
-                                                <Grid container spacing={2}>
-                                                    <Grid item xs={12}>
-                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                                            <Typography variant="subtitle1" fontWeight={600}>
-                                                                Informations du stage
-                                                            </Typography>
-                                                            {getStatusChip(internshipData.statut)}
-                                                        </Box>
-                                                        <Divider sx={{ mb: 2 }} />
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <InfoRow>
-                                                            <Person />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Stagiaire
-                                                                </Typography>
-                                                                <Typography variant="body2" fontWeight={600}>
-                                                                    {internshipData.etudiantId?.prenom || ''} {internshipData.etudiantId?.nom || ''}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <InfoRow>
-                                                            <Email />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Email
-                                                                </Typography>
-                                                                <Typography variant="body2">
-                                                                    {internshipData.etudiantId?.email || 'Non renseigné'}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <InfoRow>
-                                                            <School />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Université
-                                                                </Typography>
-                                                                <Typography variant="body2">
-                                                                    {internshipData.etudiantId?.universite || 'Non renseignée'}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <InfoRow>
-                                                            <Work />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Offre
-                                                                </Typography>
-                                                                <Typography variant="body2">
-                                                                    {internshipData.offreId?.titre || 'Non spécifié'}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <InfoRow>
-                                                            <CalendarToday />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Date de début
-                                                                </Typography>
-                                                                <Typography variant="body2">
-                                                                    {formatDate(internshipData.dateDebut)}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                    <Grid item xs={12} sm={6}>
-                                                        <InfoRow>
-                                                            <Event />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Date de fin
-                                                                </Typography>
-                                                                <Typography variant="body2">
-                                                                    {formatDate(internshipData.dateFin)}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                    <Grid item xs={12}>
-                                                        <InfoRow>
-                                                            <Person />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Encadrant
-                                                                </Typography>
-                                                                <Typography variant="body2">
-                                                                    {internshipData.encadrantId?.prenom || ''} {internshipData.encadrantId?.nom || ''}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                    <Grid item xs={12}>
-                                                        <InfoRow>
-                                                            <CheckCircle />
-                                                            <Box>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Statut de la candidature
-                                                                </Typography>
-                                                                <Typography variant="body2" fontWeight={600}>
-                                                                    {internshipData.applicationStatut === 'Acceptee' ? (
-                                                                        <Chip label="Acceptée" size="small" sx={{ backgroundColor: '#d1fae5', color: '#065f46' }} />
-                                                                    ) : (
-                                                                        <Chip label={internshipData.applicationStatut || 'En attente'} size="small" sx={{ backgroundColor: '#fef3c7', color: '#d97706' }} />
-                                                                    )}
-                                                                </Typography>
-                                                            </Box>
-                                                        </InfoRow>
-                                                    </Grid>
-                                                </Grid>
-
-                                                {/* ✅ Conditions de validation */}
-                                                <Box sx={{ mt: 3, p: 2, backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #eef1f3' }}>
-                                                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                                                        Conditions pour gérer la convention :
-                                                    </Typography>
-                                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                            {internshipData.statut === 'EnCours' ? (
-                                                                <Check sx={{ color: '#22c55e' }} />
-                                                            ) : (
-                                                                <Cancel sx={{ color: '#ef4444' }} />
-                                                            )}
-                                                            <Typography variant="body2">
-                                                                Stage en cours {internshipData.statut !== 'EnCours' && `(actuel: ${internshipData.statut})`}
-                                                            </Typography>
-                                                        </Box>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                            {internshipData.applicationStatut === 'Acceptee' ? (
-                                                                <Check sx={{ color: '#22c55e' }} />
-                                                            ) : (
-                                                                <Cancel sx={{ color: '#ef4444' }} />
-                                                            )}
-                                                            <Typography variant="body2">
-                                                                Étudiant accepté {internshipData.applicationStatut !== 'Acceptee' && `(actuel: ${internshipData.applicationStatut})`}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Box>
-                                                </Box>
-                                            </InfoPaper>
-
-                                            <ActionButtons>
-                                                <OutlinedButton onClick={handleReset}>
-                                                    Modifier
-                                                </OutlinedButton>
-                                                {isEligible && (
-                                                    <PrimaryButton
-                                                        onClick={() => setActiveStep(2)}
-                                                        startIcon={<FileCopy />}
-                                                    >
-                                                        Gérer la convention
-                                                    </PrimaryButton>
-                                                )}
-                                            </ActionButtons>
-                                        </Box>
-                                    )}
-
-                                    {/* ÉTAPE 2 : GÉRER LA CONVENTION */}
-                                    {index === 2 && internshipData && (
-                                        <Box sx={{ mt: 1 }}>
-                                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                                                Convention de stage
-                                            </Typography>
-
-                                            {/* Document actuel */}
-                                            {conventionFile ? (
-                                                <DocumentCard>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                        <DocumentIcon>
-                                                            {getFileIcon(conventionFile)}
-                                                        </DocumentIcon>
-                                                        <Box>
-                                                            <Typography variant="body2" fontWeight={500}>
-                                                                {conventionFile.nomOriginal || conventionFile.nom || 'Convention.pdf'}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                {getFileSize(conventionFile.taille)} • Déposé le {formatDate(conventionFile.dateUpload)}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Box>
-                                                    <Box>
-                                                        <Tooltip title="Voir">
+                                                    {conv.convention?.statut === 'DeposeeEtudiant' && (
+                                                        <Tooltip title="Signer la convention">
                                                             <IconButton
                                                                 size="small"
-                                                                onClick={() => {
-                                                                    const href = buildFileHref(conventionFile);
-                                                                    if (href) window.open(href, '_blank');
-                                                                }}
-                                                                sx={{ color: '#2d3748' }}
+                                                                onClick={() => handleOpenSignDialog(conv)}
+                                                                sx={{ color: '#22c55e' }}
                                                             >
-                                                                <Visibility fontSize="small" />
+                                                                <Edit fontSize="small" />
                                                             </IconButton>
                                                         </Tooltip>
-                                                    </Box>
-                                                </DocumentCard>
-                                            ) : (
-                                                <Box sx={{ mb: 3 }}>
-                                                    <Alert severity="info" sx={{ mb: 2, borderRadius: '10px' }}>
-                                                        Aucune convention déposée par l'étudiant.
-                                                    </Alert>
-                                                    <Button
-                                                        variant="outlined"
-                                                        component="label"
-                                                        startIcon={<Upload />}
-                                                        disabled={uploading}
-                                                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                                                    >
-                                                        {uploading ? 'Dépôt en cours...' : 'Déposer la convention'}
-                                                        <input
-                                                            type="file"
-                                                            hidden
-                                                            accept=".pdf"
-                                                            onChange={handleFileUpload}
-                                                            ref={fileInputRef}
-                                                        />
-                                                    </Button>
-                                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                        Format PDF uniquement, max 5MB
-                                                    </Typography>
+                                                    )}
+
+                                                    {conv.convention?.statut === 'SigneeRH' && (
+                                                        <Tooltip title="Envoyer à l'étudiant">
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() => handleSendToStudent(conv)}
+                                                                sx={{ color: '#1d4ed8' }}
+                                                            >
+                                                                <Send fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+
+                                                    {conv.convention?.statut === 'EnvoyeeEtudiant' && (
+                                                        <Tooltip title="Convention envoyée">
+                                                            <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
+                                                        </Tooltip>
+                                                    )}
                                                 </Box>
-                                            )}
-
-                                            <Divider sx={{ my: 3 }} />
-
-                                            {/* Actions RH */}
-                                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                                                Actions RH
-                                            </Typography>
-
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                {conventionFile && (
-                                                    <PrimaryButton
-                                                        startIcon={<Edit />}
-                                                        onClick={() => setSignDialogOpen(true)}
-                                                        sx={{ width: 'fit-content' }}
-                                                    >
-                                                        Ajouter la signature électronique
-                                                    </PrimaryButton>
-                                                )}
-
-                                                {conventionFile && (
-                                                    <PrimaryButton
-                                                        startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <Send />}
-                                                        onClick={handleSendToStudent}
-                                                        disabled={loading}
-                                                        color="success"
-                                                        sx={{ width: 'fit-content' }}
-                                                    >
-                                                        {loading ? 'Envoi...' : 'Réenvoyer à l\'étudiant'}
-                                                    </PrimaryButton>
-                                                )}
-
-                                                <OutlinedButton onClick={handleReset} sx={{ width: 'fit-content' }}>
-                                                    Nouvelle recherche
-                                                </OutlinedButton>
-                                            </Box>
-
-                                            {/* Statut de la convention */}
-                                            <Box sx={{ mt: 3, p: 2, backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                    <strong>Statut :</strong> {conventionFile ? 'Convention déposée' : 'En attente de dépôt'}
-                                                </Typography>
-                                                {conventionFile && (
-                                                    <Typography variant="caption" color="text.secondary" display="block">
-                                                        <strong>Signée par RH :</strong> {conventionFile.signedBy ? '✅ Oui' : '❌ Non'}
-                                                    </Typography>
-                                                )}
-                                            </Box>
-                                        </Box>
-                                    )}
-                                </StepContent>
-                            </Step>
-                        ))}
-                    </Stepper>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
                 </CardContent>
             </StyledCard>
 
             {/* ===== DIALOG SIGNATURE ===== */}
             <Dialog
                 open={signDialogOpen}
-                onClose={() => setSignDialogOpen(false)}
+                onClose={handleCloseSignDialog}
                 maxWidth="sm"
                 fullWidth
                 PaperProps={{
@@ -895,15 +436,16 @@ const GenerateConvention = () => {
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Edit sx={{ color: '#2d3748' }} />
-                        Ajouter la signature électronique
+                        Signer la convention
                     </Box>
                 </DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Saisissez votre signature électronique pour valider la convention.
+                        Saisissez votre signature électronique pour valider la convention de
+                        <strong> {selectedConvention?.etudiantId?.prenom || ''} {selectedConvention?.etudiantId?.nom || ''}</strong>.
                     </Typography>
                     <TextField
-                        label="Signature"
+                        label="Signature *"
                         value={signature}
                         onChange={(e) => setSignature(e.target.value)}
                         fullWidth
@@ -918,35 +460,20 @@ const GenerateConvention = () => {
                 </DialogContent>
                 <DialogActions sx={{ p: 2, pt: 0 }}>
                     <Button
-                        onClick={() => setSignDialogOpen(false)}
+                        onClick={handleCloseSignDialog}
                         sx={{ borderRadius: '10px', textTransform: 'none' }}
+                        disabled={processing}
                     >
                         Annuler
                     </Button>
                     <PrimaryButton
-                        onClick={handleAddSignature}
-                        disabled={loading || !signature.trim()}
+                        onClick={handleSignConvention}
+                        disabled={processing || !signature.trim()}
                     >
-                        {loading ? <CircularProgress size={20} color="inherit" /> : 'Ajouter la signature'}
+                        {processing ? <CircularProgress size={20} color="inherit" /> : 'Signer'}
                     </PrimaryButton>
                 </DialogActions>
             </Dialog>
-
-            {/* ===== RÉSUMÉ ===== */}
-            <SummaryPaper>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                    Gestion de la convention de stage
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    La convention de stage doit être signée par l'étudiant, l'encadrant et le responsable RH.
-                    Une fois complète, elle est envoyée à l'étudiant pour validation finale.
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
-                    <TagChip label="PDF requis" size="small" />
-                    <TagChip label="Signature électronique" size="small" className="purple" />
-                    <TagChip label="Envoi étudiant" size="small" className="green" />
-                </Box>
-            </SummaryPaper>
         </Container>
     );
 };
