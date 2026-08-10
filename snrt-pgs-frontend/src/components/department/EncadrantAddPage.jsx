@@ -1,4 +1,6 @@
 // src/components/department/EncadrantAddPage.jsx
+// ✅ VERSION CORRIGÉE
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -51,6 +53,9 @@ const StyledButton = styled(Button)({
     padding: '10px 32px',
 });
 
+// ✅ ID connu du rôle Encadrant
+const ENCADRANT_ROLE_ID = '6a6921c0fa6332cca9a6d7fc';
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -62,7 +67,7 @@ const EncadrantAddPage = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [encadrantRoleId, setEncadrantRoleId] = useState(null);
+    const [encadrantRoleId, setEncadrantRoleId] = useState(ENCADRANT_ROLE_ID);
 
     const [formData, setFormData] = useState({
         nom: '',
@@ -75,22 +80,31 @@ const EncadrantAddPage = () => {
         actif: true,
     });
 
+    // ✅ Vérifier que le rôle existe, mais utiliser l'ID direct
     useEffect(() => {
-        fetchEncadrantRoleId();
-    }, []);
-
-    const fetchEncadrantRoleId = async () => {
-        try {
-            const response = await api.get('/roles');
-            const roles = response.data?.data || response.data || [];
-            const encadrantRole = roles.find(r => r.nom === 'Encadrant');
-            if (encadrantRole) {
-                setEncadrantRoleId(encadrantRole._id || encadrantRole.id);
+        const verifyRole = async () => {
+            try {
+                const response = await api.get('/roles');
+                const roles = response.data?.data || response.data || [];
+                const encadrantRole = roles.find(r => r.nom === 'Encadrant');
+                
+                if (encadrantRole) {
+                    setEncadrantRoleId(encadrantRole._id || encadrantRole.id);
+                    console.log('✅ Rôle Encadrant trouvé:', encadrantRoleId);
+                } else {
+                    // ✅ Utiliser l'ID connu si le rôle n'est pas trouvé
+                    setEncadrantRoleId(ENCADRANT_ROLE_ID);
+                    console.log('⚠️ Utilisation de l\'ID connu:', ENCADRANT_ROLE_ID);
+                }
+            } catch (error) {
+                console.error('❌ Erreur chargement rôle:', error);
+                // ✅ En cas d'erreur, utiliser l'ID connu
+                setEncadrantRoleId(ENCADRANT_ROLE_ID);
             }
-        } catch (error) {
-            console.error('Erreur chargement rôle Encadrant:', error);
-        }
-    };
+        };
+        
+        verifyRole();
+    }, []);
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
@@ -132,6 +146,8 @@ const EncadrantAddPage = () => {
         setSuccess('');
         
         if (!validateForm()) return;
+        
+        // ✅ Vérifier que le rôle existe
         if (!encadrantRoleId) {
             setError('Rôle "Encadrant" non trouvé. Veuillez contacter l\'administrateur.');
             return;
@@ -148,15 +164,18 @@ const EncadrantAddPage = () => {
                 cin: formData.cin,
                 motDePasse: formData.motDePasse,
                 roleId: encadrantRoleId,
+                // ✅ Le département est automatiquement assigné
                 departementId: user?.departementId || null,
                 actif: formData.actif,
             };
+
+            console.log('📤 [EncadrantAdd] Payload:', payload);
 
             await api.post('/users/internal', payload);
             setSuccess('Encadrant ajouté avec succès !');
             setTimeout(() => navigate('/department/encadrants'), 1500);
         } catch (error) {
-            console.error('Erreur ajout:', error);
+            console.error('❌ Erreur ajout:', error);
             setError(error.response?.data?.message || 'Erreur lors de l\'ajout');
         } finally {
             setSaving(false);

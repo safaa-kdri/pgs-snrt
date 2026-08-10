@@ -77,6 +77,15 @@ router.get(
     internshipController.getDepartmentInternships
 );
 
+// ✅ ROUTE : Récupérer un stage par application
+router.get(
+    '/application/:applicationId',
+    authorize(ROLES.DEPARTEMENT, ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_GET_BY_APPLICATION'),
+    internshipController.getInternshipByApplication
+);
+
+// Affecter un encadrant (Département)
 router.put(
     '/:id/assign-supervisor',
     authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
@@ -122,11 +131,11 @@ router.get('/', authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT), internshipCon
 router.get('/:id', internshipController.getInternshipById);
 
 // ============================================
-// Routes pour Admin + RH uniquement
+// ✅ Routes pour Admin + RH + DEPARTEMENT
 // ============================================
 router.post(
     '/',
-    authorize(ROLES.ADMIN, ROLES.RH),
+    authorize(ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT),
     logAction('INTERNSHIP_CREATE'),
     internshipController.createInternship
 );

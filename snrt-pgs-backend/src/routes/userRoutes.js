@@ -1,4 +1,6 @@
 // src/routes/userRoutes.js
+// ✅ CORRECTION : Autoriser le département à créer des encadrants + route dédiée + LOGS
+
 const express = require('express');
 const router = express.Router();
 
@@ -22,18 +24,42 @@ const {
 router.use(authenticate());
 
 // ============================================
-// ✅ Routes GET accessibles aux départements (pour consulter les encadrants)
+// ✅ Routes GET
 // ============================================
 router.get('/', userController.getAllUsers);
 router.get('/:type/:id', userController.getUserById);
 
+// ✅ NOUVELLE ROUTE : Récupérer les encadrants du département
+router.get(
+    '/encadrants/department',
+    (req, res, next) => {
+        console.log('🔍 [ROUTE] GET /users/encadrants/department appelée');
+        console.log('🔍 [ROUTE] User:', req.user);
+        console.log('🔍 [ROUTE] User.departementId:', req.user?.departementId);
+        next();
+    },
+    authorize(ROLES.DEPARTEMENT),
+    userController.getEncadrantsByDepartment
+);
+
 // ============================================
-// ✅ Routes de modification - Admin uniquement
+// ✅ Routes de modification
 // ============================================
 
-// Création d'utilisateurs (Admin uniquement)
-router.post('/internal', authorize(ROLES.ADMIN), validate(createInternalUserSchema), userController.createInternalUser);
-router.post('/external', authorize(ROLES.ADMIN), validate(createExternalUserSchema), userController.createExternalUser);
+// ✅ Création d'utilisateurs internes - Autoriser ADMIN et DEPARTEMENT
+router.post(
+    '/internal', 
+    authorize(ROLES.ADMIN, ROLES.DEPARTEMENT),
+    validate(createInternalUserSchema), 
+    userController.createInternalUser
+);
+
+router.post(
+    '/external', 
+    authorize(ROLES.ADMIN), 
+    validate(createExternalUserSchema), 
+    userController.createExternalUser
+);
 
 // Mise à jour (Admin uniquement)
 function validateUpdateUser(req, res, next) {

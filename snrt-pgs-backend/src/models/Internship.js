@@ -1,4 +1,6 @@
 // src/models/Internship.js
+// ✅ AJOUTER LES CHAMPS DU SUJET DE L'OFFRE
+
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
 
@@ -23,7 +25,7 @@ const InternshipSchema = new mongoose.Schema({
     },
     remarques: String,
     
-    
+    // Références
     etudiantId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'UtilisateurExterne',
@@ -45,7 +47,29 @@ const InternshipSchema = new mongoose.Schema({
         required: true
     },
     
+    // ✅ CHAMPS DU SUJET DE L'OFFRE (copiés depuis l'offre)
+    sujetTitre: {
+        type: String,
+        default: null
+    },
+    sujetDescription: {
+        type: String,
+        default: null
+    },
+    sujetObjectifs: {
+        type: String,
+        default: null
+    },
+    sujetTechnologies: {
+        type: String,
+        default: null
+    },
+    sujetLivrables: {
+        type: String,
+        default: null
+    },
     
+    // Livrables
     livrables: [{
         nom: String,
         type: {

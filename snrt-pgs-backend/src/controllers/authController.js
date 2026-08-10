@@ -1,4 +1,6 @@
 // src/controllers/authController.js
+// ✅ CORRECTION : Inclure departementId dans la réponse
+
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const Role = require('../models/Role');
 const userLookup = require('../utils/userLookup');
@@ -281,19 +283,22 @@ const verifyTwoFactor = asyncHandler(async (req, res) => {
 
   logger.audit('LOGIN_2FA_OK', { userId: user._id.toString() });
 
-  // ✅ RÉPONSE AVEC TOKEN
+  // ✅ RÉPONSE AVEC TOKEN ET DEPARTEMENT ID
+  const userData = {
+    id: user._id,
+    nom: user.nom,
+    prenom: user.prenom,
+    email: user.email,
+    role: role,
+    userType: payload.userType,
+    departementId: payload.userType === 'interne' ? user.departementId : null, // ✅ AJOUTÉ
+  };
+
   return res.status(200).json({
     success: true,
     message: 'Connexion reussie.',
     token: accessToken,
-    user: {
-      id: user._id,
-      nom: user.nom,
-      prenom: user.prenom,
-      email: user.email,
-      role,
-      userType: payload.userType,
-    },
+    user: userData,
   });
 });
 
@@ -529,7 +534,26 @@ const me = asyncHandler(async (req, res) => {
   const user = await userLookup.findById(req.user.id, req.user.userType);
   if (!user) throw ApiError.notFound('Utilisateur introuvable.');
 
-  return res.status(200).json({ success: true, user, role: req.user.role, userType: req.user.userType });
+  // ✅ RÉPONSE AVEC DEPARTEMENT ID
+  const userData = {
+    id: user._id,
+    nom: user.nom,
+    prenom: user.prenom,
+    email: user.email,
+    cin: user.cin,
+    role: req.user.role,
+    userType: req.user.userType,
+    departementId: req.user.userType === 'interne' ? user.departementId : null, // ✅ AJOUTÉ
+    telephone: user.telephone,
+    actif: user.actif,
+  };
+
+  return res.status(200).json({ 
+    success: true, 
+    user: userData, 
+    role: req.user.role, 
+    userType: req.user.userType 
+  });
 });
 
 // ============================================
