@@ -1,9 +1,11 @@
 // src/controllers/applicationController.js
 // ✅ CORRECTION : Ajout de la transition EnAnalyse -> Acceptee + vérification du rôle
+// ✅ AJOUT : Vérification des conflits de stage en cours
 
 const Application = require('../models/Application');
 const Document = require('../models/Document');
 const Offer = require('../models/Offer');
+const Internship = require('../models/Internship');
 const Notification = require('../models/Notification');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const { APPLICATION_STATUS, ROLES, STAFF_TREATMENT_ROLES } = require('../config/constants');
@@ -99,9 +101,50 @@ const isOwnerOrStaff = (req, etudiantIdField) => {
     return ownerId === req.user.id;
 };
 
+/**
+ * ✅ Vérifier si un étudiant a un stage en cours pendant une période donnée
+ */
+const checkStudentAvailability = async (etudiantId, dateDebut, dateFin) => {
+    // Statuts considérés comme "stage en cours"
+    const activeStatuses = [
+        'EnCours', 
+        'EngagementEnvoye', 
+        'EngagementRecu', 
+        'EnAttenteValidationDirecteur', 
+        'ValideParDirecteur'
+    ];
+
+    const currentInternship = await Internship.findOne({
+        etudiantId: etudiantId,
+        statut: { $in: activeStatuses }
+    });
+
+    if (!currentInternship) {
+        return { available: true, currentInternship: null };
+    }
+
+    // Vérifier si les périodes se chevauchent
+    const newStart = new Date(dateDebut);
+    const newEnd = new Date(dateFin);
+    const currentStart = new Date(currentInternship.dateDebut);
+    const currentEnd = new Date(currentInternship.dateFin);
+
+    const hasOverlap = (newStart <= currentEnd && newEnd >= currentStart);
+
+    return {
+        available: !hasOverlap,
+        currentInternship: currentInternship,
+        hasOverlap: hasOverlap,
+        currentPeriod: {
+            dateDebut: currentInternship.dateDebut,
+            dateFin: currentInternship.dateFin,
+            sujetTitre: currentInternship.sujetTitre
+        }
+    };
+};
+
 exports.createApplication = async (req, res) => {
     try {
-
         if (req.user?.role !== ROLES.ETUDIANT) {
             return res.status(403).json({
                 success: false,
@@ -133,6 +176,25 @@ exports.createApplication = async (req, res) => {
             });
         }
 
+        // ✅ VÉRIFICATION : L'étudiant a-t-il un stage en cours qui chevauche la période ?
+        if (offer.dateDebut && offer.dateFin) {
+            const availability = await checkStudentAvailability(
+                etudiantId,
+                offer.dateDebut,
+                offer.dateFin
+            );
+
+            if (!availability.available) {
+                const stage = availability.currentInternship;
+                return res.status(400).json({
+                    success: false,
+                    message: `Vous ne pouvez pas postuler à cette offre car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
+                    data: {
+                        currentInternship: availability.currentPeriod
+                    }
+                });
+            }
+        }
 
         let safeDocuments = [];
         if (documents && documents.length > 0) {
@@ -181,14 +243,12 @@ exports.getAllApplications = async (req, res) => {
 
         if (statut) filter.statut = statut;
 
- 
         if (req.user?.role === ROLES.ETUDIANT) {
             filter.etudiantId = req.user.id;
         } else if (etudiantId) {
             filter.etudiantId = etudiantId;
         }
 
-  
         if (offreId) {
             await assertDepartmentOwnsOffer(req, offreId);
             filter.offreId = offreId;
@@ -244,7 +304,6 @@ exports.getApplicationById = async (req, res) => {
             });
         }
 
-       
         await assertDepartmentOwnsOffer(req, application.offreId?._id || application.offreId);
 
         return res.status(200).json({
@@ -274,7 +333,6 @@ exports.updateApplication = async (req, res) => {
             });
         }
 
-        
         if (!isOwnerOrStaff(req, application.etudiantId) && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
@@ -312,7 +370,8 @@ exports.updateApplication = async (req, res) => {
 
 exports.submitApplication = async (req, res) => {
     try {
-        const application = await Application.findById(req.params.id);
+        const application = await Application.findById(req.params.id)
+            .populate('offreId', 'dateDebut dateFin titre');
 
         if (!application) {
             return res.status(404).json({
@@ -333,6 +392,30 @@ exports.submitApplication = async (req, res) => {
                 success: false,
                 message: 'Seule une candidature en brouillon peut être soumise'
             });
+        }
+
+        // ✅ VÉRIFICATION : L'étudiant a-t-il un stage en cours qui chevauche la période ?
+        if (application.offreId && application.offreId.dateDebut && application.offreId.dateFin) {
+            const availability = await checkStudentAvailability(
+                application.etudiantId,
+                application.offreId.dateDebut,
+                application.offreId.dateFin
+            );
+
+            if (!availability.available) {
+                const stage = availability.currentInternship;
+                return res.status(400).json({
+                    success: false,
+                    message: `Vous ne pouvez pas soumettre cette candidature car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
+                    data: {
+                        currentInternship: availability.currentPeriod,
+                        requestedPeriod: {
+                            dateDebut: application.offreId.dateDebut,
+                            dateFin: application.offreId.dateFin
+                        }
+                    }
+                });
+            }
         }
 
         // ✅ Vérifier que la candidature a des documents
@@ -366,7 +449,6 @@ exports.submitApplication = async (req, res) => {
         });
 
         await application.save();
-
 
         await notifyStudentApplicationSubmitted(application);
 
@@ -406,7 +488,8 @@ exports.changeApplicationStatus = async (req, res) => {
             });
         }
 
-        const application = await Application.findById(req.params.id);
+        const application = await Application.findById(req.params.id)
+            .populate('offreId', 'dateDebut dateFin titre');
 
         if (!application) {
             return res.status(404).json({
@@ -429,6 +512,26 @@ exports.changeApplicationStatus = async (req, res) => {
                 success: false,
                 message: `Transition non autorisée : ${ancienStatut} vers ${statut}`
             });
+        }
+
+        // ✅ VÉRIFICATION : Si on accepte, vérifier qu'il n'y a pas de conflit
+        if (statut === APPLICATION_STATUS.ACCEPTEE && application.offreId) {
+            const availability = await checkStudentAvailability(
+                application.etudiantId,
+                application.offreId.dateDebut,
+                application.offreId.dateFin
+            );
+
+            if (!availability.available) {
+                const stage = availability.currentInternship;
+                return res.status(400).json({
+                    success: false,
+                    message: `Impossible d'accepter cette candidature : l'étudiant a déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
+                    data: {
+                        currentInternship: availability.currentPeriod
+                    }
+                });
+            }
         }
 
         application.statut = statut;
@@ -475,7 +578,6 @@ exports.getApplicationHistory = async (req, res) => {
                 message: 'Candidature non trouvée'
             });
         }
-
 
         if (!isOwnerOrStaff(req, application.etudiantId)) {
             return res.status(403).json({
@@ -551,7 +653,6 @@ exports.addDocumentToApplication = async (req, res) => {
             });
         }
 
-
         if (!isOwnerOrStaff(req, application.etudiantId)) {
             return res.status(403).json({
                 success: false,
@@ -567,7 +668,6 @@ exports.addDocumentToApplication = async (req, res) => {
                 message: 'Document non trouvé'
             });
         }
-
 
         if (document.candidatId.toString() !== application.etudiantId.toString()) {
             return res.status(403).json({

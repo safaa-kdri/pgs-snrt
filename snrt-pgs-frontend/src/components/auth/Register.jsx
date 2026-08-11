@@ -442,7 +442,7 @@ const Register = () => {
                   >
                     <MenuItem value="">* Civilité</MenuItem>
                     <MenuItem value="Mme">Mme</MenuItem>
-                    <MenuItem value="M.">Mr</MenuItem>
+                    <MenuItem value="Mr">Mr</MenuItem>
                   </RegisterField>
                 </Grid>
                 <Grid item xs={12} sm={9}>

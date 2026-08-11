@@ -1,5 +1,6 @@
 // src/models/Internship.js
-// ✅ AJOUTER LES CHAMPS DU SUJET DE L'OFFRE
+// ✅ CORRECTION : encadrantId devient optionnel
+// ✅ AJOUT : Statuts supplémentaires pour le workflow (EngagementValide, EngagementRejete)
 
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
@@ -15,7 +16,18 @@ const InternshipSchema = new mongoose.Schema({
     },
     statut: {
         type: String,
-        enum: ['EnCours', 'Termine', 'Annule'],
+        enum: [
+            'EnCours', 
+            'Termine', 
+            'Annule',
+            'EngagementEnvoye',
+            'EngagementRecu',
+            'EngagementValide',
+            'EngagementRejete',
+            'EnAttenteValidationDirecteur',
+            'ValideParDirecteur',
+            'DemandeEnvoyee'
+        ],
         default: 'EnCours'
     },
     noteFinale: {
@@ -34,7 +46,7 @@ const InternshipSchema = new mongoose.Schema({
     encadrantId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'UtilisateurInterne',
-        required: true
+        required: false
     },
     offreId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -47,7 +59,7 @@ const InternshipSchema = new mongoose.Schema({
         required: true
     },
     
-    // ✅ CHAMPS DU SUJET DE L'OFFRE (copiés depuis l'offre)
+    // CHAMPS DU SUJET DE L'OFFRE (copiés depuis l'offre)
     sujetTitre: {
         type: String,
         default: null

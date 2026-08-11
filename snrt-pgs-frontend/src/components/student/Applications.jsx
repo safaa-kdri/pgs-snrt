@@ -1,4 +1,9 @@
 // src/components/student/Applications.jsx
+// ✅ CORRECTION : Afficher le statut du stage au lieu du statut de l'application
+// ✅ NOUVELLE PROGRESSION LOGIQUE - 100% dès que la candidature est acceptée
+// ✅ SUPPRESSION : Boutons "Réinitialiser" et "Rafraîchir"
+// ✅ CORRECTION : Libellés professionnels et simples pour l'étudiant
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,7 +25,6 @@ import {
     CircularProgress,
     InputAdornment,
     Tooltip,
-    MenuItem,
     LinearProgress,
     Alert,
 } from '@mui/material';
@@ -37,7 +41,7 @@ import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
 // ============================================
-// STYLES - STATUTS CORRIGÉS
+// STYLES
 // ============================================
 
 const PageHeader = styled(Box)({
@@ -54,15 +58,26 @@ const StyledTableCell = styled(TableCell)({
     color: '#1a2332',
 });
 
-// ✅ STATUTS ALIGNÉS AVEC LE BACKEND
+// ✅ STATUTS COMPLETS DU WORKFLOW - Libellés professionnels pour l'étudiant
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
+        // Statuts de candidature
         'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
         'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
         'EnAnalyse': { bg: '#fef3c7', text: '#d97706' },
         'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
         'Acceptee': { bg: '#d1fae5', text: '#065f46' },
         'Refusee': { bg: '#fee2e2', text: '#991b1b' },
+        // Statuts de stage - Libellés simplifiés pour l'étudiant
+        'EngagementEnvoye': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementRecu': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementValide': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementRejete': { bg: '#fee2e2', text: '#991b1b' },
+        'DemandeEnvoyee': { bg: '#d1fae5', text: '#065f46' },
+        'ValideParDirecteur': { bg: '#d1fae5', text: '#065f46' },
+        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
+        'Termine': { bg: '#d1fae5', text: '#065f46' },
+        'EnCours': { bg: '#d1fae5', text: '#065f46' },
     };
     const color = colors[status] || colors['Soumise'];
     return {
@@ -104,7 +119,6 @@ const Applications = () => {
     const [applications, setApplications] = useState([]);
     const [filteredApplications, setFilteredApplications] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
 
     useEffect(() => {
         fetchApplications();
@@ -112,7 +126,7 @@ const Applications = () => {
 
     useEffect(() => {
         filterApplications();
-    }, [applications, searchTerm, statusFilter]);
+    }, [applications, searchTerm]);
 
     const fetchApplications = async () => {
         setLoading(true);
@@ -123,8 +137,34 @@ const Applications = () => {
             });
             
             const data = response.data?.data || response.data?.applications || [];
-            setApplications(data);
-            setFilteredApplications(data);
+            
+            // ✅ Pour chaque application, récupérer le stage associé
+            const applicationsWithStage = await Promise.all(
+                data.map(async (app) => {
+                    try {
+                        const stageRes = await api.get(`/internships/application/${app._id}`);
+                        if (stageRes.data?.data) {
+                            return {
+                                ...app,
+                                stageStatut: stageRes.data.data.statut,
+                                stage: stageRes.data.data,
+                                hasStage: true
+                            };
+                        }
+                    } catch (e) {
+                        // Pas de stage associé
+                    }
+                    return {
+                        ...app,
+                        stageStatut: app.statut,
+                        stage: null,
+                        hasStage: false
+                    };
+                })
+            );
+            
+            setApplications(applicationsWithStage);
+            setFilteredApplications(applicationsWithStage);
         } catch (error) {
             console.error('Erreur chargement candidatures:', error);
             setError(
@@ -150,40 +190,57 @@ const Applications = () => {
             );
         }
 
-        if (statusFilter !== 'all') {
-            filtered = filtered.filter((a) => a.statut === statusFilter);
-        }
-
         setFilteredApplications(filtered);
     };
 
-    // ✅ STATUTS ALIGNÉS AVEC LE BACKEND
+    // ✅ STATUTS COMPLETS - Libellés professionnels et simples pour l'étudiant
     const getStatusLabel = (status) => {
         const labels = {
             'Brouillon': 'Brouillon',
             'Soumise': 'Soumise',
-            'EnAnalyse': 'En analyse',
-            'Entretien': 'Entretien',
+            'EnAnalyse': 'En cours d\'analyse',
+            'Entretien': 'Entretien planifié',
             'Acceptee': 'Acceptée',
             'Refusee': 'Refusée',
+            // Statuts de stage - Libellés simplifiés
+            'EngagementEnvoye': 'Engagement envoyé',
+            'EngagementRecu': 'Engagement reçu',
+            'EngagementValide': 'Engagement validé',
+            'EngagementRejete': 'Engagement rejeté',
+            'DemandeEnvoyee': 'Demande envoyée',
+            'ValideParDirecteur': 'Validé par le Directeur',
+            'Cloturee': 'Stage clôturé',
+            'Termine': 'Stage terminé',
+            'EnCours': 'Stage en cours',
         };
         return labels[status] || status;
     };
 
-    // ✅ PROGRESSION ALIGNÉE AVEC LE BACKEND
+    // ✅ NOUVELLE PROGRESSION - 100% dès que la candidature est acceptée
     const getProgression = (statut) => {
         const map = {
             'Brouillon': 0,
             'Soumise': 20,
             'EnAnalyse': 40,
             'Entretien': 60,
-            'Acceptee': 80,
+            'Acceptee': 100,
             'Refusee': 100,
+            // Tous les statuts de stage sont à 100% (candidature déjà terminée)
+            'EngagementEnvoye': 100,
+            'EngagementRecu': 100,
+            'EngagementValide': 100,
+            'EngagementRejete': 100,
+            'DemandeEnvoyee': 100,
+            'ValideParDirecteur': 100,
+            'Cloturee': 100,
+            'Termine': 100,
+            'EnCours': 100,
         };
         return map[statut] || 0;
     };
 
     const getProgressColor = (progress) => {
+        if (progress >= 100) return '#22c55e';
         if (progress >= 80) return '#22c55e';
         if (progress >= 50) return '#f59e0b';
         return '#ef4444';
@@ -198,17 +255,6 @@ const Applications = () => {
         }
         return 'Stage';
     };
-
-    // ✅ FILTRES ALIGNÉS AVEC LE BACKEND
-    const statusOptions = [
-        { value: 'all', label: 'Tous les statuts' },
-        { value: 'Brouillon', label: 'Brouillon' },
-        { value: 'Soumise', label: 'Soumise' },
-        { value: 'EnAnalyse', label: 'En analyse' },
-        { value: 'Entretien', label: 'Entretien' },
-        { value: 'Acceptee', label: 'Acceptée' },
-        { value: 'Refusee', label: 'Refusée' },
-    ];
 
     if (loading) {
         return (
@@ -239,9 +285,9 @@ const Applications = () => {
 
             <Paper sx={{ p: 2, mb: 3, borderRadius: '12px', backgroundColor: '#f7f7f7' }}>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={5}>
+                    <Grid item xs={12}>
                         <TextField
-                            placeholder="Rechercher..."
+                            placeholder="Rechercher par titre d'offre ou type de stage..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -260,45 +306,6 @@ const Applications = () => {
                                 },
                             }}
                         />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            select
-                            label="Statut"
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            size="small"
-                            fullWidth
-                            sx={{
-                                '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#fff' },
-                            }}
-                        >
-                            {statusOptions.map((option) => (
-                                <MenuItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </MenuItem>
-                            ))}
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<FilterList />}
-                            onClick={() => {
-                                setSearchTerm('');
-                                setStatusFilter('all');
-                            }}
-                            sx={{
-                                borderRadius: '10px',
-                                textTransform: 'none',
-                                borderColor: '#ddd',
-                                color: '#666',
-                                backgroundColor: '#fff',
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
                     </Grid>
                 </Grid>
             </Paper>
@@ -329,7 +336,9 @@ const Applications = () => {
                             </TableRow>
                         ) : (
                             filteredApplications.map((app) => {
-                                const progress = getProgression(app.statut);
+                                // ✅ Utiliser le statut du stage si disponible
+                                const displayStatut = app.stageStatut || app.statut;
+                                const progress = getProgression(displayStatut);
                                 const type = getTypeStage(app);
                                 return (
                                     <TableRow key={app._id || app.id} hover>
@@ -337,6 +346,11 @@ const Applications = () => {
                                             <Typography variant="body2" fontWeight={600}>
                                                 {app.offreId?.titre || app.offre || 'Offre sans titre'}
                                             </Typography>
+                                            {app.hasStage && (
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Stage associé
+                                                </Typography>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <TypeChip
@@ -377,8 +391,8 @@ const Applications = () => {
                                         </TableCell>
                                         <TableCell>
                                             <StatusChip
-                                                label={getStatusLabel(app.statut)}
-                                                status={app.statut}
+                                                label={getStatusLabel(displayStatut)}
+                                                status={displayStatut}
                                                 size="small"
                                             />
                                         </TableCell>

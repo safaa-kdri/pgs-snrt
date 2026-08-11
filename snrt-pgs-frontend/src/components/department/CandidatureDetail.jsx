@@ -1,6 +1,7 @@
 // src/components/department/CandidatureDetail.jsx
 // ✅ VERSION AVEC BOUTON RETOUR POSITIONNÉ COMME LE RH (AU-DESSUS)
 // ✅ CORRECTION : Logs pour déboguer la création du stage
+// ✅ AJOUT : Gestion des erreurs de conflit de stage en cours
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -522,7 +523,7 @@ const CandidatureDetail = () => {
     setOpenAcceptDialog(false);
   };
 
-  // ✅ CORRECTION : Ajout de logs pour déboguer la création du stage
+  // ✅ CORRECTION : Gestion des erreurs de conflit de stage
   const handleConfirmAccept = async () => {
     setSubmitting(true);
     setError("");
@@ -544,7 +545,7 @@ const CandidatureDetail = () => {
 
       // 2. Créer le stage si nécessaire
       if (!stageId) {
-        console.log("🔍 [handleConfirmAccept] Aucun stage existant, création...");
+        console.log("🔍 [handleConfirmAccept] Aucun stage existant, tentative de création...");
         const studentId = application.etudiantId?._id || application.etudiantId;
         const offerId = application.offreId?._id || application.offreId;
 
@@ -562,20 +563,35 @@ const CandidatureDetail = () => {
           };
           console.log("🔍 [handleConfirmAccept] Données du stage:", stageData);
 
-          const stageResponse = await api.post("/internships", stageData);
-          console.log("✅ [handleConfirmAccept] Réponse du backend:", stageResponse.data);
+          try {
+            const stageResponse = await api.post("/internships", stageData);
+            console.log("✅ [handleConfirmAccept] Réponse du backend:", stageResponse.data);
 
-          const newInternship = stageResponse.data?.data || stageResponse.data;
-          if (newInternship?._id) {
-            stageId = newInternship._id;
-            setSelectedStageId(stageId);
-            setInternship(newInternship);
-            console.log("✅ [handleConfirmAccept] Stage créé avec ID:", stageId);
-          } else {
-            console.error("❌ [handleConfirmAccept] Stage non créé, réponse:", stageResponse.data);
-            setError("Impossible de créer le stage. Vérifiez les logs.");
-            setSubmitting(false);
-            return;
+            const newInternship = stageResponse.data?.data || stageResponse.data;
+            if (newInternship?._id) {
+              stageId = newInternship._id;
+              setSelectedStageId(stageId);
+              setInternship(newInternship);
+              console.log("✅ [handleConfirmAccept] Stage créé avec ID:", stageId);
+            }
+          } catch (createError) {
+            console.error("❌ [handleConfirmAccept] Erreur création du stage:", createError.response?.data);
+            
+            // ✅ Gérer spécifiquement l'erreur "étudiant déjà en stage"
+            const errorMessage = createError.response?.data?.message || "";
+            if (errorMessage.includes("déjà un stage en cours")) {
+              // Extraire les détails du stage en cours si disponibles
+              const stageData = createError.response?.data?.data?.currentInternship;
+              let detailedMessage = errorMessage;
+              if (stageData) {
+                detailedMessage = `Impossible de créer le stage : l'étudiant a déjà un stage en cours du ${new Date(stageData.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stageData.dateFin).toLocaleDateString('fr-FR')} : "${stageData.sujetTitre || 'Stage sans titre'}".`;
+              }
+              setError(detailedMessage);
+              setSubmitting(false);
+              return;
+            }
+            
+            throw createError;
           }
         } else {
           console.error("❌ [handleConfirmAccept] StudentId ou OfferId manquant:", { studentId, offerId });
@@ -603,7 +619,21 @@ const CandidatureDetail = () => {
     } catch (error) {
       console.error("❌ Erreur acceptation:", error);
       console.error("❌ Détails de l'erreur:", error.response?.data);
-      setError(error.response?.data?.message || "Erreur lors de l'acceptation");
+      
+      // ✅ Gérer les erreurs de conflit de stage
+      const errorMessage = error.response?.data?.message || "Erreur lors de l'acceptation";
+      if (errorMessage.includes("déjà un stage en cours") || errorMessage.includes("stage en cours")) {
+        const stageData = error.response?.data?.data?.currentInternship;
+        if (stageData) {
+          setError(
+            `L'étudiant a déjà un stage en cours du ${new Date(stageData.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stageData.dateFin).toLocaleDateString('fr-FR')} : "${stageData.sujetTitre || 'Stage sans titre'}".`
+          );
+        } else {
+          setError(errorMessage);
+        }
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1065,7 +1095,6 @@ const CandidatureDetail = () => {
             </SectionTitle>
             {application.documents && application.documents.length > 0 ? (
               application.documents.map((doc, idx) => (
-                // ✅ Correction: verified est un booléen, pas un attribut HTML
                 <DocumentItem 
                   key={idx} 
                   verified={doc.isVerified}

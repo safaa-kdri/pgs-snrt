@@ -1,4 +1,17 @@
 // src/components/student/ApplicationDetail.jsx
+// ✅ AJOUT : Tab Engagement avec gestion des statuts
+// ✅ CORRECTION : Engagement avant Documents dans l'ordre des tabs
+// ✅ CORRECTION : Ajout de l'historique "Engagement envoyé"
+// ✅ CORRECTION : Suppression de la bannière de statut
+// ✅ AJOUT : Logs pour déboguer l'upload d'engagement
+// ✅ AJOUT : Affichage du document déposé après upload
+// ✅ CORRECTION : Téléchargement et visualisation des fichiers d'engagement (URL sans double /uploads/)
+// ✅ CORRECTION : isEngagementVisible inclut DemandeEnvoyee
+// ✅ CORRECTION : Progression 100% dès que la candidature est acceptée
+// ✅ CORRECTION : Affichage du statut du stage dans la page de détails
+// ✅ CORRECTION : Libellé "Acceptée" → "Acceptée par le département"
+// ✅ AJOUT : Gestion de la convention avec les nouveaux statuts
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -45,6 +58,7 @@ import {
     Check,
     Cancel,
     FileCopy,
+    Assignment,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -70,6 +84,7 @@ const SectionTitle = styled(Typography)({
     gap: '10px',
 });
 
+// ✅ StatusChip avec tous les statuts du workflow
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
         'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
@@ -78,6 +93,16 @@ const StatusChip = styled(Chip)(({ status }) => {
         'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
         'Acceptee': { bg: '#d1fae5', text: '#065f46' },
         'Refusee': { bg: '#fee2e2', text: '#991b1b' },
+        // Statuts de stage - Vert pour tous (candidature terminée)
+        'EngagementEnvoye': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementRecu': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementValide': { bg: '#d1fae5', text: '#065f46' },
+        'EngagementRejete': { bg: '#fee2e2', text: '#991b1b' },
+        'DemandeEnvoyee': { bg: '#d1fae5', text: '#065f46' },
+        'ValideParDirecteur': { bg: '#d1fae5', text: '#065f46' },
+        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
+        'Termine': { bg: '#d1fae5', text: '#065f46' },
+        'EnCours': { bg: '#d1fae5', text: '#065f46' },
     };
     const color = colors[status] || colors['Soumise'];
     return {
@@ -139,17 +164,18 @@ const ConventionStatusChip = styled(Chip)(({ statut }) => {
     };
 });
 
-const UploadZone = styled(Box)({
+// ✅ STYLE PROFESSIONNEL POUR L'UPLOAD ZONE
+const StyledUploadZone = styled(Box)({
     border: '2px dashed #d1d5db',
-    borderRadius: '16px',
-    padding: '40px 20px',
+    borderRadius: '12px',
+    padding: '32px 20px',
     textAlign: 'center',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
     backgroundColor: '#fafafa',
     '&:hover': {
         borderColor: '#148aa0',
-        backgroundColor: '#f0f7fa',
+        backgroundColor: '#f7fbfc',
     },
 });
 
@@ -169,12 +195,25 @@ const ApplicationDetailStudent = () => {
     const [success, setSuccess] = useState('');
     const [tabValue, setTabValue] = useState(0);
     const [convention, setConvention] = useState(null);
+    const [engagementFile, setEngagementFile] = useState(null);
+    const [engagementDepose, setEngagementDepose] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
+    const [uploadType, setUploadType] = useState('convention');
 
     // ✅ Vérifier si la convention doit être affichée
     const isEligibleForConvention = application?.statut === 'Acceptee' || internship?.statut === 'EnCours';
+
+    // ✅ Vérifier si l'engagement doit être affiché (inclure tous les statuts de stage)
+    const isEngagementVisible = internship?.statut === 'EngagementEnvoye' || 
+                                internship?.statut === 'EngagementRecu' ||
+                                internship?.statut === 'EngagementValide' ||
+                                internship?.statut === 'EnAttenteEngagement' ||
+                                internship?.statut === 'DemandeEnvoyee' ||
+                                internship?.statut === 'ValideParDirecteur' ||
+                                internship?.statut === 'Cloturee' ||
+                                internship?.statut === 'Termine';
 
     useEffect(() => {
         fetchApplicationDetail();
@@ -193,8 +232,54 @@ const ApplicationDetailStudent = () => {
                     const stageRes = await api.get(`/internships/application/${data._id}`);
                     if (stageRes.data?.data) {
                         setInternship(stageRes.data.data);
+                        
+                        console.log('✅ [fetchApplicationDetail] Internship défini:', stageRes.data.data);
+                        console.log('✅ [fetchApplicationDetail] Internship._id:', stageRes.data.data._id);
+                        console.log('🔍 [fetchApplicationDetail] Livrables:', stageRes.data.data.livrables);
+                        
+                        // ✅ VÉRIFIER SI L'ENGAGEMENT EST DÉJÀ DÉPOSÉ
+                        const engagementLivrable = stageRes.data.data.livrables?.find(
+                            l => l.nom === 'Engagement Confidentialité Signé'
+                        );
+                        
+                        console.log('🔍 [fetchApplicationDetail] Engagement trouvé:', engagementLivrable);
+                        
+                        if (engagementLivrable) {
+                            setEngagementDepose(true);
+                            setEngagementFile({
+                                ...engagementLivrable,
+                                nomOriginal: engagementLivrable.nom || 'Engagement_Confidentialite_Signe.pdf',
+                                dateDepot: engagementLivrable.dateDepot
+                            });
+                        }
+                        
+                        // ✅ AJOUTER : Vérifier si l'engagement a été envoyé
+                        if (stageRes.data.data.statut === 'EngagementEnvoye' || 
+                            stageRes.data.data.statut === 'EngagementRecu' ||
+                            stageRes.data.data.statut === 'EngagementValide' ||
+                            stageRes.data.data.statut === 'DemandeEnvoyee') {
+                            const hasEngagementHistory = data.historique?.some(
+                                h => h.action === 'Engagement de confidentialité envoyé'
+                            );
+                            
+                            if (!hasEngagementHistory) {
+                                data.historique = data.historique || [];
+                                data.historique.push({
+                                    date: new Date(stageRes.data.data.updatedAt || new Date()),
+                                    action: 'Engagement de confidentialité envoyé',
+                                    nouveauStatut: 'EngagementEnvoye',
+                                    ancienStatut: data.statut || 'Acceptee',
+                                    commentaire: 'Le document d\'engagement vous a été envoyé par le RH. Veuillez le consulter dans l\'onglet "Engagement".'
+                                });
+                            }
+                        }
+                        
                         if (stageRes.data.data.convention) {
                             setConvention(stageRes.data.data.convention);
+                        }
+                        
+                        if (stageRes.data.data.engagement) {
+                            setEngagementFile(stageRes.data.data.engagement);
                         }
                     }
                 } catch (e) {
@@ -243,7 +328,12 @@ const ApplicationDetailStudent = () => {
 
     const handleDownloadConvention = async () => {
         try {
-            const response = await api.get(`/internships/conventions/${internship?._id}/download`, {
+            const stageId = internship?._id;
+            if (!stageId) {
+                setError('ID du stage non trouvé');
+                return;
+            }
+            const response = await api.get(`/internships/${stageId}/convention/download`, {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -258,10 +348,105 @@ const ApplicationDetailStudent = () => {
         }
     };
 
-    const handleFileSelect = (event) => {
+    // ============================================
+    // ✅ FONCTIONS ENGAGEMENT AVEC LOGS
+    // ============================================
+
+    const handleDownloadEngagement = async () => {
+        try {
+            const stageId = internship?._id;
+            if (!stageId) {
+                setError('ID du stage non trouvé');
+                return;
+            }
+
+            const response = await api.get(`/internships/${stageId}/generate-engagement`, {
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'Engagement_Confidentialite_SNRT.pdf';
+            link.click();
+            window.URL.revokeObjectURL(url);
+
+            setSuccess('Engagement de confidentialité téléchargé');
+            setTimeout(() => setSuccess(''), 3000);
+        } catch (error) {
+            console.error('Erreur téléchargement engagement:', error);
+            setError('Erreur lors du téléchargement de l\'engagement');
+        }
+    };
+
+    // ✅ CORRECTION : Ajout de logs pour déboguer + mise à jour de l'état
+    const handleUploadEngagement = async () => {
+        if (!selectedFile) return;
+
+        setUploading(true);
+        setError('');
+        setSuccess('');
+
+        try {
+            const formData = new FormData();
+            formData.append('document', selectedFile);
+
+            console.log('🔍 [handleUploadEngagement] internship:', internship);
+            console.log('🔍 [handleUploadEngagement] internship?._id:', internship?._id);
+
+            const stageId = internship?._id;
+            if (!stageId) {
+                console.error('❌ [handleUploadEngagement] stageId est undefined');
+                setError('ID du stage non trouvé');
+                setUploading(false);
+                return;
+            }
+
+            console.log('✅ [handleUploadEngagement] stageId:', stageId);
+            console.log('✅ [handleUploadEngagement] URL:', `/internships/${stageId}/upload-engagement`);
+            console.log('✅ [handleUploadEngagement] selectedFile:', selectedFile.name);
+
+            const response = await api.post(
+                `/internships/${stageId}/upload-engagement`,
+                formData,
+                { 
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    onUploadProgress: (progressEvent) => {
+                        console.log('📤 [handleUploadEngagement] Progression:', progressEvent.loaded, '/', progressEvent.total);
+                    }
+                }
+            );
+
+            console.log('✅ [handleUploadEngagement] Réponse:', response.data);
+
+            if (response.data?.success) {
+                setSuccess('Engagement déposé avec succès !');
+                setEngagementDepose(true);
+                setEngagementFile({
+                    ...response.data.data,
+                    nomOriginal: selectedFile.name,
+                    dateDepot: new Date()
+                });
+                setOpenDialog(false);
+                setSelectedFile(null);
+                fetchApplicationDetail();
+            }
+        } catch (error) {
+            console.error('❌ Erreur upload engagement:', error);
+            console.error('❌ Réponse d\'erreur:', error.response?.data);
+            console.error('❌ Statut:', error.response?.status);
+            console.error('❌ URL:', error.config?.url);
+            setError(error.response?.data?.message || 'Erreur lors du dépôt de l\'engagement');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleFileSelect = (event, type) => {
         const file = event.target.files[0];
         if (file && file.type === 'application/pdf') {
             setSelectedFile(file);
+            setUploadType(type);
             setOpenDialog(true);
         } else {
             setError('Veuillez sélectionner un fichier PDF');
@@ -279,14 +464,21 @@ const ApplicationDetailStudent = () => {
             const formData = new FormData();
             formData.append('convention', selectedFile);
 
+            const stageId = internship?._id;
+            if (!stageId) {
+                setError('ID du stage non trouvé');
+                setUploading(false);
+                return;
+            }
+
             const response = await api.post(
-                `/internships/${internship?._id}/convention/depot`,
+                `/internships/${stageId}/convention/depot`,
                 formData,
                 { headers: { 'Content-Type': 'multipart/form-data' } }
             );
 
             if (response.data?.success) {
-                setSuccess('✅ Convention déposée avec succès !');
+                setSuccess('Convention déposée avec succès !');
                 setConvention(response.data.data);
                 setOpenDialog(false);
                 setSelectedFile(null);
@@ -329,14 +521,32 @@ const ApplicationDetailStudent = () => {
     // FONCTIONS UTILITAIRES
     // ============================================
 
+    // ✅ Affichage du statut (stage si disponible, sinon application)
+    const getDisplayStatus = () => {
+        if (internship?.statut) {
+            return internship.statut;
+        }
+        return application?.statut || 'Brouillon';
+    };
+
+    // ✅ STATUTS COMPLETS - Libellés professionnels pour l'étudiant
     const getStatusLabel = (status) => {
         const labels = {
             'Brouillon': 'Brouillon',
             'Soumise': 'Soumise',
-            'EnAnalyse': 'En analyse',
-            'Entretien': 'Entretien',
-            'Acceptee': 'Acceptée',
+            'EnAnalyse': 'En cours d\'analyse',
+            'Entretien': 'Entretien planifié',
+            'Acceptee': 'Acceptée par le département',
             'Refusee': 'Refusée',
+            'EngagementEnvoye': 'Engagement envoyé',
+            'EngagementRecu': 'Engagement reçu',
+            'EngagementValide': 'Engagement validé',
+            'EngagementRejete': 'Engagement rejeté',
+            'DemandeEnvoyee': 'Demande envoyée',
+            'ValideParDirecteur': 'Validé par le Directeur',
+            'Cloturee': 'Stage clôturé',
+            'Termine': 'Stage terminé',
+            'EnCours': 'Stage en cours',
         };
         return labels[status] || status;
     };
@@ -372,7 +582,9 @@ const ApplicationDetailStudent = () => {
 
     const buildFileHref = (doc) => {
         if (!doc) return null;
+        
         const apiRoot = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+        
         if (doc.gridFsId) {
             return `${apiRoot}/api/v1/documents/file/${doc.gridFsId}`;
         }
@@ -380,14 +592,44 @@ const ApplicationDetailStudent = () => {
             return doc.url.startsWith('/') ? `${apiRoot}${doc.url}` : doc.url;
         }
         if (doc.chemin) {
-            return doc.chemin.startsWith('/') ? `${apiRoot}${doc.chemin}` : doc.chemin;
+            let cleanPath = doc.chemin;
+            if (cleanPath.startsWith('./')) {
+                cleanPath = cleanPath.substring(2);
+            }
+            if (cleanPath.startsWith('/')) {
+                cleanPath = cleanPath.substring(1);
+            }
+            return `${apiRoot}/${cleanPath}`;
         }
+        if (doc.nom && doc.nom.includes('Engagement')) {
+            let nom = doc.nom;
+            if (nom.startsWith('uploads/')) {
+                return `${apiRoot}/${nom}`;
+            }
+            return `${apiRoot}/uploads/engagements/${nom}`;
+        }
+        if (doc.nomOriginal) {
+            let nom = doc.nomOriginal;
+            if (nom.startsWith('uploads/')) {
+                return `${apiRoot}/${nom}`;
+            }
+            return `${apiRoot}/uploads/engagements/${nom}`;
+        }
+        
+        console.warn('⚠️ [buildFileHref] Impossible de construire l\'URL pour:', doc);
         return null;
     };
 
     const handleDownloadDocument = (doc) => {
-        if (!doc) return;
+        if (!doc) {
+            setError('Document non trouvé');
+            return;
+        }
+        
         const href = buildFileHref(doc);
+        console.log('🔍 [handleDownloadDocument] href:', href);
+        console.log('🔍 [handleDownloadDocument] doc:', doc);
+        
         if (href) {
             window.open(href, '_blank');
         } else {
@@ -413,6 +655,10 @@ const ApplicationDetailStudent = () => {
                         else if (status === 'Soumise') dotColor = '#1d4ed8';
                         else if (status === 'EnAnalyse') dotColor = '#f59e0b';
                         else if (status === 'Entretien') dotColor = '#8b5cf6';
+                        else if (status === 'EngagementValide') dotColor = '#22c55e';
+                        else if (status === 'EngagementEnvoye') dotColor = '#22c55e';
+                        else if (status === 'EngagementRecu') dotColor = '#22c55e';
+                        else if (status === 'Cloturee') dotColor = '#22c55e';
 
                         return (
                             <Box key={idx} sx={{
@@ -519,20 +765,199 @@ const ApplicationDetailStudent = () => {
         );
     };
 
-    // ✅ RENDER CONVENTION - CORRIGÉ
+    // ✅ RENDER ENGAGEMENT - Version avec affichage du document déposé
+    const renderEngagement = () => {
+        const stageStatut = internship?.statut || 'EnCours';
+        const isSent = stageStatut === 'EngagementEnvoye' || 
+                       stageStatut === 'EngagementRecu' ||
+                       stageStatut === 'EngagementValide' ||
+                       stageStatut === 'EnAttenteEngagement' ||
+                       stageStatut === 'DemandeEnvoyee' ||
+                       stageStatut === 'ValideParDirecteur' ||
+                       stageStatut === 'Cloturee' ||
+                       stageStatut === 'Termine';
+
+        const hasEngagement = engagementDepose || 
+                             (engagementFile && (engagementFile.chemin || engagementFile.gridFsId || engagementFile._id));
+
+        return (
+            <Box>
+                {isSent && (
+                    <>
+                        <Button
+                            variant="outlined"
+                            startIcon={<Download />}
+                            onClick={handleDownloadEngagement}
+                            sx={{ 
+                                mb: 3,
+                                borderRadius: '8px',
+                                textTransform: 'none',
+                                borderColor: '#148aa0',
+                                color: '#148aa0',
+                                fontWeight: 500,
+                                px: 3,
+                                py: 1,
+                                '&:hover': {
+                                    backgroundColor: 'rgba(20, 138, 160, 0.04)',
+                                    borderColor: '#0b7890'
+                                }
+                            }}
+                        >
+                            Télécharger l'engagement de confidentialité
+                        </Button>
+
+                        <Divider sx={{ my: 3 }} />
+
+                        {hasEngagement ? (
+                            <Box>
+                                <Alert 
+                                    severity="success" 
+                                    sx={{ 
+                                        mb: 2,
+                                        borderRadius: '8px',
+                                        backgroundColor: '#d1fae5',
+                                        '& .MuiAlert-icon': { color: '#16a34a' }
+                                    }}
+                                >
+                                    <Typography variant="body2" color="#065f46">
+                                        Votre engagement de confidentialité a été déposé avec succès.
+                                    </Typography>
+                                </Alert>
+
+                                <Typography variant="subtitle2" fontWeight={600} color="#1a2332" sx={{ mb: 2 }}>
+                                    Document déposé
+                                </Typography>
+                                
+                                <DocumentCard>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <PictureAsPdf sx={{ color: '#ef4444', fontSize: 24 }} />
+                                        <Box>
+                                            <Typography variant="body2" fontWeight={500}>
+                                                {engagementFile?.nomOriginal || engagementFile?.nom || 'Engagement_Confidentialite_Signe.pdf'}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Déposé le {formatDate(engagementFile?.dateDepot || engagementFile?.createdAt || new Date())}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                        <Tooltip title="Voir le document">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => {
+                                                    const href = buildFileHref(engagementFile);
+                                                    if (href) {
+                                                        window.open(href, '_blank');
+                                                    } else {
+                                                        setError('Impossible d\'afficher ce document');
+                                                    }
+                                                }}
+                                                sx={{ color: '#2d3748' }}
+                                            >
+                                                <Visibility fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Télécharger">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => {
+                                                    const href = buildFileHref(engagementFile);
+                                                    if (href) {
+                                                        const link = document.createElement('a');
+                                                        link.href = href;
+                                                        link.download = engagementFile?.nomOriginal || engagementFile?.nom || 'Engagement_Confidentialite.pdf';
+                                                        link.target = '_blank';
+                                                        document.body.appendChild(link);
+                                                        link.click();
+                                                        document.body.removeChild(link);
+                                                    } else {
+                                                        setError('Impossible de télécharger ce document');
+                                                    }
+                                                }}
+                                                sx={{ color: '#4f46e5' }}
+                                            >
+                                                <Download fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </Box>
+                                </DocumentCard>
+                            </Box>
+                        ) : (
+                            <>
+                                <Box sx={{ mb: 2 }}>
+                                    <Typography variant="subtitle2" fontWeight={600} color="#1a2332" sx={{ mb: 0.5 }}>
+                                        Déposer le document signé
+                                    </Typography>
+                                    <Typography variant="body2" color="#687480" sx={{ mb: 2 }}>
+                                        Format PDF • Taille max 5 MB
+                                    </Typography>
+                                </Box>
+
+                                <StyledUploadZone onClick={() => document.getElementById('engagement-upload')?.click()}>
+                                    <input
+                                        id="engagement-upload"
+                                        type="file"
+                                        hidden
+                                        accept=".pdf"
+                                        onChange={(e) => handleFileSelect(e, 'engagement')}
+                                    />
+                                    <Upload sx={{ fontSize: 32, color: '#9aa4ac' }} />
+                                    <Typography variant="body1" sx={{ mt: 1, color: '#1a2332', fontWeight: 500 }}>
+                                        Cliquez pour déposer le document signé
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        ou glissez-déposez le fichier ici
+                                    </Typography>
+                                </StyledUploadZone>
+
+                                <Alert 
+                                    severity="info" 
+                                    sx={{ 
+                                        mt: 2, 
+                                        borderRadius: '8px',
+                                        backgroundColor: '#f0f7fa',
+                                        '& .MuiAlert-icon': { color: '#148aa0' }
+                                    }}
+                                >
+                                    <Typography variant="body2" color="#1a2332">
+                                        Assurez-vous que le document est bien signé avant de le déposer.
+                                    </Typography>
+                                </Alert>
+                            </>
+                        )}
+                    </>
+                )}
+
+                {!isSent && (
+                    <Box sx={{ 
+                        p: 3, 
+                        textAlign: 'center',
+                        backgroundColor: '#fafafa',
+                        borderRadius: '10px',
+                        border: '1px solid #eef1f3'
+                    }}>
+                        <Typography variant="body2" color="#687480">
+                            L'engagement de confidentialité n'a pas encore été envoyé par le service RH.
+                        </Typography>
+                        <Typography variant="caption" color="#9aa4ac">
+                            Vous serez notifié dès sa disponibilité.
+                        </Typography>
+                    </Box>
+                )}
+            </Box>
+        );
+    };
+
+    // ✅ RENDER CONVENTION
     const renderConvention = () => {
         const conventionData = convention || internship?.convention || {};
         const statut = conventionData.statut || 'NonGeneree';
 
-        // Vérifier si la convention est déposée
         const isDeposee = statut === 'DeposeeEtudiant' || statut === 'SigneeRH' || statut === 'EnvoyeeEtudiant' || statut === 'Cloturee';
-
-        // Vérifier si l'étudiant peut déposer (convention envoyée par RH ou en attente)
         const canDeposit = statut === 'NonGeneree' || statut === 'DeposeeEtudiant';
 
         return (
             <Box>
-                {/* Informations de la convention */}
                 <Card sx={{ mb: 3, p: 2, backgroundColor: '#f7f8fa', borderRadius: '12px' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         {getConventionStatusIcon(statut)}
@@ -542,16 +967,15 @@ const ApplicationDetailStudent = () => {
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                                 {statut === 'NonGeneree' && 'Aucune convention déposée. Vous pouvez déposer votre convention.'}
-                                {statut === 'DeposeeEtudiant' && '✅ Votre convention a été déposée. En attente de signature RH.'}
-                                {statut === 'SigneeRH' && '📝 La convention a été signée par le RH. En attente d\'envoi.'}
-                                {statut === 'EnvoyeeEtudiant' && '✅ La convention signée vous a été envoyée. Vous pouvez la télécharger.'}
-                                {statut === 'Cloturee' && '🏁 Convention clôturée.'}
+                                {statut === 'DeposeeEtudiant' && 'Votre convention a été déposée. En attente de signature RH.'}
+                                {statut === 'SigneeRH' && 'La convention a été signée par le RH. En attente d\'envoi.'}
+                                {statut === 'EnvoyeeEtudiant' && 'La convention signée vous a été envoyée. Vous pouvez la télécharger.'}
+                                {statut === 'Cloturee' && 'Convention clôturée.'}
                             </Typography>
                         </Box>
                     </Box>
                 </Card>
 
-                {/* Télécharger la convention (si signée et envoyée) */}
                 {(statut === 'EnvoyeeEtudiant' || statut === 'Cloturee') && (
                     <Button
                         variant="contained"
@@ -563,42 +987,40 @@ const ApplicationDetailStudent = () => {
                     </Button>
                 )}
 
-                {/* Déposer la convention (si non déposée) */}
                 {canDeposit && (
                     <>
                         <Divider sx={{ my: 3 }} />
                         <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                            📤 Déposer ma convention
+                            Déposer ma convention signée
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                             Téléchargez votre convention de stage fournie par votre établissement.
                         </Typography>
 
-                        <UploadZone onClick={() => document.getElementById('convention-upload')?.click()}>
+                        <StyledUploadZone onClick={() => document.getElementById('convention-upload')?.click()}>
                             <input
                                 id="convention-upload"
                                 type="file"
                                 hidden
                                 accept=".pdf"
-                                onChange={handleFileSelect}
+                                onChange={(e) => handleFileSelect(e, 'convention')}
                             />
-                            <Upload sx={{ fontSize: 40, color: '#148aa0' }} />
-                            <Typography variant="body1" sx={{ mt: 1, color: '#1a2332' }}>
-                                Cliquez pour sélectionner votre convention
+                            <Upload sx={{ fontSize: 32, color: '#9aa4ac' }} />
+                            <Typography variant="body1" sx={{ mt: 1, color: '#1a2332', fontWeight: 500 }}>
+                                Cliquez pour déposer votre convention signée
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                                 Format PDF uniquement, max 5MB
                             </Typography>
-                        </UploadZone>
+                        </StyledUploadZone>
                     </>
                 )}
 
-                {/* Convention déposée - affichage */}
                 {isDeposee && convention && (
                     <>
                         <Divider sx={{ my: 3 }} />
                         <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                            📄 Convention déposée
+                            Convention déposée
                         </Typography>
                         <DocumentCard>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -639,10 +1061,9 @@ const ApplicationDetailStudent = () => {
                     </>
                 )}
 
-                {/* Message si déjà envoyée */}
                 {statut === 'EnvoyeeEtudiant' && (
                     <Alert severity="success" sx={{ mt: 2, borderRadius: '10px' }}>
-                        ✅ Votre convention a été signée par le RH. Téléchargez-la ci-dessus.
+                        Votre convention a été signée par le RH. Téléchargez-la ci-dessus.
                     </Alert>
                 )}
             </Box>
@@ -661,7 +1082,9 @@ const ApplicationDetailStudent = () => {
             fullWidth
             PaperProps={{ sx: { borderRadius: '16px', padding: '8px' } }}
         >
-            <DialogTitle>📤 Confirmer le dépôt</DialogTitle>
+            <DialogTitle>
+                {uploadType === 'convention' ? 'Confirmer le dépôt de la convention' : 'Confirmer le dépôt de l\'engagement'}
+            </DialogTitle>
             <DialogContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
                     <PictureAsPdf sx={{ color: '#ef4444', fontSize: 40 }} />
@@ -676,7 +1099,9 @@ const ApplicationDetailStudent = () => {
                 </Box>
                 {uploading && <LinearProgress sx={{ mt: 2, borderRadius: 4 }} />}
                 <Alert severity="info" sx={{ mt: 2, borderRadius: '10px' }}>
-                    Vérifiez que le fichier est bien votre convention de stage.
+                    {uploadType === 'convention' 
+                        ? 'Vérifiez que le fichier est bien votre convention de stage signée.'
+                        : 'Vérifiez que le fichier est bien votre engagement de confidentialité signé.'}
                 </Alert>
             </DialogContent>
             <DialogActions sx={{ p: 2, pt: 0 }}>
@@ -689,7 +1114,7 @@ const ApplicationDetailStudent = () => {
                 </Button>
                 <Button
                     variant="contained"
-                    onClick={handleUploadConvention}
+                    onClick={uploadType === 'convention' ? handleUploadConvention : handleUploadEngagement}
                     disabled={uploading}
                     sx={{
                         backgroundColor: '#148aa0',
@@ -733,6 +1158,9 @@ const ApplicationDetailStudent = () => {
         );
     }
 
+    const displayStatus = getDisplayStatus();
+    const statusLabel = getStatusLabel(displayStatus);
+
     const documents = application.documents || [];
     const isConventionVisible = isEligibleForConvention;
 
@@ -751,10 +1179,15 @@ const ApplicationDetailStudent = () => {
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
                         Suivi de candidature
                     </Typography>
-                    <StatusChip label={getStatusLabel(application.statut)} status={application.statut} />
+                    <StatusChip label={statusLabel} status={displayStatus} />
                 </Box>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     {application.offreId?.titre || application.offre || 'Offre sans titre'}
+                    {internship && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                            Stage: {internship.sujetTitre || 'Sujet non défini'}
+                        </Typography>
+                    )}
                 </Typography>
             </Box>
 
@@ -775,6 +1208,13 @@ const ApplicationDetailStudent = () => {
                         iconPosition="start"
                         label="Avancement"
                     />
+                    {isEngagementVisible && (
+                        <StyledTab
+                            icon={<Assignment sx={{ fontSize: 20 }} />}
+                            iconPosition="start"
+                            label="Engagement"
+                        />
+                    )}
                     <StyledTab
                         icon={<Description sx={{ fontSize: 20 }} />}
                         iconPosition="start"
@@ -791,8 +1231,9 @@ const ApplicationDetailStudent = () => {
 
                 <Box sx={{ p: 3 }}>
                     {tabValue === 0 && renderHistorique()}
-                    {tabValue === 1 && renderDocuments()}
-                    {tabValue === 2 && isConventionVisible && renderConvention()}
+                    {tabValue === 1 && isEngagementVisible && renderEngagement()}
+                    {tabValue === 2 && renderDocuments()}
+                    {tabValue === (isEngagementVisible ? 3 : 2) && isConventionVisible && renderConvention()}
                 </Box>
             </Paper>
 

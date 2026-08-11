@@ -116,7 +116,7 @@ const ForgotPassword = () => {
     return (
         <Container maxWidth="sm" sx={{ py: 4 }}>
             <ForgotCard>
-                <Typography variant="h2">🔑 Mot de passe oublié</Typography>
+                <Typography variant="h2">Mot de passe oublié</Typography>
 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                     Saisissez votre adresse email pour recevoir un lien de réinitialisation
