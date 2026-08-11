@@ -1,6 +1,4 @@
 // src/components/admin/UsersList.jsx
-// ✅ CORRECTION : Ajout des IDs pour les TextField
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -166,7 +164,7 @@ const CancelButton = styled(Button)({
     },
 });
 
-// ✅ CONFIGURATION DES RÔLES
+// CONFIGURATION DES RÔLES
 const roleConfig = {
     'all': { 
         icon: <GroupIcon />, 
@@ -186,7 +184,7 @@ const roleConfig = {
     'Departement': { 
         icon: <BusinessIcon />, 
         color: '#f59e0b', 
-        label: 'Département', 
+        label: 'Départements', 
     },
     'Encadrant': { 
         icon: <SupervisorIcon />, 
@@ -200,7 +198,7 @@ const roleConfig = {
     },
 };
 
-// ✅ MAPPING RÔLE → TYPE
+// MAPPING RÔLE → TYPE
 const ROLE_TO_TYPE = {
     'Administrateur': 'interne',
     'RH': 'interne',
@@ -209,11 +207,11 @@ const ROLE_TO_TYPE = {
     'Etudiant': 'externe',
 };
 
-// ✅ RÔLES DISPONIBLES
+// RÔLES DISPONIBLES
 const ALL_ROLES = ['Administrateur', 'RH', 'Departement', 'Encadrant', 'Etudiant'];
 const INTERNAL_ROLES = ['Administrateur', 'RH', 'Departement', 'Encadrant'];
 
-// ✅ MIN PASSWORD LENGTH PAR TYPE
+// MIN PASSWORD LENGTH PAR TYPE
 const PASSWORD_MIN_LENGTH = {
     'externe': 16,
     'interne': 20,
@@ -227,7 +225,6 @@ const UsersList = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // ✅ LIRE LE RÔLE DEPUIS L'URL
     const queryParams = new URLSearchParams(location.search);
     const roleFilter = queryParams.get('role') || 'all';
 
@@ -244,10 +241,12 @@ const UsersList = () => {
     const [selectedUserId, setSelectedUserId] = useState(null);
     const [selectedUserType, setSelectedUserType] = useState('interne');
 
-    // ✅ DÉTERMINER SI ON EST DANS UN FILTRE SPÉCIFIQUE
     const isFilteredByRole = roleFilter !== 'all';
     const isEtudiantFilter = roleFilter === 'Etudiant';
     const isInternalFilter = isFilteredByRole && roleFilter !== 'Etudiant';
+
+    const [departments, setDepartments] = useState([]);
+    const [loadingDepartments, setLoadingDepartments] = useState(false);
 
     const [formData, setFormData] = useState({
         nom: '',
@@ -260,9 +259,19 @@ const UsersList = () => {
         confirmMotDePasse: '',
         actif: true,
         type: 'interne',
+        universite: '',
+        filiere: '',
+        niveau: '',
+        annee: '',
+        civilite: 'Mr',
+        dateNaissance: '2000-01-01',
+        adresse: 'Non renseignée',
+        ville: 'Non renseignée',
+        pays: 'Maroc',
+        departementId: '',
+        departementNom: '',
     });
 
-    // ✅ RÉCUPÉRER LA LONGUEUR MIN DU MOT DE PASSE
     const getPasswordMinLength = () => {
         if (isEtudiantFilter || formData.type === 'externe') {
             return PASSWORD_MIN_LENGTH.externe;
@@ -270,7 +279,6 @@ const UsersList = () => {
         return PASSWORD_MIN_LENGTH.interne;
     };
 
-    // ✅ FERMER LE FORMULAIRE QUAND L'URL CHANGE (clic sur un autre rôle dans le menu)
     useEffect(() => {
         if (showForm) {
             setShowForm(false);
@@ -281,6 +289,7 @@ const UsersList = () => {
 
     useEffect(() => {
         fetchUsers();
+        fetchDepartments();
     }, []);
 
     useEffect(() => {
@@ -291,19 +300,48 @@ const UsersList = () => {
         return roleConfig[role] || roleConfig['all'];
     };
 
+    const fetchDepartments = async () => {
+        setLoadingDepartments(true);
+        try {
+            const response = await api.get('/departments');
+            console.log('📥 Départements reçus:', response.data);
+            
+            let data = [];
+            if (response.data?.success && response.data?.data) {
+                data = response.data.data;
+            } else if (Array.isArray(response.data)) {
+                data = response.data;
+            } else if (response.data?.data && Array.isArray(response.data.data)) {
+                data = response.data.data;
+            }
+            
+            const validDepartments = data.filter(dept => dept._id || dept.id);
+            console.log('📌 Départements valides:', validDepartments.map(d => ({ 
+                nom: d.nom, 
+                id: d._id || d.id 
+            })));
+            
+            setDepartments(validDepartments);
+        } catch (error) {
+            console.error('❌ Erreur chargement départements:', error);
+            setError('Erreur lors du chargement des départements');
+        } finally {
+            setLoadingDepartments(false);
+        }
+    };
+
     const fetchUsers = async () => {
         setLoading(true);
         setError('');
         try {
             const response = await api.get('/users');
+            console.log('📥 Utilisateurs reçus:', response.data);
 
             let allUsers = [];
 
             if (response.data?.success && response.data?.data) {
                 const data = response.data.data;
-                if (data.internes && data.externes) {
-                    allUsers = [...data.internes, ...data.externes];
-                } else if (Array.isArray(data)) {
+                if (Array.isArray(data)) {
                     allUsers = data;
                 } else {
                     allUsers = [data];
@@ -315,7 +353,6 @@ const UsersList = () => {
             if (!allUsers || allUsers.length === 0) {
                 setUsers([]);
                 setFilteredUsers([]);
-                setError('Aucun utilisateur trouvé');
                 setLoading(false);
                 return;
             }
@@ -327,10 +364,21 @@ const UsersList = () => {
                 email: user.email || '',
                 cin: user.cin || '',
                 telephone: user.telephone || 'Non renseigné',
-                role: user.roleId?.nom || user.role || user.userType || 'Etudiant',
+                role: user.role || user.roleId?.nom || 'Etudiant',
                 userType: user.userType || (user.roleId ? 'interne' : 'externe'),
                 status: user.actif !== undefined ? (user.actif ? 'active' : 'inactive') : 'active',
                 dateInscription: user.createdAt || user.dateInscription || new Date().toISOString(),
+                departementId: user.departementId?._id || user.departementId || null,
+                departementNom: user.departementId?.nom || null,
+                universite: user.universite || '',
+                filiere: user.filiere || '',
+                niveau: user.niveau || '',
+                annee: user.annee || '',
+                civilite: user.civilite || 'Mr',
+                dateNaissance: user.dateNaissance || '2000-01-01',
+                adresse: user.adresse || 'Non renseignée',
+                ville: user.ville || 'Non renseignée',
+                pays: user.pays || 'Maroc',
             }));
 
             setUsers(formattedData);
@@ -392,14 +440,12 @@ const UsersList = () => {
         return `${prenom[0]}${nom[0]}`.toUpperCase();
     };
 
-    // ✅ OUVRIR LE FORMULAIRE AVEC PRÉ-REMPLISSAGE SELON LE FILTRE
     const openForm = (mode, user = null) => {
         setFormMode(mode);
         setError('');
         setSuccess('');
         
         if (user) {
-            // ✅ ÉDITION D'UN UTILISATEUR EXISTANT
             setSelectedUserId(user.id);
             setSelectedUserType(user.userType || 'interne');
             setFormData({
@@ -413,12 +459,21 @@ const UsersList = () => {
                 confirmMotDePasse: '',
                 actif: user.status === 'active',
                 type: user.userType || 'interne',
+                universite: user.universite || '',
+                filiere: user.filiere || '',
+                niveau: user.niveau || '',
+                annee: user.annee || '',
+                civilite: user.civilite || 'Mr',
+                dateNaissance: user.dateNaissance || '2000-01-01',
+                adresse: user.adresse || 'Non renseignée',
+                ville: user.ville || 'Non renseignée',
+                pays: user.pays || 'Maroc',
+                departementId: user.departementId || '',
+                departementNom: user.departementNom || '',
             });
         } else {
-            // ✅ AJOUT D'UN NOUVEL UTILISATEUR
             setSelectedUserId(null);
             
-            // ✅ SI LE FILTRE EST "Etudiant" → pré-remplir avec Etudiant/Externe
             if (isEtudiantFilter) {
                 setFormData({
                     nom: '',
@@ -431,11 +486,20 @@ const UsersList = () => {
                     confirmMotDePasse: '',
                     actif: true,
                     type: 'externe',
+                    universite: '',
+                    filiere: '',
+                    niveau: '',
+                    annee: '',
+                    civilite: 'Mr',
+                    dateNaissance: '2000-01-01',
+                    adresse: 'Non renseignée',
+                    ville: 'Non renseignée',
+                    pays: 'Maroc',
+                    departementId: '',
+                    departementNom: '',
                 });
                 setSelectedUserType('externe');
-            } 
-            // ✅ SI UN AUTRE FILTRE DE RÔLE EST ACTIF (RH, Administrateur, etc.)
-            else if (isFilteredByRole) {
+            } else if (isFilteredByRole) {
                 const type = ROLE_TO_TYPE[roleFilter] || 'interne';
                 setFormData({
                     nom: '',
@@ -448,11 +512,20 @@ const UsersList = () => {
                     confirmMotDePasse: '',
                     actif: true,
                     type: type,
+                    universite: '',
+                    filiere: '',
+                    niveau: '',
+                    annee: '',
+                    civilite: 'Mr',
+                    dateNaissance: '2000-01-01',
+                    adresse: 'Non renseignée',
+                    ville: 'Non renseignée',
+                    pays: 'Maroc',
+                    departementId: '',
+                    departementNom: '',
                 });
                 setSelectedUserType(type);
-            } 
-            // ✅ AUCUN FILTRE → l'admin choisit
-            else {
+            } else {
                 setFormData({
                     nom: '',
                     prenom: '',
@@ -464,6 +537,17 @@ const UsersList = () => {
                     confirmMotDePasse: '',
                     actif: true,
                     type: 'interne',
+                    universite: '',
+                    filiere: '',
+                    niveau: '',
+                    annee: '',
+                    civilite: 'Mr',
+                    dateNaissance: '2000-01-01',
+                    adresse: 'Non renseignée',
+                    ville: 'Non renseignée',
+                    pays: 'Maroc',
+                    departementId: '',
+                    departementNom: '',
                 });
                 setSelectedUserType('interne');
             }
@@ -483,12 +567,10 @@ const UsersList = () => {
         setFormData({ ...formData, [name]: value });
     };
 
-    // ✅ QUAND LE TYPE CHANGE, ON AJUSTE LE RÔLE
     const handleTypeChange = (e) => {
         const newType = e.target.value;
         let newRole = formData.role;
         
-        // Si le rôle actuel n'est pas compatible avec le nouveau type
         if (newType === 'externe') {
             newRole = 'Etudiant';
         } else if (newType === 'interne' && formData.role === 'Etudiant') {
@@ -502,25 +584,15 @@ const UsersList = () => {
         });
     };
 
-    // ✅ DÉTERMINER SI LE CHAMP RÔLE EST DÉSACTIVÉ
     const isRoleDisabled = () => {
-        if (isFilteredByRole) {
-            return true;
-        }
-        if (formMode === 'edit' || formMode === 'view') {
-            return true;
-        }
+        if (isFilteredByRole) return true;
+        if (formMode === 'edit' || formMode === 'view') return true;
         return false;
     };
 
-    // ✅ DÉTERMINER SI LE CHAMP TYPE EST DÉSACTIVÉ
     const isTypeDisabled = () => {
-        if (isFilteredByRole) {
-            return true;
-        }
-        if (formMode === 'edit' || formMode === 'view') {
-            return true;
-        }
+        if (isFilteredByRole) return true;
+        if (formMode === 'edit' || formMode === 'view') return true;
         return false;
     };
 
@@ -528,19 +600,41 @@ const UsersList = () => {
         setError('');
         setSuccess('');
 
+        // Validation des champs obligatoires
         if (!formData.nom || !formData.prenom || !formData.email || !formData.cin || !formData.role) {
             setError('Veuillez remplir tous les champs obligatoires');
             return;
         }
 
-        // ✅ VALIDATION DU MOT DE PASSE SELON LE TYPE
+        // Validation du département pour les utilisateurs internes
+        if (formData.type === 'interne') {
+            if (!formData.departementId || formData.departementId === '') {
+                setError('Veuillez sélectionner un département pour les utilisateurs internes');
+                return;
+            }
+            
+            // Vérifier que le département existe dans la liste
+            const selectedDept = departments.find(d => 
+                (d._id || d.id) === formData.departementId
+            );
+            if (!selectedDept) {
+                setError('Le département sélectionné n\'existe pas');
+                return;
+            }
+            
+            // ✅ Récupérer le NOM du département pour l'envoyer au backend
+            setFormData(prev => ({
+                ...prev,
+                departementNom: selectedDept.nom
+            }));
+        }
+
         const minLength = getPasswordMinLength();
         if (formMode === 'add') {
             if (!formData.motDePasse || formData.motDePasse.length < minLength) {
                 setError(`Le mot de passe doit contenir au moins ${minLength} caractères`);
                 return;
             }
-            // Vérifier les exigences du mot de passe
             const password = formData.motDePasse;
             const errors = [];
             if (!/[A-Z]/.test(password)) errors.push('une majuscule');
@@ -559,19 +653,47 @@ const UsersList = () => {
         }
 
         try {
-            const payload = {
-                nom: formData.nom,
-                prenom: formData.prenom,
-                email: formData.email,
-                cin: formData.cin,
-                telephone: formData.telephone,
-                role: formData.role,
-                actif: formData.actif,
-            };
+            let payload = {};
 
-            if (formData.motDePasse) {
-                payload.motDePasse = formData.motDePasse;
+            if (formData.type === 'externe' || formData.role === 'Etudiant') {
+                payload = {
+                    nom: formData.nom,
+                    prenom: formData.prenom,
+                    email: formData.email,
+                    cin: formData.cin,
+                    telephone: formData.telephone || '0612345678',
+                    civilite: formData.civilite || 'Mr',
+                    dateNaissance: formData.dateNaissance || '2000-01-01',
+                    adresse: formData.adresse || 'Non renseignée',
+                    ville: formData.ville || 'Non renseignée',
+                    pays: formData.pays || 'Maroc',
+                    universite: formData.universite || '',
+                    filiere: formData.filiere || '',
+                    niveau: formData.niveau || '',
+                    annee: formData.annee || '',
+                    motDePasse: formData.motDePasse,
+                    actif: formData.actif,
+                };
+            } else {
+                // 🔥 Utilisateur interne - Envoyer le NOM du département, pas l'ID
+                const selectedDept = departments.find(d => 
+                    (d._id || d.id) === formData.departementId
+                );
+                
+                payload = {
+                    nom: formData.nom,
+                    prenom: formData.prenom,
+                    email: formData.email,
+                    cin: formData.cin,
+                    telephone: formData.telephone || '0612345678',
+                    role: formData.role,
+                    motDePasse: formData.motDePasse,
+                    actif: formData.actif,
+                    departementNom: selectedDept ? selectedDept.nom : formData.departementNom,
+                };
             }
+
+            console.log('📤 [UsersList] Payload envoyé:', JSON.stringify(payload, null, 2));
 
             let endpoint = '';
             if (formMode === 'edit') {
@@ -581,18 +703,33 @@ const UsersList = () => {
                 setSuccess('Utilisateur modifié avec succès');
             } else {
                 const type = formData.type || 'interne';
-                endpoint = `/users/${type}`;
-                await api.post(endpoint, payload);
+                if (type === 'externe' || formData.role === 'Etudiant') {
+                    endpoint = '/users/externe';
+                } else {
+                    endpoint = '/users/internal';
+                }
+                const response = await api.post(endpoint, payload);
+                console.log('✅ Réponse succès:', response.data);
                 setSuccess('Utilisateur ajouté avec succès');
             }
 
             setTimeout(() => {
                 closeForm();
                 fetchUsers();
+                fetchDepartments();
             }, 1500);
         } catch (error) {
-            console.error('Erreur sauvegarde:', error);
-            setError(error.response?.data?.message || 'Erreur lors de la sauvegarde');
+            console.error('❌ Erreur sauvegarde:', error);
+            console.error('❌ Response:', error.response?.data);
+            console.error('❌ Status:', error.response?.status);
+            
+            let errorMessage = 'Erreur lors de la sauvegarde';
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            }
+            setError(errorMessage);
         }
     };
 
@@ -601,9 +738,11 @@ const UsersList = () => {
         try {
             const type = user.userType || 'interne';
             await api.delete(`/users/${type}/${user.id}`);
+            setSuccess('Utilisateur supprimé avec succès');
             fetchUsers();
         } catch (error) {
-            setError('Erreur lors de la suppression');
+            console.error('❌ Erreur suppression:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la suppression');
         }
     };
 
@@ -612,20 +751,19 @@ const UsersList = () => {
         try {
             const type = user.userType || 'interne';
             await api.patch(`/users/${type}/${user.id}/status`, { actif: newStatus });
+            setSuccess(newStatus ? 'Utilisateur activé' : 'Utilisateur désactivé');
             fetchUsers();
         } catch (error) {
-            setError('Erreur lors du changement de statut');
+            console.error('❌ Erreur changement statut:', error);
+            setError(error.response?.data?.message || 'Erreur lors du changement de statut');
         }
     };
 
     const currentRoleConfig = getRoleConfig(roleFilter);
 
-    // ✅ AFFICHER LE TITRE DU FORMULAIRE
     const getFormTitle = () => {
         if (formMode === 'add') {
-            if (isFilteredByRole) {
-                return `Ajouter un ${roleFilter}`;
-            }
+            if (isFilteredByRole) return `Ajouter un ${roleFilter}`;
             return 'Ajouter un utilisateur';
         }
         if (formMode === 'edit') return 'Modifier un utilisateur';
@@ -824,6 +962,146 @@ const UsersList = () => {
                             )}
                         </Grid>
 
+                        {/* CHAMP DÉPARTEMENT - REQUIS POUR LES UTILISATEURS INTERNES */}
+                        {formData.type === 'interne' && (
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth required>
+                                    <InputLabel id="user-departement-label">Département *</InputLabel>
+                                    <Select
+                                        labelId="user-departement-label"
+                                        id="user-departement"
+                                        name="departementId"
+                                        value={formData.departementId || ''}
+                                        onChange={handleFormChange}
+                                        label="Département *"
+                                        disabled={formMode === 'view' || loadingDepartments}
+                                        sx={{ borderRadius: '10px' }}
+                                    >
+                                        <MenuItem value="">
+                                            {loadingDepartments ? 'Chargement...' : 'Sélectionner un département'}
+                                        </MenuItem>
+                                        {departments.map((dept) => (
+                                            <MenuItem 
+                                                key={dept._id || dept.id} 
+                                                value={dept._id || dept.id}
+                                            >
+                                                {dept.nom}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                    {departments.length === 0 && !loadingDepartments && (
+                                        <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+                                            Aucun département disponible. Veuillez en créer un d'abord.
+                                        </Typography>
+                                    )}
+                                </FormControl>
+                            </Grid>
+                        )}
+
+                        {/* Champs pour étudiant */}
+                        {formData.type === 'externe' && (
+                            <>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-universite"
+                                        label="Université"
+                                        name="universite"
+                                        value={formData.universite || ''}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-filiere"
+                                        label="Filière"
+                                        name="filiere"
+                                        value={formData.filiere || ''}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-niveau"
+                                        label="Niveau"
+                                        name="niveau"
+                                        value={formData.niveau || ''}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-annee"
+                                        label="Année universitaire"
+                                        name="annee"
+                                        value={formData.annee || ''}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-civilite"
+                                        label="Civilité"
+                                        name="civilite"
+                                        value={formData.civilite || 'Mr'}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-dateNaissance"
+                                        label="Date de naissance"
+                                        name="dateNaissance"
+                                        type="date"
+                                        value={formData.dateNaissance || '2000-01-01'}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-adresse"
+                                        label="Adresse"
+                                        name="adresse"
+                                        value={formData.adresse || ''}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        id="user-ville"
+                                        label="Ville"
+                                        name="ville"
+                                        value={formData.ville || ''}
+                                        onChange={handleFormChange}
+                                        fullWidth
+                                        disabled={formMode === 'view'}
+                                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                                    />
+                                </Grid>
+                            </>
+                        )}
+
                         <Grid item xs={12} sm={6}>
                             <TextField
                                 id="user-password"
@@ -942,6 +1220,7 @@ const UsersList = () => {
                                     <StyledTableCell>Utilisateur</StyledTableCell>
                                     <StyledTableCell>Email</StyledTableCell>
                                     <StyledTableCell>Rôle</StyledTableCell>
+                                    <StyledTableCell>Département</StyledTableCell>
                                     <StyledTableCell>Statut</StyledTableCell>
                                     <StyledTableCell>Inscription</StyledTableCell>
                                     <StyledTableCell align="right">Actions</StyledTableCell>
@@ -950,13 +1229,13 @@ const UsersList = () => {
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                                        <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                             <CircularProgress size={40} sx={{ color: '#000000' }} />
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredUsers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                                        <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                             <Typography variant="body1" color="text.secondary">
                                                 {roleFilter !== 'all' 
                                                     ? `Aucun utilisateur avec le rôle "${roleFilter}"`
@@ -1005,6 +1284,9 @@ const UsersList = () => {
                                                             },
                                                         }}
                                                     />
+                                                </TableCell>
+                                                <TableCell>
+                                                    {user.departementNom || '-'}
                                                 </TableCell>
                                                 <TableCell>
                                                     <StatusChip

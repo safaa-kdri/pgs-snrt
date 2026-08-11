@@ -1,4 +1,13 @@
 // src/components/rh/ApplicationDetail.jsx
+// ✅ CORRECTION : Nouveau workflow après génération de la demande
+// ✅ CORRECTION : Affichage du document d'engagement déposé par l'étudiant
+// ✅ CORRECTION : Ajout du bouton "Valider l'engagement" et "Rejeter l'engagement"
+// ✅ CORRECTION : Génération de la demande de stage pour le Directeur
+// ✅ AJOUT : Retour en arrière UNIQUEMENT vers les étapes précédentes
+// ✅ AJOUT : Passage à l'étape suivante après génération de la demande
+// ✅ AJOUT : Consultation du rapport déposé par l'étudiant
+// ✅ AJOUT : Gestion des statuts EngagementRecu et EngagementRejete
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -64,7 +73,6 @@ import {
 } from "@mui/icons-material";
 import { useAuth } from "../../hooks/useAuth";
 import api from "../../services/api";
-import { pdfService } from "../../services/pdfService";
 
 // ============================================
 // STYLES
@@ -86,8 +94,10 @@ const StatusBanner = styled(Box)(({ status }) => {
     Entretien: { bg: "#f3e8ff", border: "#6b21a8", text: "#6b21a8" },
     Refusee: { bg: "#fee2e2", border: "#ef4444", text: "#991b1b" },
     EngagementEnvoye: { bg: "#dbeafe", border: "#1d4ed8", text: "#1d4ed8" },
+    EngagementRecu: { bg: "#fef3c7", border: "#d97706", text: "#d97706" },
     EngagementValide: { bg: "#d1fae5", border: "#22c55e", text: "#065f46" },
-    DemandeEnvoyee: { bg: "#fef3c7", border: "#d97706", text: "#d97706" },
+    EngagementRejete: { bg: "#fee2e2", border: "#ef4444", text: "#991b1b" },
+    DemandeEnvoyee: { bg: "#dbeafe", border: "#1d4ed8", text: "#1d4ed8" },
     ValideParDirecteur: { bg: "#d1fae5", border: "#22c55e", text: "#065f46" },
     Cloturee: { bg: "#d1fae5", border: "#22c55e", text: "#065f46" },
   };
@@ -115,8 +125,10 @@ const StatusChip = styled(Chip)(({ status }) => {
     Acceptee: { bg: "#d1fae5", text: "#065f46" },
     Refusee: { bg: "#fee2e2", text: "#991b1b" },
     EngagementEnvoye: { bg: "#dbeafe", text: "#1d4ed8" },
+    EngagementRecu: { bg: "#fef3c7", text: "#d97706" },
     EngagementValide: { bg: "#d1fae5", text: "#065f46" },
-    DemandeEnvoyee: { bg: "#fef3c7", text: "#d97706" },
+    EngagementRejete: { bg: "#fee2e2", text: "#991b1b" },
+    DemandeEnvoyee: { bg: "#dbeafe", text: "#1d4ed8" },
     ValideParDirecteur: { bg: "#d1fae5", text: "#065f46" },
     Cloturee: { bg: "#d1fae5", text: "#065f46" },
   };
@@ -235,7 +247,10 @@ const ApplicationDetail = () => {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const [activeStep, setActiveStep] = useState(0);
+  const [maxStepReached, setMaxStepReached] = useState(0);
   const [generating, setGenerating] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   // ============================================
   // FONCTIONS UTILITAIRES
@@ -259,7 +274,6 @@ const ApplicationDetail = () => {
     return <InsertDriveFile sx={{ color: "#4f46e5", fontSize: 20 }} />;
   };
 
-  // ✅ MODIFICATION ICI : Ajout de FicheDemandeStage
   const cleanDocumentType = (type) => {
     if (!type) return "Autre";
     const typeMap = {
@@ -272,7 +286,6 @@ const ApplicationDetail = () => {
       Photo: "Photo d'identité",
       CIN: "Copie CIN",
       Assurance: "Assurance",
-      FicheDemandeStage: "Fiche de demande de stage",
       Autre: "Autre",
     };
     return typeMap[type] || "Autre";
@@ -294,10 +307,14 @@ const ApplicationDetail = () => {
       return doc.url;
     }
     if (doc.chemin) {
-      if (doc.chemin.startsWith("/")) {
-        return `${apiRoot}${doc.chemin}`;
+      let cleanPath = doc.chemin;
+      if (cleanPath.startsWith("./")) {
+        cleanPath = cleanPath.substring(2);
       }
-      return doc.chemin;
+      if (cleanPath.startsWith("/")) {
+        cleanPath = cleanPath.substring(1);
+      }
+      return `${apiRoot}/${cleanPath}`;
     }
     return null;
   };
@@ -335,6 +352,7 @@ const ApplicationDetail = () => {
     }
   };
 
+  // ✅ NOUVEAU WORKFLOW AVEC TOUS LES STATUTS
   const determineActiveStep = (internshipData) => {
     if (!internshipData) {
       setActiveStep(0);
@@ -343,14 +361,17 @@ const ApplicationDetail = () => {
 
     const status = internshipData.statut || "EnCours";
 
-    if (status === "Cloturee") setActiveStep(5);
-    else if (status === "ValideParDirecteur" || status === "DemandeEnvoyee")
-      setActiveStep(4);
-    else if (status === "EngagementValide") setActiveStep(3);
-    else if (status === "EngagementEnvoye" || status === "EnAttenteEngagement")
-      setActiveStep(2);
-    else if (status === "Acceptee" || status === "EnCours") setActiveStep(1);
-    else setActiveStep(0);
+    let step = 0;
+    if (status === "Cloturee") step = 6;
+    else if (status === "ValideParDirecteur") step = 5;
+    else if (status === "DemandeEnvoyee") step = 4;
+    else if (status === "EngagementValide") step = 3;
+    else if (status === "EngagementRecu" || status === "EngagementRejete") step = 2;
+    else if (status === "EngagementEnvoye" || status === "EnAttenteEngagement") step = 1;
+    else if (status === "Acceptee" || status === "EnCours") step = 0;
+    
+    setActiveStep(step);
+    setMaxStepReached(step);
   };
 
   const getStatusLabel = (status) => {
@@ -362,7 +383,9 @@ const ApplicationDetail = () => {
       Acceptee: "Acceptée",
       Refusee: "Refusée",
       EngagementEnvoye: "Engagement envoyé",
+      EngagementRecu: "Engagement reçu",
       EngagementValide: "Engagement validé",
+      EngagementRejete: "Engagement rejeté",
       DemandeEnvoyee: "Demande envoyée",
       ValideParDirecteur: "Validé par Directeur",
       Cloturee: "Clôturée",
@@ -391,6 +414,27 @@ const ApplicationDetail = () => {
   };
 
   // ============================================
+  // GESTION DU STEPPER - Navigation
+  // ============================================
+  const handleStepClick = (index) => {
+    // ✅ Permet de naviguer vers n'importe quelle étape déjà atteinte (<= maxStepReached)
+    if (index <= maxStepReached) {
+      setActiveStep(index);
+    }
+  };
+
+  // ✅ Passer à l'étape suivante (pour le RH après une action)
+  const goToNextStep = () => {
+    if (activeStep < steps.length - 1) {
+      const nextStep = activeStep + 1;
+      setActiveStep(nextStep);
+      if (nextStep > maxStepReached) {
+        setMaxStepReached(nextStep);
+      }
+    }
+  };
+
+  // ============================================
   // WORKFLOW RH - FONCTIONS
   // ============================================
 
@@ -403,16 +447,17 @@ const ApplicationDetail = () => {
         );
 
         setSuccess(
-          " Tous les documents ont été validés. Candidature transmise en analyse.",
+          "Tous les documents ont été validés. Candidature transmise au département pour analyse.",
         );
         setDialogAction("");
         fetchApplicationDetail();
+        goToNextStep();
       } else {
         await api.patch(`/documents/${application._id}/verify`, {
           statut: "Refuse",
           commentaire: comment || "Non conforme",
         });
-        setSuccess("❌ Documents refusés");
+        setSuccess("Documents refusés");
         setDialogAction("");
         fetchApplicationDetail();
       }
@@ -425,37 +470,181 @@ const ApplicationDetail = () => {
     }
   };
 
+  // Télécharger l'engagement via l'API backend
+  const handleDownloadEngagement = async () => {
+    try {
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      const response = await api.get(`/internships/${stageId}/generate-engagement`, {
+        responseType: 'blob'
+      });
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Engagement_Confidentialite_SNRT.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setSuccess("Engagement de confidentialité téléchargé");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (error) {
+      console.error("Erreur téléchargement:", error);
+      setError(error.response?.data?.message || "Erreur lors du téléchargement");
+    }
+  };
+
+  // Envoyer l'engagement par email via l'API backend
+  const handleSendEngagement = async () => {
+    setGenerating(true);
+    try {
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      await api.post(`/internships/${stageId}/send-engagement`);
+      
+      setSuccess("Engagement de confidentialité envoyé à l'étudiant");
+      setTimeout(() => setSuccess(""), 3000);
+      fetchApplicationDetail();
+      goToNextStep();
+    } catch (error) {
+      console.error("Erreur envoi engagement:", error);
+      setError(error.response?.data?.message || "Erreur lors de l'envoi");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Valider l'engagement déposé par l'étudiant
+  const handleValidateEngagement = async () => {
+    setGenerating(true);
+    try {
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      await api.patch(`/internships/${stageId}/status`, {
+        statut: "EngagementValide"
+      });
+      
+      setSuccess("Engagement validé avec succès. Vous pouvez maintenant générer la demande de stage.");
+      setTimeout(() => setSuccess(""), 3000);
+      fetchApplicationDetail();
+      goToNextStep();
+    } catch (error) {
+      console.error("Erreur validation engagement:", error);
+      setError(error.response?.data?.message || "Erreur lors de la validation");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Rejeter l'engagement déposé par l'étudiant
+  const handleRejectEngagement = async () => {
+    if (!rejectReason.trim()) {
+      setError("Veuillez indiquer la raison du rejet");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      await api.patch(`/internships/${stageId}/status`, {
+        statut: "EngagementRejete"
+      });
+      
+      setSuccess("Engagement rejeté. L'étudiant a été informé.");
+      setTimeout(() => setSuccess(""), 3000);
+      setRejectDialogOpen(false);
+      setRejectReason("");
+      fetchApplicationDetail();
+    } catch (error) {
+      console.error("Erreur rejet engagement:", error);
+      setError(error.response?.data?.message || "Erreur lors du rejet");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Générer la demande de stage pour le Directeur
   const handleGenerateDemandeStage = async () => {
     setGenerating(true);
     try {
-      const blob = await pdfService.generateDemandeStage(
-        internship?._id || application._id,
-      );
-      pdfService.downloadPDF(blob, "Demande_Stage_Directeur.pdf");
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
 
-      await api.put(
-        `/internships/${internship?._id || application._id}/status`,
-        { statut: "DemandeEnvoyee" },
-      );
+      const response = await api.get(`/internships/${stageId}/generate-demande-stage`, {
+        responseType: 'blob'
+      });
 
-      setSuccess("Fiche de demande de stage générée avec succès");
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Demande_Stage_Directeur_${application?.etudiantId?.prenom || ''}_${application?.etudiantId?.nom || ''}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // ✅ Mettre à jour le statut du stage
+      await api.patch(`/internships/${stageId}/status`, {
+        statut: "DemandeEnvoyee"
+      });
+
+      setSuccess("Demande de stage générée avec succès !");
+      setTimeout(() => setSuccess(""), 3000);
       fetchApplicationDetail();
+      goToNextStep();
     } catch (error) {
-      console.error("Erreur génération:", error);
+      console.error("Erreur génération demande:", error);
       setError(error.response?.data?.message || "Erreur lors de la génération");
     } finally {
       setGenerating(false);
     }
   };
 
+  // Envoyer la fiche signée
   const handleSendFicheSignee = async () => {
     setGenerating(true);
     try {
-      await api.post(
-        `/internships/${internship?._id || application._id}/send-fiche-signee`,
-      );
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      await api.post(`/internships/${stageId}/send-fiche-signee`);
       setSuccess("Fiche signée envoyée à l'étudiant");
+      setTimeout(() => setSuccess(""), 3000);
       fetchApplicationDetail();
+      goToNextStep();
     } catch (error) {
       console.error("Erreur envoi:", error);
       setError(error.response?.data?.message || "Erreur lors de l'envoi");
@@ -464,14 +653,22 @@ const ApplicationDetail = () => {
     }
   };
 
+  // Générer l'attestation
   const handleGenerateAttestation = async () => {
     setGenerating(true);
     try {
-      await api.post(
-        `/internships/${internship?._id || application._id}/generate-attestation`,
-      );
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      await api.post(`/internships/${stageId}/generate-attestation`);
       setSuccess("Attestation de stage générée avec succès");
+      setTimeout(() => setSuccess(""), 3000);
       fetchApplicationDetail();
+      goToNextStep();
     } catch (error) {
       console.error("Erreur attestation:", error);
       setError(error.response?.data?.message || "Erreur lors de la génération");
@@ -480,39 +677,48 @@ const ApplicationDetail = () => {
     }
   };
 
-  const handleDownloadEngagement = async () => {
-    try {
-      const blob = await pdfService.generateEngagementConfidentialite(
-        application._id,
-      );
-      pdfService.downloadPDF(blob, "Engagement_Confidentialite.pdf");
-      setSuccess("Engagement de confidentialité téléchargé");
-    } catch (error) {
-      console.error("Erreur téléchargement:", error);
-      setError("Erreur lors du téléchargement");
-    }
-  };
-
+  // ✅ NOUVELLES ÉTAPES DU WORKFLOW
   const steps = [
     { label: "Validation", description: "Documents" },
     { label: "Engagement", description: "Envoyer" },
     { label: "Dépôt", description: "Signé" },
+    { label: "Validation", description: "Engagement" },
     { label: "Directeur", description: "Demande" },
-    { label: "Fiche", description: "Signée" },
-    { label: "Clôture", description: "Attestation" },
+    { label: "Clôture", description: "Rapport" },
+    { label: "Terminé", description: "Attestation" },
   ];
 
+  // ============================================
+  // RENDER STEP CONTENT
+  // ============================================
+
   const renderStepContent = (step) => {
+    // Statuts de la candidature
     const isAccepted = application?.statut === "Acceptee";
     const isRefused = application?.statut === "Refusee";
+    const isEnAnalyse = application?.statut === "EnAnalyse";
+
+    // Statuts du stage
     const isEngagementEnvoye =
       internship?.statut === "EngagementEnvoye" ||
       internship?.statut === "EnAttenteEngagement";
+    const isEngagementRecu = internship?.statut === "EngagementRecu";
     const isEngagementValide = internship?.statut === "EngagementValide";
+    const isEngagementRejete = internship?.statut === "EngagementRejete";
     const isDemandeEnvoyee =
       internship?.statut === "DemandeEnvoyee" ||
       internship?.statut === "ValideParDirecteur";
     const isCloturee = internship?.statut === "Cloturee";
+
+    // Récupérer le livrable d'engagement
+    const engagementLivrable = internship?.livrables?.find(
+        l => l.nom === 'Engagement Confidentialité Signé'
+    );
+
+    // Récupérer le rapport de stage (livrable de type "Rapport")
+    const rapportLivrable = internship?.livrables?.find(
+        l => l.type === 'Rapport'
+    );
 
     switch (step) {
       case 0:
@@ -567,7 +773,7 @@ const ApplicationDetail = () => {
                               display="block"
                             >
                               {docType}
-                              {doc.isVerified && " •  Vérifié"}
+                              {doc.isVerified && " • Vérifié"}
                             </Typography>
                           </Box>
                         </Box>
@@ -603,7 +809,7 @@ const ApplicationDetail = () => {
               </Typography>
             )}
 
-            {!isAccepted && !isRefused ? (
+            {!isAccepted && !isRefused && !isEnAnalyse ? (
               <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
                 <ActionButton
                   variant="contained"
@@ -628,9 +834,11 @@ const ApplicationDetail = () => {
                   Refuser
                 </ActionButton>
               </Box>
-            ) : isAccepted ? (
+            ) : isAccepted || isEnAnalyse ? (
               <Alert severity="success" sx={{ borderRadius: "8px", mt: 1 }}>
-                Candidature acceptée. Engagement de confidentialité généré.
+                {isAccepted
+                  ? "Candidature acceptée. Engagement de confidentialité généré."
+                  : "Candidature acceptée et transmise au département pour analyse."}
               </Alert>
             ) : isRefused ? (
               <Alert severity="error" sx={{ borderRadius: "8px", mt: 1 }}>
@@ -678,14 +886,197 @@ const ApplicationDetail = () => {
         return (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {isEngagementValide
-                ? "L'engagement a été validé."
-                : "En attente du dépôt de l'engagement signé."}
+              {isEngagementRecu || isEngagementValide || isEngagementRejete
+                ? "L'engagement signé a été déposé par l'étudiant."
+                : "En attente du dépôt de l'engagement signé par l'étudiant."}
             </Typography>
+
+            {engagementLivrable && (
+              <Box sx={{ mb: 3 }}>
+                <Alert 
+                  severity={isEngagementRejete ? "error" : "success"}
+                  sx={{ 
+                    mb: 2, 
+                    borderRadius: '8px',
+                    backgroundColor: isEngagementRejete ? '#fee2e2' : '#d1fae5',
+                    '& .MuiAlert-icon': { color: isEngagementRejete ? '#ef4444' : '#16a34a' }
+                  }}
+                >
+                  <Typography variant="body2" color={isEngagementRejete ? '#991b1b' : '#065f46'}>
+                    {isEngagementRejete 
+                      ? "L'engagement a été rejeté. L'étudiant doit en déposer un nouveau."
+                      : "L'engagement de confidentialité signé a été déposé par l'étudiant."
+                    }
+                  </Typography>
+                </Alert>
+                
+                <Paper sx={{ p: 2, borderRadius: '10px', border: '1px solid #eef1f3' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <PictureAsPdf sx={{ color: '#ef4444', fontSize: 24 }} />
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {engagementLivrable.nom || 'Engagement_Confidentialite_Signe.pdf'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Déposé le {formatDate(engagementLivrable.dateDepot)}
+                        </Typography>
+                        {isEngagementRejete && (
+                          <Typography variant="caption" color="error" display="block">
+                            Rejeté
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                    <Tooltip title="Voir le document">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          const href = buildFileHref(engagementLivrable);
+                          if (href) window.open(href, '_blank');
+                          else setError("Impossible de visualiser ce document");
+                        }}
+                        sx={{ color: '#2d3748' }}
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Paper>
+              </Box>
+            )}
+          </Box>
+        );
+
+      case 3:
+        return (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {isEngagementRejete 
+                ? "L'engagement a été rejeté. Veuillez contacter l'étudiant pour un nouveau dépôt."
+                : "Vérifiez l'engagement déposé par l'étudiant et validez ou rejetez-le."
+              }
+            </Typography>
+
+            {engagementLivrable && (
+              <Box sx={{ mb: 3 }}>
+                <Alert 
+                  severity={isEngagementRejete ? "error" : "info"}
+                  sx={{ mb: 2, borderRadius: '8px' }}
+                >
+                  <Typography variant="body2">
+                    {isEngagementRejete 
+                      ? "Engagement rejeté. L'étudiant doit en déposer un nouveau."
+                      : "Veuillez vérifier que l'engagement est bien signé par l'étudiant avant de le valider."
+                    }
+                  </Typography>
+                </Alert>
+                
+                <Paper sx={{ p: 2, borderRadius: '10px', border: '1px solid #eef1f3' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <PictureAsPdf sx={{ color: '#ef4444', fontSize: 24 }} />
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {engagementLivrable.nom || 'Engagement_Confidentialite_Signe.pdf'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Déposé le {formatDate(engagementLivrable.dateDepot)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Tooltip title="Voir le document">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          const href = buildFileHref(engagementLivrable);
+                          if (href) window.open(href, '_blank');
+                          else setError("Impossible de visualiser ce document");
+                        }}
+                        sx={{ color: '#2d3748' }}
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Paper>
+              </Box>
+            )}
+
+            {!isEngagementValide && !isEngagementRejete && isEngagementRecu && (
+              <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
+                <ActionButton
+                  variant="contained"
+                  startIcon={<ThumbUp />}
+                  onClick={handleValidateEngagement}
+                  disabled={generating}
+                  sx={{
+                    backgroundColor: "#22c55e",
+                    "&:hover": { backgroundColor: "#16a34a" },
+                  }}
+                >
+                  Valider l'engagement
+                </ActionButton>
+                <ActionButton
+                  variant="contained"
+                  startIcon={<ThumbDown />}
+                  onClick={() => setRejectDialogOpen(true)}
+                  disabled={generating}
+                  sx={{
+                    backgroundColor: "#ef4444",
+                    "&:hover": { backgroundColor: "#dc2626" },
+                  }}
+                >
+                  Rejeter
+                </ActionButton>
+              </Box>
+            )}
+
             {isEngagementValide && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="success" sx={{ borderRadius: '8px' }}>
+                  Engagement validé. Vous pouvez maintenant générer la demande de stage.
+                </Alert>
+                <ActionButton
+                  variant="contained"
+                  startIcon={<Print />}
+                  onClick={handleGenerateDemandeStage}
+                  disabled={generating}
+                  sx={{
+                    backgroundColor: "#2d3748",
+                    "&:hover": { backgroundColor: "#1a202c" },
+                    mt: 2,
+                  }}
+                >
+                  {generating ? "Génération..." : "Générer la demande de stage"}
+                </ActionButton>
+              </Box>
+            )}
+
+            {isEngagementRejete && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="error" sx={{ borderRadius: '8px' }}>
+                  Engagement rejeté. L'étudiant doit en déposer un nouveau.
+                </Alert>
+              </Box>
+            )}
+          </Box>
+        );
+
+      // ✅ ÉTAPE 4 : DIRECTEUR - Demande de stage
+      case 4:
+        return (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {isDemandeEnvoyee
+                ? "La demande de stage a été générée. Imprimez-la, faites-la signer et cacheter par le Directeur."
+                : "Générez la demande de stage pour le Directeur."}
+            </Typography>
+            
+            {!isDemandeEnvoyee ? (
               <ActionButton
                 variant="contained"
-                startIcon={<Send />}
+                startIcon={<Print />}
                 onClick={handleGenerateDemandeStage}
                 disabled={generating}
                 sx={{
@@ -696,81 +1087,198 @@ const ApplicationDetail = () => {
               >
                 {generating ? "Génération..." : "Générer la demande"}
               </ActionButton>
+            ) : (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="success" sx={{ borderRadius: '8px', mb: 2 }}>
+                  La demande de stage a été générée avec succès.
+                </Alert>
+                <ActionButton
+                  variant="outlined"
+                  startIcon={<Print />}
+                  onClick={handleGenerateDemandeStage}
+                  sx={{
+                    borderColor: "#2d3748",
+                    color: "#2d3748",
+                    mt: 1,
+                  }}
+                >
+                  Télécharger à nouveau
+                </ActionButton>
+                <Alert severity="info" sx={{ mt: 2, borderRadius: "8px" }}>
+                  <Typography variant="body2">
+                    <strong>Prochaine étape :</strong> Après signature et cachet du Directeur, 
+                    vous pouvez passer à l'étape "Clôture" pour consulter le rapport de l'étudiant.
+                  </Typography>
+                </Alert>
+                {/* ✅ Bouton pour passer manuellement à l'étape suivante */}
+                {activeStep === 4 && (
+                  <ActionButton
+                    variant="contained"
+                    onClick={goToNextStep}
+                    sx={{
+                      backgroundColor: "#148aa0",
+                      "&:hover": { backgroundColor: "#0b7890" },
+                      mt: 2,
+                    }}
+                  >
+                    Passer à l'étape Clôture
+                  </ActionButton>
+                )}
+              </Box>
             )}
           </Box>
         );
 
-      case 3:
-        return (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {isDemandeEnvoyee
-                ? "La demande a été envoyée au Directeur."
-                : "Générez la fiche de demande de stage."}
-            </Typography>
-            <ActionButton
-              variant="contained"
-              startIcon={<Print />}
-              onClick={handleGenerateDemandeStage}
-              disabled={generating || isDemandeEnvoyee}
-              sx={{
-                backgroundColor: "#2d3748",
-                "&:hover": { backgroundColor: "#1a202c" },
-                mt: 1,
-              }}
-            >
-              {generating ? "Génération..." : "Générer la demande"}
-            </ActionButton>
-            <Alert severity="info" sx={{ mt: 2, borderRadius: "8px" }}>
-              <Typography variant="body2">
-                <strong>Instructions :</strong> Imprimez, faites signer et
-                cacheter par le Directeur, scannez et envoyez à l'étudiant.
-              </Typography>
-            </Alert>
-          </Box>
-        );
-
-      case 4:
-        return (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Envoyez la fiche signée et cachetée à l'étudiant.
-            </Typography>
-            <ActionButton
-              variant="contained"
-              startIcon={<Send />}
-              onClick={handleSendFicheSignee}
-              disabled={generating}
-              sx={{
-                backgroundColor: "#2d3748",
-                "&:hover": { backgroundColor: "#1a202c" },
-                mt: 1,
-              }}
-            >
-              Envoyer la fiche signée
-            </ActionButton>
-          </Box>
-        );
-
+      // ✅ ÉTAPE 5 : CLÔTURE - Consultation du rapport
       case 5:
         return (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Le stage est clôturé. Générez l'attestation.
+              {rapportLivrable
+                ? "L'étudiant a déposé son rapport de stage."
+                : "En attente du dépôt du rapport par l'étudiant."}
             </Typography>
-            <ActionButton
-              variant="contained"
-              startIcon={<Description />}
-              onClick={handleGenerateAttestation}
-              disabled={generating || isCloturee}
-              sx={{
-                backgroundColor: "#2d3748",
-                "&:hover": { backgroundColor: "#1a202c" },
-                mt: 1,
-              }}
-            >
-              {isCloturee ? "Attestation générée" : "Générer l'attestation"}
-            </ActionButton>
+
+            {/* ✅ AFFICHER LE RAPPORT SI DÉPOSÉ */}
+            {rapportLivrable ? (
+              <Box>
+                <Alert severity="success" sx={{ borderRadius: '8px', mb: 2 }}>
+                  Le rapport de stage a été déposé par l'étudiant.
+                </Alert>
+                
+                <Paper sx={{ p: 2, borderRadius: '10px', border: '1px solid #eef1f3' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <PictureAsPdf sx={{ color: '#ef4444', fontSize: 24 }} />
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {rapportLivrable.nom || 'Rapport_de_stage.pdf'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Déposé le {formatDate(rapportLivrable.dateDepot)}
+                        </Typography>
+                        {rapportLivrable.valide && (
+                          <Typography variant="caption" color="success.main" display="block">
+                            Validé par l'encadrant
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                    <Tooltip title="Voir le rapport">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          const href = buildFileHref(rapportLivrable);
+                          if (href) window.open(href, '_blank');
+                          else setError("Impossible de visualiser ce document");
+                        }}
+                        sx={{ color: '#2d3748' }}
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Paper>
+
+                {!isCloturee && rapportLivrable.valide && (
+                  <Box sx={{ mt: 2 }}>
+                    <Alert severity="info" sx={{ borderRadius: '8px', mb: 2 }}>
+                      Le rapport a été validé par l'encadrant. Vous pouvez clôturer le stage.
+                    </Alert>
+                    <ActionButton
+                      variant="contained"
+                      startIcon={<CheckCircle />}
+                      onClick={async () => {
+                        try {
+                          const stageId = internship?._id || application._id;
+                          await api.patch(`/internships/${stageId}/status`, {
+                            statut: "Cloturee"
+                          });
+                          setSuccess("Stage clôturé avec succès !");
+                          setTimeout(() => setSuccess(""), 3000);
+                          fetchApplicationDetail();
+                          goToNextStep();
+                        } catch (error) {
+                          console.error("Erreur clôture:", error);
+                          setError(error.response?.data?.message || "Erreur lors de la clôture");
+                        }
+                      }}
+                      sx={{
+                        backgroundColor: "#22c55e",
+                        "&:hover": { backgroundColor: "#16a34a" },
+                      }}
+                    >
+                      Clôturer le stage
+                    </ActionButton>
+                  </Box>
+                )}
+
+                {isCloturee && (
+                  <Alert severity="success" sx={{ borderRadius: '8px', mt: 2 }}>
+                    Le stage est clôturé. Passez à l'étape suivante pour générer l'attestation.
+                  </Alert>
+                )}
+                
+                {/* ✅ Bouton pour passer manuellement à l'étape suivante si clôturé */}
+                {isCloturee && activeStep === 5 && (
+                  <ActionButton
+                    variant="contained"
+                    onClick={goToNextStep}
+                    sx={{
+                      backgroundColor: "#148aa0",
+                      "&:hover": { backgroundColor: "#0b7890" },
+                      mt: 2,
+                    }}
+                  >
+                    Passer à l'étape Terminé
+                  </ActionButton>
+                )}
+              </Box>
+            ) : (
+              <Alert severity="info" sx={{ borderRadius: '8px' }}>
+                <Typography variant="body2">
+                  L'étudiant n'a pas encore déposé son rapport de stage.
+                </Typography>
+              </Alert>
+            )}
+          </Box>
+        );
+
+      case 6:
+        return (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {isCloturee
+                ? "Le stage est clôturé. Générez l'attestation."
+                : "Le stage n'est pas encore clôturé."}
+            </Typography>
+
+            {isCloturee ? (
+              <Box>
+                <Alert severity="success" sx={{ borderRadius: '8px', mb: 2 }}>
+                  Le stage est clôturé. Vous pouvez générer l'attestation de stage.
+                </Alert>
+                <ActionButton
+                  variant="contained"
+                  startIcon={<Description />}
+                  onClick={handleGenerateAttestation}
+                  disabled={generating}
+                  sx={{
+                    backgroundColor: "#2d3748",
+                    "&:hover": { backgroundColor: "#1a202c" },
+                    mt: 1,
+                  }}
+                >
+                  {generating ? "Génération..." : "Générer l'attestation"}
+                </ActionButton>
+              </Box>
+            ) : (
+              <Alert severity="info" sx={{ borderRadius: '8px' }}>
+                <Typography variant="body2">
+                  Le stage doit être clôturé avant de pouvoir générer l'attestation.
+                </Typography>
+              </Alert>
+            )}
           </Box>
         );
 
@@ -973,16 +1481,20 @@ const ApplicationDetail = () => {
                 application.statut === "Acceptee" ||
                 application.statut === "Cloturee"
                   ? "#22c55e"
-                  : "#1d4ed8",
+                  : application.statut === "EnAnalyse"
+                    ? "#d97706"
+                    : "#1d4ed8",
             }}
           />
           <Typography variant="body1" fontWeight={600} color="text.primary">
             {application.statut === "Acceptee" ||
             application.statut === "Cloturee"
               ? "Candidature acceptée"
-              : application.statut === "Refusee"
-                ? "Candidature refusée"
-                : "Candidature en cours de traitement"}
+              : application.statut === "EnAnalyse"
+                ? "Candidature en analyse par le département"
+                : application.statut === "Refusee"
+                  ? "Candidature refusée"
+                  : "Candidature en cours de traitement"}
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
@@ -1008,20 +1520,35 @@ const ApplicationDetail = () => {
               Workflow de validation
             </Typography>
 
-            <StyledStepper activeStep={activeStep} alternativeLabel>
+            {/* STEPPER AVEC RETOUR EN ARRIÈRE ET RETOUR À L'ÉTAPE ACTUELLE */}
+            <StyledStepper 
+              activeStep={activeStep} 
+              alternativeLabel
+              nonLinear
+            >
               {steps.map((step, index) => (
                 <Step
                   key={step.label}
                   active={activeStep === index}
-                  completed={activeStep > index}
+                  completed={index < maxStepReached}
+                  onClick={() => handleStepClick(index)}
+                  sx={{
+                    // ✅ Cliquable si l'étape a déjà été atteinte (<= maxStepReached)
+                    cursor: index <= maxStepReached ? 'pointer' : 'default',
+                    '&:hover': {
+                      '& .MuiStepLabel-root': {
+                        color: index <= maxStepReached ? '#2d3748' : 'inherit'
+                      }
+                    }
+                  }}
                 >
                   <StepLabel
                     StepIconComponent={() => (
                       <StepIconWrapper
                         active={activeStep === index}
-                        completed={activeStep > index}
+                        completed={index < maxStepReached}
                       >
-                        {activeStep > index ? (
+                        {index < maxStepReached ? (
                           <CheckCircle sx={{ fontSize: 16 }} />
                         ) : (
                           index + 1
@@ -1029,10 +1556,10 @@ const ApplicationDetail = () => {
                       </StepIconWrapper>
                     )}
                     sx={{
-                      "& .MuiStepLabel-label": {
-                        fontSize: "11px",
+                      '& .MuiStepLabel-label': {
+                        fontSize: '11px',
                         fontWeight: activeStep === index ? 600 : 400,
-                        color: activeStep === index ? "#2d3748" : "#999",
+                        color: activeStep === index ? '#2d3748' : '#999',
                       },
                     }}
                   >
@@ -1079,7 +1606,7 @@ const ApplicationDetail = () => {
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {cleanDocumentType(doc.type)}
-                        {doc.isVerified && " • "}
+                        {doc.isVerified && " • Vérifié"}
                       </Typography>
                     </Box>
                     <Tooltip title="Voir">
@@ -1106,25 +1633,72 @@ const ApplicationDetail = () => {
                 Aucun document déposé
               </Typography>
             )}
-
-            {application.documents?.filter(
-              (doc) => cleanDocumentType(doc.type) !== "Autre",
-            ).length === 0 &&
-              application.documents?.length > 0 && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mt: 1 }}
-                >
-                  {application.documents.length} document(s) non affiché(s)
-                  (type "Autre")
-                </Typography>
-              )}
           </DocumentCard>
         </Grid>
       </Grid>
 
-      {/* ===== DIALOG ===== */}
+      {/* ===== DIALOG REJET ENGAGEMENT ===== */}
+      <Dialog
+        open={rejectDialogOpen}
+        onClose={() => {
+          setRejectDialogOpen(false);
+          setRejectReason("");
+        }}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: "16px", padding: "8px" },
+        }}
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <ThumbDown sx={{ color: "#ef4444" }} /> Rejeter l'engagement
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Êtes-vous sûr de vouloir rejeter l'engagement de confidentialité de {student.prenom || ""} {student.nom || ""} ?
+          </Typography>
+          <TextField
+            label="Raison du rejet"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            fullWidth
+            multiline
+            rows={3}
+            placeholder="Expliquez la raison du rejet (document non signé, illisible, etc.)..."
+            required
+            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button
+            onClick={() => {
+              setRejectDialogOpen(false);
+              setRejectReason("");
+            }}
+            sx={{ borderRadius: "10px", textTransform: "none" }}
+            disabled={generating}
+          >
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleRejectEngagement}
+            disabled={generating || !rejectReason.trim()}
+            sx={{
+              backgroundColor: "#ef4444",
+              borderRadius: "10px",
+              textTransform: "none",
+              "&:hover": { backgroundColor: "#dc2626" },
+            }}
+          >
+            {generating ? "Traitement..." : "Rejeter"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ===== DIALOG VALIDATION DOCUMENTS ===== */}
       <Dialog
         open={openDialog}
         onClose={handleCloseDialog}

@@ -1,5 +1,5 @@
 // src/components/rh/GenerateConvention.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -41,9 +41,15 @@ import {
     PictureAsPdf,
     InsertDriveFile,
     Refresh,
+    Clear,
+    Save,
+    Person,
+    Business,
+    CalendarToday,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import SignatureCanvas from 'react-signature-canvas';
 
 // ============================================
 // STYLES
@@ -91,26 +97,19 @@ const PrimaryButton = styled(Button)({
     '&:disabled': { backgroundColor: '#999999' },
 });
 
-const SuccessButton = styled(Button)({
-    backgroundColor: '#22c55e',
-    color: '#ffffff',
-    borderRadius: '10px',
-    textTransform: 'none',
-    padding: '8px 20px',
-    '&:hover': { backgroundColor: '#16a34a' },
-    '&:disabled': { backgroundColor: '#999999' },
-});
-
-const OutlinedButton = styled(Button)({
-    borderRadius: '10px',
-    borderColor: '#d0d4d8',
-    color: '#6b7280',
-    textTransform: 'none',
-    padding: '8px 20px',
+const SignatureBox = styled(Box)({
+    border: '2px solid #d1d5db',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    transition: 'all 0.3s ease',
     '&:hover': {
-        borderColor: '#2d3748',
-        backgroundColor: alpha('#2d3748', 0.04),
+        borderColor: '#148aa0',
     },
+    '&.active': {
+        borderColor: '#148aa0',
+        boxShadow: '0 0 0 3px rgba(20, 138, 160, 0.1)',
+    }
 });
 
 // ============================================
@@ -120,6 +119,7 @@ const OutlinedButton = styled(Button)({
 const GenerateConvention = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const sigCanvas = useRef(null);
 
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState('');
@@ -127,11 +127,30 @@ const GenerateConvention = () => {
     const [conventions, setConventions] = useState([]);
     const [selectedConvention, setSelectedConvention] = useState(null);
     const [signDialogOpen, setSignDialogOpen] = useState(false);
-    const [signature, setSignature] = useState('');
     const [processing, setProcessing] = useState(false);
+    const [isSignatureEmpty, setIsSignatureEmpty] = useState(true);
+    const [signatureData, setSignatureData] = useState(null);
+    const [signatureInfo, setSignatureInfo] = useState({
+        nom: '',
+        fonction: '',
+        date: new Date().toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        }),
+        societe: 'SNRT'
+    });
 
     useEffect(() => {
         fetchConventions();
+        setSignatureInfo(prev => ({
+            ...prev,
+            date: new Date().toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+            })
+        }));
     }, []);
 
     const fetchConventions = async () => {
@@ -209,19 +228,67 @@ const GenerateConvention = () => {
 
     const handleOpenSignDialog = (convention) => {
         setSelectedConvention(convention);
-        setSignature('');
+        setSignatureData(null);
+        setIsSignatureEmpty(true);
+        setSignatureInfo({
+            ...signatureInfo,
+            nom: user?.prenom + ' ' + user?.nom || '',
+            fonction: 'Responsable RH',
+            societe: 'SNRT'
+        });
+        if (sigCanvas.current) {
+            sigCanvas.current.clear();
+        }
         setSignDialogOpen(true);
     };
 
     const handleCloseSignDialog = () => {
         setSignDialogOpen(false);
         setSelectedConvention(null);
-        setSignature('');
+        setSignatureData(null);
+        setIsSignatureEmpty(true);
     };
 
-    const handleSignConvention = async () => {
-        if (!signature.trim()) {
-            setError('Veuillez saisir votre signature');
+    const handleClearSignature = () => {
+        if (sigCanvas.current) {
+            sigCanvas.current.clear();
+            setIsSignatureEmpty(true);
+            setSignatureData(null);
+        }
+    };
+
+    const handleBeginSignature = () => {};
+
+    const handleEndSignature = () => {
+        if (sigCanvas.current && !sigCanvas.current.isEmpty()) {
+            setIsSignatureEmpty(false);
+        } else {
+            setIsSignatureEmpty(true);
+        }
+    };
+
+    const handleSaveSignature = () => {
+        if (sigCanvas.current && !sigCanvas.current.isEmpty()) {
+            const signatureImage = sigCanvas.current.toDataURL('image/png');
+            
+            const completeSignature = {
+                signature: signatureImage,
+                nom: signatureInfo.nom || 'Signature',
+                fonction: signatureInfo.fonction || 'Responsable',
+                date: signatureInfo.date,
+                societe: signatureInfo.societe,
+                timestamp: new Date().toISOString()
+            };
+            
+            setSignatureData(completeSignature);
+            setIsSignatureEmpty(false);
+        }
+    };
+
+    // ✅ SIGNER ET ENVOYER AUTOMATIQUEMENT À L'ÉTUDIANT
+    const handleSignAndSend = async () => {
+        if (!signatureData) {
+            setError('Veuillez dessiner votre signature et la valider');
             return;
         }
 
@@ -229,40 +296,88 @@ const GenerateConvention = () => {
         setError('');
 
         try {
+            // 1. Signer la convention
             await api.post(`/internships/conventions/${selectedConvention._id}/sign`, {
-                signature: signature,
+                signature: signatureData.signature,
+                signatureComplete: signatureData
             });
 
-            setSuccess('Convention signée avec succès');
+            // 2. ✅ Envoyer automatiquement à l'étudiant
+            await api.post(`/internships/conventions/${selectedConvention._id}/send-to-student`);
+
+            setSuccess('✅ Convention signée et envoyée à l\'étudiant avec succès');
             handleCloseSignDialog();
             fetchConventions();
         } catch (error) {
-            console.error('Erreur signature:', error);
-            setError(error.response?.data?.message || 'Erreur lors de la signature');
+            console.error('Erreur:', error);
+            setError(error.response?.data?.message || 'Erreur lors de la signature ou de l\'envoi');
         } finally {
             setProcessing(false);
         }
     };
 
-    const handleSendToStudent = async (convention) => {
-        if (!window.confirm(`Envoyer la convention signée à ${convention.etudiantId?.prenom || ''} ${convention.etudiantId?.nom || ''} ?`)) {
-            return;
-        }
+    const renderSignaturePreview = () => {
+        if (!signatureData) return null;
 
-        setProcessing(true);
-        setError('');
+        return (
+            <Box sx={{ 
+                mt: 3, 
+                p: 2, 
+                border: '1px solid #e5e7eb', 
+                borderRadius: '8px',
+                backgroundColor: '#fafafa',
+                position: 'relative'
+            }}>
+                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CheckCircle sx={{ color: '#22c55e', fontSize: 18 }} />
+                    Signature validée
+                </Typography>
+                
+                <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    p: 2,
+                    border: '2px solid #148aa0',
+                    borderRadius: '8px',
+                    backgroundColor: '#ffffff'
+                }}>
+                    <Box sx={{ 
+                        border: '2px solid #148aa0',
+                        borderRadius: '50%',
+                        width: 70,
+                        height: 70,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mb: 2,
+                        backgroundColor: 'rgba(20, 138, 160, 0.05)'
+                    }}>
+                        <Typography variant="caption" fontWeight={700} color="#148aa0" textAlign="center">
+                            {signatureInfo.societe}
+                        </Typography>
+                    </Box>
 
-        try {
-            await api.post(`/internships/conventions/${convention._id}/send-to-student`);
+                    <img 
+                        src={signatureData.signature} 
+                        alt="Signature" 
+                        style={{ maxHeight: '60px', maxWidth: '100%' }} 
+                    />
 
-            setSuccess('Convention envoyée à l\'étudiant avec succès');
-            fetchConventions();
-        } catch (error) {
-            console.error('Erreur envoi:', error);
-            setError(error.response?.data?.message || 'Erreur lors de l\'envoi');
-        } finally {
-            setProcessing(false);
-        }
+                    <Box sx={{ textAlign: 'center', mt: 1 }}>
+                        <Typography variant="body2" fontWeight={600}>
+                            {signatureInfo.nom || 'Signature'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            {signatureInfo.fonction || 'Responsable'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                            {signatureInfo.societe} • {signatureInfo.date}
+                        </Typography>
+                    </Box>
+                </Box>
+            </Box>
+        );
     };
 
     if (loading) {
@@ -395,18 +510,6 @@ const GenerateConvention = () => {
                                                         </Tooltip>
                                                     )}
 
-                                                    {conv.convention?.statut === 'SigneeRH' && (
-                                                        <Tooltip title="Envoyer à l'étudiant">
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() => handleSendToStudent(conv)}
-                                                                sx={{ color: '#1d4ed8' }}
-                                                            >
-                                                                <Send fontSize="small" />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                    )}
-
                                                     {conv.convention?.statut === 'EnvoyeeEtudiant' && (
                                                         <Tooltip title="Convention envoyée">
                                                             <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
@@ -423,11 +526,11 @@ const GenerateConvention = () => {
                 </CardContent>
             </StyledCard>
 
-            {/* ===== DIALOG SIGNATURE ===== */}
+            {/* ===== DIALOG SIGNATURE AVEC ENVOI AUTOMATIQUE ===== */}
             <Dialog
                 open={signDialogOpen}
                 onClose={handleCloseSignDialog}
-                maxWidth="sm"
+                maxWidth="md"
                 fullWidth
                 PaperProps={{
                     sx: { borderRadius: '16px', padding: '8px' },
@@ -436,27 +539,132 @@ const GenerateConvention = () => {
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Edit sx={{ color: '#2d3748' }} />
-                        Signer la convention
+                        Signature électronique
                     </Box>
                 </DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Saisissez votre signature électronique pour valider la convention de
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                        Dessinez votre signature pour valider la convention de
                         <strong> {selectedConvention?.etudiantId?.prenom || ''} {selectedConvention?.etudiantId?.nom || ''}</strong>.
+                        <br />
+                        <em style={{ color: '#148aa0' }}>La convention sera automatiquement envoyée à l'étudiant après signature.</em>
                     </Typography>
-                    <TextField
-                        label="Signature *"
-                        value={signature}
-                        onChange={(e) => setSignature(e.target.value)}
-                        fullWidth
-                        multiline
-                        rows={2}
-                        placeholder="Ex: Dr. Karim BENNANI, Responsable RH"
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                    />
-                    <Alert severity="info" sx={{ mt: 2, borderRadius: '10px' }}>
-                        Cette signature sera apposée sur la convention avant envoi à l'étudiant.
-                    </Alert>
+
+                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                label="Nom du signataire *"
+                                value={signatureInfo.nom}
+                                onChange={(e) => setSignatureInfo({ ...signatureInfo, nom: e.target.value })}
+                                size="small"
+                                fullWidth
+                                placeholder="Ex: Dr. Karim BENNANI"
+                                InputProps={{
+                                    startAdornment: <Person sx={{ color: '#999', fontSize: 18, mr: 1 }} />
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                label="Fonction *"
+                                value={signatureInfo.fonction}
+                                onChange={(e) => setSignatureInfo({ ...signatureInfo, fonction: e.target.value })}
+                                size="small"
+                                fullWidth
+                                placeholder="Ex: Responsable RH"
+                                InputProps={{
+                                    startAdornment: <Business sx={{ color: '#999', fontSize: 18, mr: 1 }} />
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                label="Société"
+                                value={signatureInfo.societe}
+                                onChange={(e) => setSignatureInfo({ ...signatureInfo, societe: e.target.value })}
+                                size="small"
+                                fullWidth
+                                InputProps={{
+                                    startAdornment: <Business sx={{ color: '#999', fontSize: 18, mr: 1 }} />
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                label="Date"
+                                value={signatureInfo.date}
+                                size="small"
+                                fullWidth
+                                disabled
+                                InputProps={{
+                                    startAdornment: <CalendarToday sx={{ color: '#999', fontSize: 18, mr: 1 }} />
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+                            />
+                        </Grid>
+                    </Grid>
+
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Dessinez votre signature (utilisez la souris ou le doigt) :
+                    </Typography>
+                    
+                    <SignatureBox className={!isSignatureEmpty ? 'active' : ''}>
+                        <SignatureCanvas
+                            ref={sigCanvas}
+                            canvasProps={{
+                                width: 500,
+                                height: 150,
+                                className: 'sigCanvas',
+                                style: { width: '100%', height: '100%', cursor: 'crosshair' }
+                            }}
+                            onBegin={handleBeginSignature}
+                            onEnd={handleEndSignature}
+                            backgroundColor="#ffffff"
+                            penColor="#1a2332"
+                            dotSize={2}
+                            minWidth={1}
+                            maxWidth={3}
+                        />
+                    </SignatureBox>
+
+                    <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<Clear />}
+                            onClick={handleClearSignature}
+                            sx={{ borderRadius: '8px', textTransform: 'none' }}
+                        >
+                            Effacer
+                        </Button>
+                        <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<Save />}
+                            onClick={handleSaveSignature}
+                            disabled={isSignatureEmpty}
+                            sx={{
+                                backgroundColor: '#148aa0',
+                                borderRadius: '8px',
+                                textTransform: 'none',
+                                '&:hover': { backgroundColor: '#0b7890' },
+                                '&:disabled': { backgroundColor: '#a0c4cd' }
+                            }}
+                        >
+                            Valider la signature
+                        </Button>
+                    </Box>
+
+                    {renderSignaturePreview()}
+
+                    {signatureData && (
+                        <Alert severity="success" sx={{ mt: 2, borderRadius: '10px' }}>
+                            ✅ Signature validée - Cliquez sur "Signer et envoyer" pour finaliser
+                        </Alert>
+                    )}
                 </DialogContent>
                 <DialogActions sx={{ p: 2, pt: 0 }}>
                     <Button
@@ -466,12 +674,20 @@ const GenerateConvention = () => {
                     >
                         Annuler
                     </Button>
-                    <PrimaryButton
-                        onClick={handleSignConvention}
-                        disabled={processing || !signature.trim()}
+                    <Button
+                        variant="contained"
+                        onClick={handleSignAndSend}
+                        disabled={!signatureData || processing}
+                        sx={{
+                            backgroundColor: '#22c55e',
+                            borderRadius: '10px',
+                            textTransform: 'none',
+                            '&:hover': { backgroundColor: '#16a34a' },
+                            '&:disabled': { backgroundColor: '#999999' }
+                        }}
                     >
-                        {processing ? <CircularProgress size={20} color="inherit" /> : 'Signer'}
-                    </PrimaryButton>
+                        {processing ? <CircularProgress size={20} color="inherit" /> : '✅ Signer et envoyer'}
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Container>

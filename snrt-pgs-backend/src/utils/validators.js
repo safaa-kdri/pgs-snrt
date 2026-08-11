@@ -238,22 +238,32 @@ const departmentMemberSchema = Joi.object({
 });
 
 
+// ✅ NOUVEAU SCHEMA : Accepte role (nom) ET departementNom
 const createInternalUserSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(60).required(),
   prenom: Joi.string().trim().min(2).max(60).required(),
   email: Joi.string().trim().email().required(),
   cin: Joi.string().trim().uppercase().pattern(CIN_RE).required().messages({ 'string.pattern.base': CIN_MESSAGE }),
-  
   motDePasse: Joi.string().min(PASSWORD_MIN_LENGTH.interne).max(128).required(),
   telephone: Joi.string()
     .trim()
     .pattern(PHONE_RE)
     .allow(null, '')
     .messages({ 'string.pattern.base': PHONE_MESSAGE }),
-  roleId: Joi.string().hex().length(24).required(),
-  departementId: Joi.string().hex().length(24).allow(null),
+  // ✅ Accepter role (nom) au lieu de roleId
+  role: Joi.string().trim().optional(),
+  roleId: Joi.string().hex().length(24).optional(),
+  // ✅ Accepter departementNom (nom) au lieu de departementId
+  departementNom: Joi.string().trim().optional().allow(null, ''),
+  departementId: Joi.string().hex().length(24).allow(null).optional(),
   actif: Joi.boolean().default(true),
-});
+}).custom((value, helpers) => {
+  // ✅ Vérifier qu'au moins role OU roleId est fourni
+  if (!value.role && !value.roleId) {
+    return helpers.message('Le champ "role" est requis (ex: "Encadrant")');
+  }
+  return value;
+}, 'Role validation');
 
 
 const createExternalUserSchema = registerSchema.keys({
