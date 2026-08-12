@@ -71,14 +71,14 @@ const InfoDivider = styled(Box)({
 });
 
 // ============================================
-// BOUTON POSTULER - COULEUR DU THEME (#148aa0)
+// BOUTON POSTULER - CORRIGÉ
 // ============================================
 
-const PostulerButton = styled(Button)(({ submitted }) => ({
+const PostulerButton = styled(Button)({
     width: '200px',
     height: '44px',
     borderRadius: '10px',
-    backgroundColor: submitted ? '#2E7D32' : '#148aa0',
+    backgroundColor: '#148aa0',
     color: '#FFFFFF',
     border: 'none',
     fontFamily: 'Inter, sans-serif',
@@ -88,15 +88,15 @@ const PostulerButton = styled(Button)(({ submitted }) => ({
     boxShadow: 'none',
     transition: 'all 0.3s ease',
     '&:hover': {
-        backgroundColor: submitted ? '#2E7D32' : '#0b7890',
+        backgroundColor: '#0b7890',
         boxShadow: 'none',
     },
     '&:disabled': {
-        backgroundColor: '#2E7D32',
+        backgroundColor: '#a0c4cd',
         color: '#FFFFFF',
         opacity: 1,
     },
-}));
+});
 
 const SectionTitle = styled(Typography)({
     fontFamily: 'Inter, sans-serif',
@@ -127,7 +127,6 @@ const Paragraph = styled(Typography)({
     textAlign: 'justify',
 });
 
-// ✅ CORRIGÉ : Activités en lignes séparées
 const ActivityItem = styled(Box)({
     display: 'flex',
     alignItems: 'flex-start',
@@ -238,11 +237,11 @@ const OfferDetail = () => {
     const { selectedOffer, loading, error } = useSelector((state) => state.offers);
     const { isAuthenticated: authIsAuthenticated } = useSelector((state) => state.auth);
     
-    // ✅ UNIQUEMENT le user (pas de token)
     const isAuthenticated = authIsAuthenticated || !!localStorage.getItem('user');
 
     useEffect(() => {
         if (id) {
+            console.log('🔍 [OfferDetail] Chargement de l\'offre ID:', id);
             dispatch(fetchOfferById(id));
         }
         return () => {
@@ -250,17 +249,36 @@ const OfferDetail = () => {
         };
     }, [dispatch, id]);
 
-    // ✅ BOUTON POSTULER FONCTIONNEL
+    // ✅ BOUTON POSTULER - CORRIGÉ AVEC LOGS
     const handlePostuler = () => {
+        console.log('🔍 [OfferDetail] handlePostuler - id:', id);
+        console.log('🔍 [OfferDetail] handlePostuler - isAuthenticated:', isAuthenticated);
+        console.log('🔍 [OfferDetail] handlePostuler - selectedOffer:', selectedOffer);
+
         if (!isAuthenticated) {
-            // Rediriger vers login avec le chemin de retour
+            console.log('🔍 [OfferDetail] Non authentifié, redirection vers login');
             navigate('/login', { 
-                state: { from: `/apply/${id}` } 
+                state: { from: `/offres/${id}` } 
             });
             return;
         }
-        // Rediriger vers la page de candidature
-        navigate(`/apply/${id}`);
+
+        // ✅ Vérifier que l'offre est chargée
+        if (!id) {
+            console.error('❌ [OfferDetail] ID de l\'offre manquant');
+            return;
+        }
+
+        console.log('✅ [OfferDetail] Postuler à l\'offre ID:', id);
+        console.log('✅ [OfferDetail] Titre de l\'offre:', selectedOffer?.titre || 'Offre sans titre');
+
+        // ✅ Rediriger vers le workflow avec l'ID de l'offre
+        navigate('/depot-candidature', { 
+            state: { 
+                offreId: id,
+                offreTitre: selectedOffer?.titre || 'Offre'
+            } 
+        });
     };
 
     const handleGoBack = () => {
@@ -273,10 +291,6 @@ const OfferDetail = () => {
 
     const offer = selectedOffer;
 
-    // ========================================== //
-    // AFFICHAGE CHARGEMENT
-    // ========================================== //
-    
     if (loading) {
         return (
             <Box sx={{ width: '100%', px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
@@ -286,10 +300,6 @@ const OfferDetail = () => {
             </Box>
         );
     }
-
-    // ========================================== //
-    // AFFICHAGE ERREUR
-    // ========================================== //
 
     if (error || !offer) {
         return (
@@ -318,10 +328,6 @@ const OfferDetail = () => {
         );
     }
 
-    // ========================================== //
-    // AFFICHAGE PRINCIPAL
-    // ========================================== //
-
     return (
         <Box sx={{ width: '100%', px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
             <DetailContainer>
@@ -338,9 +344,7 @@ const OfferDetail = () => {
                         <InfoText>Nombre de postes : {offer.nbPostes || 1}</InfoText>
                         <PostulerButton
                             onClick={handlePostuler}
-                            submitted={submitted}
                             disabled={submitted}
-                            disableRipple={true}
                         >
                             {submitted ? '✓ Candidature envoyée' : '+ Postuler'}
                         </PostulerButton>

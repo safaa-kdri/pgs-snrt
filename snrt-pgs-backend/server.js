@@ -27,6 +27,8 @@ const studentRoutes = require('./src/routes/studentRoutes');
 const internshipRoutes = require('./src/routes/internshipRoutes');
 const resultsRoutes = require('./src/routes/resultsRoutes');
 const periodRoutes = require('./src/routes/periodRoutes');
+// ✅ AJOUT : Routes pour les rôles
+const roleRoutes = require('./src/routes/roleRoutes');
 
 assertRequiredEnv();
 
@@ -75,6 +77,8 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/periods', periodRoutes);
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/internships', internshipRoutes);
+// ✅ AJOUT : Route pour les rôles
+app.use('/api/v1/roles', roleRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route introuvable : ${req.method} ${req.originalUrl}` });

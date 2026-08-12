@@ -1,8 +1,5 @@
 // src/components/student/Applications.jsx
-// ✅ CORRECTION : Afficher le statut du stage au lieu du statut de l'application
-// ✅ NOUVELLE PROGRESSION LOGIQUE - 100% dès que la candidature est acceptée
-// ✅ SUPPRESSION : Boutons "Réinitialiser" et "Rafraîchir"
-// ✅ CORRECTION : Libellés professionnels et simples pour l'étudiant
+// ✅ AJOUT : Bouton "Déposer une candidature" pour accéder au workflow
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +32,7 @@ import {
     FilterList,
     Event,
     Description,
+    Add,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useAuth } from '../../hooks/useAuth';
@@ -61,14 +59,12 @@ const StyledTableCell = styled(TableCell)({
 // ✅ STATUTS COMPLETS DU WORKFLOW - Libellés professionnels pour l'étudiant
 const StatusChip = styled(Chip)(({ status }) => {
     const colors = {
-        // Statuts de candidature
         'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
         'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
         'EnAnalyse': { bg: '#fef3c7', text: '#d97706' },
         'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
         'Acceptee': { bg: '#d1fae5', text: '#065f46' },
         'Refusee': { bg: '#fee2e2', text: '#991b1b' },
-        // Statuts de stage - Libellés simplifiés pour l'étudiant
         'EngagementEnvoye': { bg: '#d1fae5', text: '#065f46' },
         'EngagementRecu': { bg: '#d1fae5', text: '#065f46' },
         'EngagementValide': { bg: '#d1fae5', text: '#065f46' },
@@ -138,7 +134,6 @@ const Applications = () => {
             
             const data = response.data?.data || response.data?.applications || [];
             
-            // ✅ Pour chaque application, récupérer le stage associé
             const applicationsWithStage = await Promise.all(
                 data.map(async (app) => {
                     try {
@@ -193,7 +188,6 @@ const Applications = () => {
         setFilteredApplications(filtered);
     };
 
-    // ✅ STATUTS COMPLETS - Libellés professionnels et simples pour l'étudiant
     const getStatusLabel = (status) => {
         const labels = {
             'Brouillon': 'Brouillon',
@@ -202,7 +196,6 @@ const Applications = () => {
             'Entretien': 'Entretien planifié',
             'Acceptee': 'Acceptée',
             'Refusee': 'Refusée',
-            // Statuts de stage - Libellés simplifiés
             'EngagementEnvoye': 'Engagement envoyé',
             'EngagementRecu': 'Engagement reçu',
             'EngagementValide': 'Engagement validé',
@@ -216,7 +209,6 @@ const Applications = () => {
         return labels[status] || status;
     };
 
-    // ✅ NOUVELLE PROGRESSION - 100% dès que la candidature est acceptée
     const getProgression = (statut) => {
         const map = {
             'Brouillon': 0,
@@ -225,7 +217,6 @@ const Applications = () => {
             'Entretien': 60,
             'Acceptee': 100,
             'Refusee': 100,
-            // Tous les statuts de stage sont à 100% (candidature déjà terminée)
             'EngagementEnvoye': 100,
             'EngagementRecu': 100,
             'EngagementValide': 100,
@@ -256,6 +247,11 @@ const Applications = () => {
         return 'Stage';
     };
 
+    const handleDeposerCandidature = () => {
+        // ✅ Rediriger vers la liste des offres pour choisir une offre
+        navigate('/offres');
+    };
+
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -275,6 +271,21 @@ const Applications = () => {
                         {filteredApplications.length} candidature(s) trouvée(s)
                     </Typography>
                 </Box>
+                {/* ✅ AJOUT : Bouton pour déposer une nouvelle candidature */}
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={handleDeposerCandidature}
+                    sx={{
+                        backgroundColor: '#148aa0',
+                        borderRadius: '10px',
+                        textTransform: 'none',
+                        fontFamily: 'Inter, sans-serif',
+                        '&:hover': { backgroundColor: '#0b7890' },
+                    }}
+                >
+                    Déposer une candidature
+                </Button>
             </PageHeader>
 
             {error && (
@@ -332,11 +343,18 @@ const Applications = () => {
                                     <Typography variant="body1" color="text.secondary">
                                         Aucune candidature trouvée
                                     </Typography>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<Add />}
+                                        onClick={handleDeposerCandidature}
+                                        sx={{ mt: 2, borderRadius: '10px', textTransform: 'none' }}
+                                    >
+                                        Déposer une candidature
+                                    </Button>
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredApplications.map((app) => {
-                                // ✅ Utiliser le statut du stage si disponible
                                 const displayStatut = app.stageStatut || app.statut;
                                 const progress = getProgression(displayStatut);
                                 const type = getTypeStage(app);

@@ -11,6 +11,8 @@
 // ✅ CORRECTION : Affichage du statut du stage dans la page de détails
 // ✅ CORRECTION : Libellé "Acceptée" → "Acceptée par le département"
 // ✅ AJOUT : Gestion de la convention avec les nouveaux statuts
+// ✅ CORRECTION : Affichage des documents populés
+// ✅ SUPPRESSION : Onglet Convention (fonctionnalité séparée)
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -146,24 +148,6 @@ const DocumentCard = styled(Paper)({
     },
 });
 
-const ConventionStatusChip = styled(Chip)(({ statut }) => {
-    const colors = {
-        'NonGeneree': { bg: '#e5e7eb', text: '#6b7280' },
-        'DeposeeEtudiant': { bg: '#fef3c7', text: '#d97706' },
-        'SigneeRH': { bg: '#dbeafe', text: '#1d4ed8' },
-        'EnvoyeeEtudiant': { bg: '#d1fae5', text: '#065f46' },
-        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
-    };
-    const color = colors[statut] || colors['NonGeneree'];
-    return {
-        backgroundColor: color.bg,
-        color: color.text,
-        fontWeight: 500,
-        fontSize: '11px',
-        height: '24px',
-    };
-});
-
 // ✅ STYLE PROFESSIONNEL POUR L'UPLOAD ZONE
 const StyledUploadZone = styled(Box)({
     border: '2px dashed #d1d5db',
@@ -194,16 +178,12 @@ const ApplicationDetailStudent = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [tabValue, setTabValue] = useState(0);
-    const [convention, setConvention] = useState(null);
     const [engagementFile, setEngagementFile] = useState(null);
     const [engagementDepose, setEngagementDepose] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploadType, setUploadType] = useState('convention');
-
-    // ✅ Vérifier si la convention doit être affichée
-    const isEligibleForConvention = application?.statut === 'Acceptee' || internship?.statut === 'EnCours';
 
     // ✅ Vérifier si l'engagement doit être affiché (inclure tous les statuts de stage)
     const isEngagementVisible = internship?.statut === 'EngagementEnvoye' || 
@@ -225,6 +205,22 @@ const ApplicationDetailStudent = () => {
         try {
             const response = await api.get(`/applications/${id}`);
             let data = response.data.data || response.data;
+            
+            // ✅ Récupérer les détails des documents si ce sont des IDs
+            if (data.documents && data.documents.length > 0 && typeof data.documents[0] === 'string') {
+                const docDetails = await Promise.all(
+                    data.documents.map(async (docId) => {
+                        try {
+                            const docRes = await api.get(`/documents/${docId}`);
+                            return docRes.data.data;
+                        } catch (e) {
+                            return null;
+                        }
+                    })
+                );
+                data.documents = docDetails.filter(d => d);
+            }
+            
             setApplication(data);
 
             if (data._id) {
@@ -274,10 +270,6 @@ const ApplicationDetailStudent = () => {
                             }
                         }
                         
-                        if (stageRes.data.data.convention) {
-                            setConvention(stageRes.data.data.convention);
-                        }
-                        
                         if (stageRes.data.data.engagement) {
                             setEngagementFile(stageRes.data.data.engagement);
                         }
@@ -323,32 +315,6 @@ const ApplicationDetailStudent = () => {
     };
 
     // ============================================
-    // FONCTIONS CONVENTION
-    // ============================================
-
-    const handleDownloadConvention = async () => {
-        try {
-            const stageId = internship?._id;
-            if (!stageId) {
-                setError('ID du stage non trouvé');
-                return;
-            }
-            const response = await api.get(`/internships/${stageId}/convention/download`, {
-                responseType: 'blob'
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'Convention_Stage.pdf';
-            link.click();
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Erreur téléchargement:', error);
-            setError('Erreur lors du téléchargement de la convention');
-        }
-    };
-
-    // ============================================
     // ✅ FONCTIONS ENGAGEMENT AVEC LOGS
     // ============================================
 
@@ -379,7 +345,6 @@ const ApplicationDetailStudent = () => {
         }
     };
 
-    // ✅ CORRECTION : Ajout de logs pour déboguer + mise à jour de l'état
     const handleUploadEngagement = async () => {
         if (!selectedFile) return;
 
@@ -450,70 +415,6 @@ const ApplicationDetailStudent = () => {
             setOpenDialog(true);
         } else {
             setError('Veuillez sélectionner un fichier PDF');
-        }
-    };
-
-    const handleUploadConvention = async () => {
-        if (!selectedFile) return;
-
-        setUploading(true);
-        setError('');
-        setSuccess('');
-
-        try {
-            const formData = new FormData();
-            formData.append('convention', selectedFile);
-
-            const stageId = internship?._id;
-            if (!stageId) {
-                setError('ID du stage non trouvé');
-                setUploading(false);
-                return;
-            }
-
-            const response = await api.post(
-                `/internships/${stageId}/convention/depot`,
-                formData,
-                { headers: { 'Content-Type': 'multipart/form-data' } }
-            );
-
-            if (response.data?.success) {
-                setSuccess('Convention déposée avec succès !');
-                setConvention(response.data.data);
-                setOpenDialog(false);
-                setSelectedFile(null);
-                fetchApplicationDetail();
-            }
-        } catch (error) {
-            console.error('Erreur upload:', error);
-            setError(error.response?.data?.message || 'Erreur lors du dépôt de la convention');
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const getConventionStatusLabel = (statut) => {
-        const labels = {
-            'NonGeneree': 'Non générée',
-            'DeposeeEtudiant': 'Déposée par l\'étudiant',
-            'SigneeRH': 'Signée par le RH',
-            'EnvoyeeEtudiant': 'Envoyée à l\'étudiant',
-            'Cloturee': 'Clôturée',
-        };
-        return labels[statut] || statut;
-    };
-
-    const getConventionStatusIcon = (statut) => {
-        switch (statut) {
-            case 'EnvoyeeEtudiant':
-            case 'Cloturee':
-                return <CheckCircle sx={{ color: '#22c55e' }} />;
-            case 'DeposeeEtudiant':
-                return <Pending sx={{ color: '#f59e0b' }} />;
-            case 'SigneeRH':
-                return <Check sx={{ color: '#1d4ed8' }} />;
-            default:
-                return <FileCopy sx={{ color: '#6b7280' }} />;
         }
     };
 
@@ -706,62 +607,87 @@ const ApplicationDetailStudent = () => {
         );
     };
 
+    // ✅ RENDER DOCUMENTS - CORRIGÉ AVEC VÉRIFICATION DES POPULATES
     const renderDocuments = () => {
         const documents = application?.documents || [];
+        
+        // ✅ Vérifier si les documents sont populés (ont un nomOriginal)
+        const hasPopulatedDocs = documents.length > 0 && documents[0]?.nomOriginal;
+        
+        // ✅ Si aucun document
+        if (documents.length === 0) {
+            return (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                    <Description sx={{ fontSize: 48, color: '#d1d5db' }} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Aucune pièce justificative déposée
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        Les documents déposés lors de l'étape 3 apparaîtront ici
+                    </Typography>
+                </Box>
+            );
+        }
+        
+        // ✅ Si les documents ne sont pas populés (ce sont des IDs)
+        if (!hasPopulatedDocs) {
+            return (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                    <Description sx={{ fontSize: 48, color: '#d1d5db' }} />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {documents.length} pièce(s) justificative(s) déposée(s)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        Chargement des détails des documents...
+                    </Typography>
+                </Box>
+            );
+        }
+        
+        // ✅ Affichage normal des documents populés
         return (
-            <>
-                {documents.length > 0 ? (
-                    <List dense sx={{ p: 0 }}>
-                        {documents.map((doc, idx) => (
-                            <ListItem key={idx} sx={{
-                                px: 0,
-                                py: 1.5,
-                                borderBottom: idx < documents.length - 1 ? '1px solid #f0f2f5' : 'none',
-                                alignItems: 'flex-start'
-                            }}>
-                                <ListItemIcon sx={{ minWidth: 36, mt: 0.5 }}>
-                                    {doc.isVerified ? (
-                                        <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
-                                    ) : (
-                                        <Pending sx={{ color: '#f59e0b', fontSize: 20 }} />
-                                    )}
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary={doc.nomOriginal || doc.nom || 'Document'}
-                                    secondary={
-                                        <>
-                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                {cleanDocumentType(doc.type)} • {doc.isVerified ? 'Validé' : 'En attente'}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                {doc.dateUpload ? formatDate(doc.dateUpload) : 'Date non spécifiée'}
-                                            </Typography>
-                                        </>
-                                    }
-                                />
-                                <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-                                    <Tooltip title="Télécharger">
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => handleDownloadDocument(doc)}
-                                            sx={{ color: '#4f46e5' }}
-                                        >
-                                            <Download fontSize="small" />
-                                        </IconButton>
-                                    </Tooltip>
-                                </Box>
-                            </ListItem>
-                        ))}
-                    </List>
-                ) : (
-                    <Box sx={{ py: 4, textAlign: 'center' }}>
-                        <Description sx={{ fontSize: 48, color: '#d1d5db' }} />
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                            Aucun document déposé
-                        </Typography>
-                    </Box>
-                )}
-            </>
+            <List dense sx={{ p: 0 }}>
+                {documents.map((doc, idx) => (
+                    <ListItem key={doc._id || idx} sx={{
+                        px: 0,
+                        py: 1.5,
+                        borderBottom: idx < documents.length - 1 ? '1px solid #f0f2f5' : 'none',
+                        alignItems: 'flex-start'
+                    }}>
+                        <ListItemIcon sx={{ minWidth: 36, mt: 0.5 }}>
+                            {doc.isVerified ? (
+                                <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
+                            ) : (
+                                <Pending sx={{ color: '#f59e0b', fontSize: 20 }} />
+                            )}
+                        </ListItemIcon>
+                        <ListItemText
+                            primary={doc.nomOriginal || doc.nom || 'Document'}
+                            secondary={
+                                <>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        {cleanDocumentType(doc.type)} • {doc.isVerified ? 'Validé' : 'En attente'}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        {doc.dateUpload ? formatDate(doc.dateUpload) : 'Date non spécifiée'}
+                                    </Typography>
+                                </>
+                            }
+                        />
+                        <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                            <Tooltip title="Télécharger">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => handleDownloadDocument(doc)}
+                                    sx={{ color: '#4f46e5' }}
+                                >
+                                    <Download fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    </ListItem>
+                ))}
+            </List>
         );
     };
 
@@ -948,128 +874,6 @@ const ApplicationDetailStudent = () => {
         );
     };
 
-    // ✅ RENDER CONVENTION
-    const renderConvention = () => {
-        const conventionData = convention || internship?.convention || {};
-        const statut = conventionData.statut || 'NonGeneree';
-
-        const isDeposee = statut === 'DeposeeEtudiant' || statut === 'SigneeRH' || statut === 'EnvoyeeEtudiant' || statut === 'Cloturee';
-        const canDeposit = statut === 'NonGeneree' || statut === 'DeposeeEtudiant';
-
-        return (
-            <Box>
-                <Card sx={{ mb: 3, p: 2, backgroundColor: '#f7f8fa', borderRadius: '12px' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        {getConventionStatusIcon(statut)}
-                        <Box>
-                            <Typography variant="body2" fontWeight={600}>
-                                Statut : {getConventionStatusLabel(statut)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {statut === 'NonGeneree' && 'Aucune convention déposée. Vous pouvez déposer votre convention.'}
-                                {statut === 'DeposeeEtudiant' && 'Votre convention a été déposée. En attente de signature RH.'}
-                                {statut === 'SigneeRH' && 'La convention a été signée par le RH. En attente d\'envoi.'}
-                                {statut === 'EnvoyeeEtudiant' && 'La convention signée vous a été envoyée. Vous pouvez la télécharger.'}
-                                {statut === 'Cloturee' && 'Convention clôturée.'}
-                            </Typography>
-                        </Box>
-                    </Box>
-                </Card>
-
-                {(statut === 'EnvoyeeEtudiant' || statut === 'Cloturee') && (
-                    <Button
-                        variant="contained"
-                        startIcon={<Download />}
-                        onClick={handleDownloadConvention}
-                        sx={{ mb: 2, borderRadius: '10px', textTransform: 'none', backgroundColor: '#148aa0' }}
-                    >
-                        Télécharger la convention signée
-                    </Button>
-                )}
-
-                {canDeposit && (
-                    <>
-                        <Divider sx={{ my: 3 }} />
-                        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                            Déposer ma convention signée
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Téléchargez votre convention de stage fournie par votre établissement.
-                        </Typography>
-
-                        <StyledUploadZone onClick={() => document.getElementById('convention-upload')?.click()}>
-                            <input
-                                id="convention-upload"
-                                type="file"
-                                hidden
-                                accept=".pdf"
-                                onChange={(e) => handleFileSelect(e, 'convention')}
-                            />
-                            <Upload sx={{ fontSize: 32, color: '#9aa4ac' }} />
-                            <Typography variant="body1" sx={{ mt: 1, color: '#1a2332', fontWeight: 500 }}>
-                                Cliquez pour déposer votre convention signée
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                Format PDF uniquement, max 5MB
-                            </Typography>
-                        </StyledUploadZone>
-                    </>
-                )}
-
-                {isDeposee && convention && (
-                    <>
-                        <Divider sx={{ my: 3 }} />
-                        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                            Convention déposée
-                        </Typography>
-                        <DocumentCard>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <PictureAsPdf sx={{ color: '#ef4444', fontSize: 24 }} />
-                                <Box>
-                                    <Typography variant="body2" fontWeight={500}>
-                                        {convention.nomOriginal || 'Convention.pdf'}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Déposé le {formatDate(convention.dateDepot)}
-                                    </Typography>
-                                </Box>
-                            </Box>
-                            <Box>
-                                <Tooltip title="Voir">
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => {
-                                            const href = buildFileHref(convention);
-                                            if (href) window.open(href, '_blank');
-                                        }}
-                                        sx={{ color: '#2d3748' }}
-                                    >
-                                        <Visibility fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Télécharger">
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => handleDownloadDocument(convention)}
-                                        sx={{ color: '#4f46e5' }}
-                                    >
-                                        <Download fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        </DocumentCard>
-                    </>
-                )}
-
-                {statut === 'EnvoyeeEtudiant' && (
-                    <Alert severity="success" sx={{ mt: 2, borderRadius: '10px' }}>
-                        Votre convention a été signée par le RH. Téléchargez-la ci-dessus.
-                    </Alert>
-                )}
-            </Box>
-        );
-    };
-
     // ============================================
     // DIALOG CONFIRMATION UPLOAD
     // ============================================
@@ -1083,7 +887,7 @@ const ApplicationDetailStudent = () => {
             PaperProps={{ sx: { borderRadius: '16px', padding: '8px' } }}
         >
             <DialogTitle>
-                {uploadType === 'convention' ? 'Confirmer le dépôt de la convention' : 'Confirmer le dépôt de l\'engagement'}
+                Confirmer le dépôt du document
             </DialogTitle>
             <DialogContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
@@ -1099,9 +903,7 @@ const ApplicationDetailStudent = () => {
                 </Box>
                 {uploading && <LinearProgress sx={{ mt: 2, borderRadius: 4 }} />}
                 <Alert severity="info" sx={{ mt: 2, borderRadius: '10px' }}>
-                    {uploadType === 'convention' 
-                        ? 'Vérifiez que le fichier est bien votre convention de stage signée.'
-                        : 'Vérifiez que le fichier est bien votre engagement de confidentialité signé.'}
+                    Vérifiez que le fichier est bien le document à déposer.
                 </Alert>
             </DialogContent>
             <DialogActions sx={{ p: 2, pt: 0 }}>
@@ -1114,7 +916,7 @@ const ApplicationDetailStudent = () => {
                 </Button>
                 <Button
                     variant="contained"
-                    onClick={uploadType === 'convention' ? handleUploadConvention : handleUploadEngagement}
+                    onClick={handleUploadEngagement}
                     disabled={uploading}
                     sx={{
                         backgroundColor: '#148aa0',
@@ -1162,7 +964,6 @@ const ApplicationDetailStudent = () => {
     const statusLabel = getStatusLabel(displayStatus);
 
     const documents = application.documents || [];
-    const isConventionVisible = isEligibleForConvention;
 
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -1218,22 +1019,16 @@ const ApplicationDetailStudent = () => {
                     <StyledTab
                         icon={<Description sx={{ fontSize: 20 }} />}
                         iconPosition="start"
-                        label={`Documents (${documents.length})`}
+                        label={`Pièces justificatives (${documents.length})`}
                     />
-                    {isConventionVisible && (
-                        <StyledTab
-                            icon={<FileCopy sx={{ fontSize: 20 }} />}
-                            iconPosition="start"
-                            label="Convention"
-                        />
-                    )}
+                    {/* ✅ ONGLET CONVENTION SUPPRIMÉ */}
                 </StyledTabs>
 
                 <Box sx={{ p: 3 }}>
                     {tabValue === 0 && renderHistorique()}
                     {tabValue === 1 && isEngagementVisible && renderEngagement()}
                     {tabValue === 2 && renderDocuments()}
-                    {tabValue === (isEngagementVisible ? 3 : 2) && isConventionVisible && renderConvention()}
+                    {/* ✅ RENDU CONVENTION SUPPRIMÉ */}
                 </Box>
             </Paper>
 

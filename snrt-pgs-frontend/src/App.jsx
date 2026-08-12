@@ -1,5 +1,6 @@
 // src/App.jsx
 // ✅ CORRECTION : Import correct de OfferEditPage
+// ✅ AJOUT : Route pour DepotCandidature (Workflow 3 étapes)
 
 import React, { useEffect, useState, useRef } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
@@ -62,6 +63,8 @@ import DepotEngagement from "./components/student/DepotEngagement";
 import DepotRapport from "./components/student/DepotRapport";
 import Attestation from "./components/student/Attestation";
 import ApplicationDetailStudent from "./components/student/ApplicationDetail";
+// ✅ AJOUT
+import DepotCandidature from "./components/student/DepotCandidature";
 
 // ===== DEPARTMENT PAGES =====
 import CreateOffer from "./components/department/CreateOffer";
@@ -449,6 +452,27 @@ function App() {
             <Layout>
               <PrivateRoute>
                 <ApplicationDetailStudent />
+              </PrivateRoute>
+            </Layout>
+          }
+        />
+        {/* ✅ NOUVEAU - WORKFLOW DE CANDIDATURE EN 3 ÉTAPES */}
+        <Route
+          path="/depot-candidature"
+          element={
+            <Layout>
+              <PrivateRoute>
+                <DepotCandidature />
+              </PrivateRoute>
+            </Layout>
+          }
+        />
+        <Route
+          path="/depot-candidature/:id"
+          element={
+            <Layout>
+              <PrivateRoute>
+                <DepotCandidature />
               </PrivateRoute>
             </Layout>
           }

@@ -1,6 +1,9 @@
 // src/controllers/applicationController.js
 // ✅ CORRECTION : Ajout de la transition EnAnalyse -> Acceptee + vérification du rôle
 // ✅ AJOUT : Vérification des conflits de stage en cours
+// ✅ AJOUT : Workflow de candidature en 3 étapes (saveEtape1, saveEtape2, submitWorkflow, getWorkflowState)
+// ✅ AJOUT : getDepartmentApplications pour le département
+// ✅ CORRECTION : Renommer engagementAccepte en ficheAccepte pour l'étape 2
 
 const Application = require('../models/Application');
 const Document = require('../models/Document');
@@ -218,7 +221,9 @@ exports.createApplication = async (req, res) => {
             commentaire,
             documents: safeDocuments,
             statut: APPLICATION_STATUS.BROUILLON,
-            createdBy: req.user?._id
+            createdBy: req.user?._id,
+            workflowEtape: 1,
+            workflowComplete: false
         });
 
         return res.status(201).json({
@@ -440,6 +445,8 @@ exports.submitApplication = async (req, res) => {
         application.statut = APPLICATION_STATUS.SOUMISE;
         application.dateSoumission = new Date();
         application.updatedBy = req.user?._id;
+        application.workflowComplete = true;
+        application.workflowEtape = 3;
 
         application.historique.push({
             ancienStatut,
@@ -698,7 +705,7 @@ exports.addDocumentToApplication = async (req, res) => {
     } catch (error) {
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de l’ajout du document',
+            message: 'Erreur lors de l\'ajout du document à la candidature',
             error: error.message
         });
     }
@@ -707,9 +714,9 @@ exports.addDocumentToApplication = async (req, res) => {
 // ============================================
 // ✅ RÉCUPÉRER LES CANDIDATURES DU DÉPARTEMENT
 // ============================================
+
 exports.getDepartmentApplications = async (req, res) => {
     try {
-        const { statut, search, page = 1, limit = 20 } = req.query;
         const { departementId } = req.user;
 
         if (!departementId) {
@@ -719,82 +726,438 @@ exports.getDepartmentApplications = async (req, res) => {
             });
         }
 
-        // ✅ Récupérer les IDs des offres du département
-        const offreIds = await Offer.find({ departementId }).distinct('_id');
+        // Récupérer toutes les offres du département
+        const offers = await Offer.find({ departementId }).select('_id');
+        const offerIds = offers.map(o => o._id);
 
-        if (offreIds.length === 0) {
+        if (offerIds.length === 0) {
             return res.status(200).json({
                 success: true,
                 count: 0,
-                data: [],
-                pagination: { page: 1, limit, total: 0, pages: 0 }
+                data: []
             });
         }
 
-        // ✅ Construire le filtre
-        const filter = { offreId: { $in: offreIds } };
-        if (statut) filter.statut = statut;
-
-        // ✅ Recherche par nom du candidat
-        let searchFilter = {};
-        if (search) {
-            const students = await UtilisateurExterne.find({
-                $or: [
-                    { nom: { $regex: search, $options: 'i' } },
-                    { prenom: { $regex: search, $options: 'i' } },
-                    { email: { $regex: search, $options: 'i' } }
-                ]
-            }).select('_id');
-            const studentIds = students.map(s => s._id);
-            if (studentIds.length > 0) {
-                searchFilter.etudiantId = { $in: studentIds };
-            } else {
-                // Aucun étudiant trouvé → retourner 0 résultat
-                return res.status(200).json({
-                    success: true,
-                    count: 0,
-                    data: [],
-                    pagination: { page: 1, limit, total: 0, pages: 0 }
-                });
-            }
-        }
-
-        Object.assign(filter, searchFilter);
-
-        // ✅ Pagination
-        const pageNum = Math.max(parseInt(page, 10) || 1, 1);
-        const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
-        const skip = (pageNum - 1) * limitNum;
-
-        // ✅ Récupérer les candidatures
-        const [applications, total] = await Promise.all([
-            Application.find(filter)
-                .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
-                .populate('offreId', 'titre typeStage departementId')
-                .populate('documents')
-                .populate('traiteurId', 'nom prenom email')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limitNum),
-            Application.countDocuments(filter)
-        ]);
+        const applications = await Application.find({
+            offreId: { $in: offerIds }
+        })
+            .populate('etudiantId', 'nom prenom email cin')
+            .populate('offreId', 'titre typeStage')
+            .populate('documents')
+            .sort({ createdAt: -1 });
 
         return res.status(200).json({
             success: true,
             count: applications.length,
-            data: applications,
-            pagination: {
-                page: pageNum,
-                limit: limitNum,
-                total,
-                pages: Math.ceil(total / limitNum)
-            }
+            data: applications
         });
+
     } catch (error) {
         console.error('❌ Erreur getDepartmentApplications:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la récupération des candidatures',
+            error: error.message
+        });
+    }
+};
+
+// ============================================
+// ✅ WORKFLOW DE CANDIDATURE EN 3 ÉTAPES
+// ============================================
+
+/**
+ * ÉTAPE 1 - Sauvegarder les informations universitaires
+ * POST /api/v1/applications/:id/workflow/etape1
+ */
+exports.saveEtape1 = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            universite,
+            etablissement,
+            filiere,
+            niveau,
+            anneeUniversitaire,
+            typeStageDemande,
+            dureeStage,
+            dateDebutPrevue,
+            dateFinPrevue
+        } = req.body;
+
+        // Vérifier que l'application existe
+        const application = await Application.findById(id);
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Candidature non trouvée'
+            });
+        }
+
+        // Vérifier que l'étudiant est le propriétaire
+        if (application.etudiantId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'êtes pas autorisé à modifier cette candidature'
+            });
+        }
+
+        // Vérifier que la candidature est en brouillon ou en cours
+        if (application.statut === APPLICATION_STATUS.SOUMISE) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cette candidature a déjà été soumise, vous ne pouvez plus la modifier'
+            });
+        }
+
+        // Mettre à jour les champs
+        application.universite = universite || application.universite || '';
+        application.etablissement = etablissement || application.etablissement || '';
+        application.filiere = filiere || application.filiere || '';
+        application.niveau = niveau || application.niveau || '';
+        application.anneeUniversitaire = anneeUniversitaire || application.anneeUniversitaire || '';
+        application.typeStageDemande = typeStageDemande || application.typeStageDemande || '';
+        application.dureeStage = dureeStage || application.dureeStage || '';
+        application.dateDebutPrevue = dateDebutPrevue || application.dateDebutPrevue || null;
+        application.dateFinPrevue = dateFinPrevue || application.dateFinPrevue || null;
+        application.workflowEtape = 1;
+        application.updatedBy = req.user?._id;
+
+        await application.save();
+
+        logger.info(`✅ Étape 1 sauvegardée pour l'application ${id} par l'étudiant ${req.user._id}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Informations universitaires sauvegardées avec succès',
+            data: {
+                id: application._id,
+                workflowEtape: application.workflowEtape,
+                universite: application.universite,
+                etablissement: application.etablissement,
+                filiere: application.filiere,
+                niveau: application.niveau,
+                anneeUniversitaire: application.anneeUniversitaire,
+                typeStageDemande: application.typeStageDemande,
+                dureeStage: application.dureeStage,
+                dateDebutPrevue: application.dateDebutPrevue,
+                dateFinPrevue: application.dateFinPrevue
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur saveEtape1:', error);
+        logger.error(`Erreur saveEtape1: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la sauvegarde des informations universitaires',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * ✅ ÉTAPE 2 - Sauvegarder la confirmation de téléchargement de la fiche de demande
+ * POST /api/v1/applications/:id/workflow/etape2
+ */
+exports.saveEtape2 = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ficheAccepte } = req.body;
+
+        const application = await Application.findById(id);
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Candidature non trouvée'
+            });
+        }
+
+        // Vérifier que l'étudiant est le propriétaire
+        if (application.etudiantId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'êtes pas autorisé à modifier cette candidature'
+            });
+        }
+
+        // Vérifier que la candidature est en brouillon ou en cours
+        if (application.statut === APPLICATION_STATUS.SOUMISE) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cette candidature a déjà été soumise'
+            });
+        }
+
+        // Vérifier que l'étape 1 est complétée
+        if (!application.universite && !application.filiere) {
+            return res.status(400).json({
+                success: false,
+                message: 'Veuillez d\'abord renseigner vos informations universitaires (Étape 1)'
+            });
+        }
+
+        // ✅ CORRECTION : Sauvegarder ficheAccepte au lieu de engagementAccepte
+        application.ficheAccepte = ficheAccepte === true;
+        if (ficheAccepte) {
+            application.ficheDateAccepte = new Date();
+        }
+        application.workflowEtape = 2;
+        application.updatedBy = req.user?._id;
+
+        await application.save();
+
+        logger.info(`✅ Étape 2 sauvegardée pour l'application ${id} par l'étudiant ${req.user._id}`);
+
+        res.status(200).json({
+            success: true,
+            message: ficheAccepte ? 'Fiche de demande de stage confirmée' : 'Confirmation annulée',
+            data: {
+                id: application._id,
+                workflowEtape: application.workflowEtape,
+                ficheAccepte: application.ficheAccepte,
+                ficheDateAccepte: application.ficheDateAccepte
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur saveEtape2:', error);
+        logger.error(`Erreur saveEtape2: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la sauvegarde de la confirmation',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * ✅ ÉTAPE 3 - Soumettre la candidature complète
+ * POST /api/v1/applications/:id/workflow/submit
+ */
+exports.submitWorkflow = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { documents } = req.body;
+
+        const application = await Application.findById(id)
+            .populate('offreId', 'titre dateDebut dateFin');
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Candidature non trouvée'
+            });
+        }
+
+        // Vérifier que l'étudiant est le propriétaire
+        if (application.etudiantId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'êtes pas autorisé à modifier cette candidature'
+            });
+        }
+
+        // Vérifier que la candidature est en brouillon
+        if (application.statut === APPLICATION_STATUS.SOUMISE) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cette candidature a déjà été soumise'
+            });
+        }
+
+        // Vérifier que l'étape 1 est complétée
+        if (!application.universite && !application.filiere) {
+            return res.status(400).json({
+                success: false,
+                message: 'Veuillez d\'abord renseigner vos informations universitaires (Étape 1)'
+            });
+        }
+
+        // ✅ CORRECTION : Vérifier que la fiche a été acceptée (étape 2)
+        if (!application.ficheAccepte) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vous devez confirmer que vous avez téléchargé la fiche de demande de stage avant de soumettre votre candidature (Étape 2)'
+            });
+        }
+
+        // Vérifier qu'il y a des documents
+        if (!documents || documents.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vous devez déposer au moins un document avant de soumettre votre candidature'
+            });
+        }
+
+        // ✅ VÉRIFICATION : L'étudiant a-t-il un stage en cours qui chevauche la période ?
+        if (application.offreId && application.offreId.dateDebut && application.offreId.dateFin) {
+            const availability = await checkStudentAvailability(
+                application.etudiantId,
+                application.offreId.dateDebut,
+                application.offreId.dateFin
+            );
+
+            if (!availability.available) {
+                const stage = availability.currentInternship;
+                return res.status(400).json({
+                    success: false,
+                    message: `Vous ne pouvez pas soumettre cette candidature car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
+                    data: {
+                        currentInternship: availability.currentPeriod,
+                        requestedPeriod: {
+                            dateDebut: application.offreId.dateDebut,
+                            dateFin: application.offreId.dateFin
+                        }
+                    }
+                });
+            }
+        }
+
+        // Ajouter les documents à la candidature
+        if (documents && documents.length > 0) {
+            const foundDocuments = await Document.find({ _id: { $in: documents } }).select('candidatId');
+            const allOwnedByCaller =
+                foundDocuments.length === documents.length &&
+                foundDocuments.every((doc) => doc.candidatId.toString() === req.user._id.toString());
+
+            if (!allOwnedByCaller) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Vous ne pouvez associer que vos propres documents à votre candidature'
+                });
+            }
+            
+            // Ajouter les documents s'ils ne sont pas déjà présents
+            const existingDocIds = application.documents.map(d => d.toString());
+            const newDocs = documents.filter(d => !existingDocIds.includes(d));
+            if (newDocs.length > 0) {
+                application.documents = [...application.documents, ...newDocs];
+                
+                // Mettre à jour les documents avec l'applicationId
+                await Document.updateMany(
+                    { _id: { $in: newDocs } },
+                    { applicationId: application._id }
+                );
+            }
+        }
+
+        // Vérifier qu'il y a un CV
+        const docs = await Document.find({ _id: { $in: application.documents } }).select('type');
+        const hasCv = docs.some((doc) => doc.type === 'CV');
+        if (!hasCv) {
+            return res.status(400).json({
+                success: false,
+                message: 'Un CV est obligatoire avant de soumettre la candidature'
+            });
+        }
+
+        // Changer le statut
+        const ancienStatut = application.statut;
+        application.statut = APPLICATION_STATUS.SOUMISE;
+        application.dateSoumission = new Date();
+        application.workflowEtape = 3;
+        application.workflowComplete = true;
+        application.updatedBy = req.user?._id;
+
+        // Ajouter à l'historique
+        if (!application.historique) application.historique = [];
+        application.historique.push({
+            ancienStatut,
+            nouveauStatut: APPLICATION_STATUS.SOUMISE,
+            commentaire: 'Candidature soumise via le workflow en 3 étapes',
+            auteurId: req.user?._id,
+            date: new Date()
+        });
+
+        await application.save();
+
+        // Notification à l'étudiant
+        await notifyStudentApplicationSubmitted(application);
+
+        logger.info(`✅ Candidature soumise avec succès pour l'application ${id} par l'étudiant ${req.user._id}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Votre candidature a été déposée avec succès !',
+            data: {
+                id: application._id,
+                statut: application.statut,
+                workflowComplete: application.workflowComplete,
+                documentsCount: application.documents.length,
+                dateSoumission: application.dateSoumission
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur submitWorkflow:', error);
+        logger.error(`Erreur submitWorkflow: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la soumission de la candidature',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Récupérer l'état du workflow
+ * GET /api/v1/applications/:id/workflow/state
+ */
+exports.getWorkflowState = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const application = await Application.findById(id);
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Candidature non trouvée'
+            });
+        }
+
+        // Vérifier que l'étudiant est le propriétaire ou staff
+        if (!isOwnerOrStaff(req, application.etudiantId) && req.user?.role !== ROLES.ADMIN) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'avez pas accès à cette candidature'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                id: application._id,
+                workflowEtape: application.workflowEtape || 1,
+                workflowComplete: application.workflowComplete || false,
+                statut: application.statut,
+                // Étape 1
+                universite: application.universite || '',
+                etablissement: application.etablissement || '',
+                filiere: application.filiere || '',
+                niveau: application.niveau || '',
+                anneeUniversitaire: application.anneeUniversitaire || '',
+                typeStageDemande: application.typeStageDemande || '',
+                dureeStage: application.dureeStage || '',
+                dateDebutPrevue: application.dateDebutPrevue || null,
+                dateFinPrevue: application.dateFinPrevue || null,
+                // ✅ Étape 2 - CORRECTION : ficheAccepte au lieu de engagementAccepte
+                ficheAccepte: application.ficheAccepte || false,
+                ficheDateAccepte: application.ficheDateAccepte || null,
+                // Documents
+                documents: application.documents || []
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur getWorkflowState:', error);
+        logger.error(`Erreur getWorkflowState: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération de l\'état du workflow',
             error: error.message
         });
     }

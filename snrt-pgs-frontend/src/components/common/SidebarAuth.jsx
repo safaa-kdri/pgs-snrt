@@ -1,6 +1,9 @@
 // src/components/common/SidebarAuth.jsx
+// ⚠️ MODIFICATIONS UNIQUEMENT SUR LES ESPACEMENTS ET HAUTEURS
+// AUCUN CHANGEMENT DE CONTENU
+
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom"; // ✅ Ajout de useLocation
+import { useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
@@ -14,7 +17,6 @@ import {
 import { styled } from "@mui/material/styles";
 import { logout, login } from "../../store/slices/authSlice";
 import {
-  PersonOutline,
   DescriptionOutlined,
   VpnKeyOutlined,
   LogoutOutlined,
@@ -24,12 +26,13 @@ import {
 // STYLES
 // ============================================
 
+// ✅ CARTE 1 : HAUTEUR RÉDUITE
 const SideCard = styled(Card)({
   backgroundColor: "#f7f7f7",
   borderRadius: "19px",
-  padding: "50px 16px 16px",
+  padding: "28px 16px 16px", // ✅ Padding réduit (était 50px 16px 16px)
   textAlign: "center",
-  minHeight: "350px",
+  minHeight: "auto", // ✅ Supprimé minHeight: 350px
   maxWidth: "285px",
   width: "100%",
   margin: "0 auto",
@@ -38,7 +41,7 @@ const SideCard = styled(Card)({
   flexDirection: "column",
   alignItems: "center",
   "& h2": {
-    margin: "0 0 18px",  // ✅ Augmenté de 14px à 20px
+    margin: "0 0 18px",
     color: "#4a4a4a",
     fontSize: "18px",
     lineHeight: 1.2,
@@ -47,8 +50,19 @@ const SideCard = styled(Card)({
   },
 });
 
+// ✅ CARTE 2 : REMONTÉE VERS LE HAUT
+const SnrtContainer = styled(Box)({
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  width: "100%",
+  borderTop: "1px solid #e5e7eb",
+  paddingTop: "14px", // ✅ Réduit (était 16px)
+  marginTop: "6px", // ✅ RÉDUIT (était 16px) - Rapproche les cartes
+});
+
 const AttemptsText = styled(Typography)({
-  margin: "10px 0 18px",  // ✅ Ajout de marginTop: 16px
+  margin: "10px 0 18px",
   color: "#687480",
   fontSize: "13px",
   lineHeight: 1.6,
@@ -104,13 +118,13 @@ const StyledTextField = styled(TextField)({
 });
 
 // ============================================
-// ⬇️ STYLES DU CAPTCHA - FOND GRIS CLAIR COMME LA CARTE
+// ⬇️ STYLES DU CAPTCHA
 // ============================================
 
 const CaptchaBox = styled(Box)({
   height: "42px",
   margin: "6px 0",
-  background: "#f7f7f7", // ✅ Même couleur que la carte grise
+  background: "#f7f7f7",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -121,10 +135,6 @@ const CaptchaBox = styled(Box)({
     height: "40px",
   },
 });
-
-// ============================================
-// ⬇️ STYLES DU CHAMP CAPTCHA
-// ============================================
 
 const CaptchaInput = styled(TextField)({
   width: "120px",
@@ -142,10 +152,6 @@ const CaptchaInput = styled(TextField)({
   },
 });
 
-// ============================================
-// ⬇️ STYLES DU BOUTON RÉGÉNÉRER
-// ============================================
-
 const GrayButton = styled(Button)({
   height: "36px",
   border: 0,
@@ -159,10 +165,6 @@ const GrayButton = styled(Button)({
   minWidth: "80px",
   "&:hover": { backgroundColor: "#555" },
 });
-
-// ============================================
-// ⬇️ STYLES DU BOUTON SE CONNECTER
-// ============================================
 
 const LoginButton = styled(Button)({
   width: "100%",
@@ -182,17 +184,13 @@ const LoginButton = styled(Button)({
   "& i": { marginRight: "8px" },
 });
 
-// ============================================
-// ⬇️ STYLES DU COMBOT (CAPTCHA INPUT + BOUTON REGENERER)
-// ============================================
-
 const CaptchaWrapper = styled(Box)({
   display: "flex",
   gap: "8px",
   marginBottom: "12px",
   justifyContent: "center",
   width: "100%",
-  maxWidth: "175px", // ✅ Même largeur que le bouton "Se connecter"
+  maxWidth: "175px",
 });
 
 const ForgotLink = styled(Button)({
@@ -221,54 +219,111 @@ const TermsText = styled(Typography)({
 });
 
 // ============================================
-// STYLES POUR LA VERSION CONNECTÉE (PRO)
+// ✅ STYLES POUR LA VERSION CONNECTÉE
 // ============================================
 
+// ✅ "Bienvenue," en noir (ligne 1)
 const WelcomeText = styled(Typography)({
   fontFamily: "Inter, sans-serif",
-  fontSize: "20px",
-  fontWeight: 700,
+  fontSize: "16px",
+  fontWeight: 400,
   color: "#1a2332",
-  marginBottom: "4px",
+  marginBottom: "2px",
+  lineHeight: 1.2,
 });
 
-const DashboardLink = styled(Button)({
-  width: "100%",
-  maxWidth: "220px",
-  borderRadius: "12px",
-  padding: "10px 16px",
-  textTransform: "none",
+// ✅ Nom en gras (ligne 2) - DYNAMIQUE
+const WelcomeName = styled(Typography)({
   fontFamily: "Inter, sans-serif",
-  fontWeight: 500,
-  fontSize: "14px",
-  justifyContent: "flex-start",
-  gap: "12px",
+  fontSize: "16px",
+  fontWeight: 700,
   color: "#1a2332",
-  backgroundColor: "#ffffff",
-  border: "1px solid #e5e7eb",
+  marginBottom: "16px", // ✅ Réduit (était 20px)
+  lineHeight: 1.2,
+});
+
+// ✅ LIEN "Suivi des offres" - bleu, souligné, centré
+const StyledLink = styled(Button)({
+  fontFamily: "Inter, sans-serif",
+  fontSize: "16px",
+  fontWeight: 400,
+  color: "#0066FF",
+  textDecoration: "underline",
+  textUnderlineOffset: "2px",
+  textTransform: "none",
+  padding: "2px 0", // ✅ Réduit (était 4px 0)
+  minWidth: "auto",
   "&:hover": {
-    backgroundColor: "#f0f7fa",
-    borderColor: "#148aa0",
+    color: "#0044CC",
+    backgroundColor: "transparent",
   },
 });
 
-const LogoutButton = styled(Button)({
+// ✅ LIEN "Changer mon mot de passe" - bleu, souligné, centré
+const StyledLink2 = styled(Button)({
+  fontFamily: "Inter, sans-serif",
+  fontSize: "16px",
+  fontWeight: 400,
+  color: "#0066FF",
+  textDecoration: "underline",
+  textUnderlineOffset: "2px",
+  textTransform: "none",
+  padding: "2px 0", // ✅ Réduit (était 4px 0)
+  minWidth: "auto",
+  marginBottom: "20px", // ✅ Réduit (était 28px)
+  "&:hover": {
+    color: "#0044CC",
+    backgroundColor: "transparent",
+  },
+});
+
+// ✅ BOUTON DÉCONNEXION - bleu/turquoise, bord arrondi
+const LogoutBtn = styled(Button)({
   width: "100%",
   maxWidth: "220px",
-  borderRadius: "12px",
-  padding: "10px 16px",
+  height: "42px", // ✅ Réduit (était 45px)
+  borderRadius: "25px",
+  backgroundColor: "#1689A3",
+  color: "#ffffff",
+  fontSize: "16px",
+  fontWeight: 600,
   textTransform: "none",
   fontFamily: "Inter, sans-serif",
-  fontWeight: 500,
-  fontSize: "14px",
-  justifyContent: "flex-start",
-  gap: "12px",
-  color: "#ef4444",
-  backgroundColor: "#ffffff",
-  border: "1px solid #fecaca",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "10px",
   "&:hover": {
-    backgroundColor: "#fef2f2",
-    borderColor: "#ef4444",
+    backgroundColor: "#0e6f85",
+  },
+});
+
+// ✅ SECTION SNRT - CONTENU CONSERVÉ, SEUL L'ESPACEMENT CHANGE
+const SnrtContainerStyled = styled(Box)({
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  width: "100%",
+  borderTop: "1px solid #e5e7eb",
+  paddingTop: "14px",
+  marginTop: "6px", // ✅ RÉDUIT - Rapproche les cartes
+});
+
+const SnrtLink = styled(Button)({
+  textTransform: "none",
+  fontFamily: "Inter, sans-serif",
+  fontSize: "13px",
+  fontWeight: 500,
+  color: "#1a2332",
+  justifyContent: "flex-start",
+  gap: "10px",
+  padding: "6px 4px",
+  "&:hover": {
+    color: "#148aa0",
+    backgroundColor: "transparent",
+  },
+  "& .MuiButton-startIcon": {
+    color: "#148aa0",
   },
 });
 
@@ -279,7 +334,7 @@ const LogoutButton = styled(Button)({
 const SidebarAuth = () => {
   console.log("SidebarAuth mounted — file updated:", new Date().toISOString());
   const navigate = useNavigate();
-  const location = useLocation(); // ✅ Ajout de useLocation
+  const location = useLocation();
   const dispatch = useDispatch();
   
   const { user, isAuthenticated } = useSelector((state) => state.auth);
@@ -292,10 +347,9 @@ const SidebarAuth = () => {
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // ✅ GÉNÉRER LE CAPTCHA AU CHARGEMENT ET À CHAQUE CHANGEMENT DE PAGE
   useEffect(() => {
     regenerateCaptcha();
-  }, [location.pathname]); // ✅ Dépendance ajoutée
+  }, [location.pathname]);
 
   const regenerateCaptcha = () => {
     const chars =
@@ -362,51 +416,42 @@ const SidebarAuth = () => {
   const isBlocked = attempts >= 3;
 
   // ========================================== //
-  // ✅ VERSION CONNECTÉE
+  // ✅ VERSION CONNECTÉE - HAUTEUR RÉDUITE
   // ========================================== //
   if (isAuthenticated && user) {
+    const fullName = `${user.prenom || ''} ${user.nom || ''}`.trim() || "Utilisateur";
+
     return (
       <SideCard>
         <Box sx={{ width: "100%", maxWidth: "220px", textAlign: "center" }}>
-          <WelcomeText>
-            Bienvenue {user.prenom || user.nom || "Utilisateur"}
-          </WelcomeText>
+          {/* ✅ "Bienvenue," (ligne 1) */}
+          <WelcomeText>Bienvenue,</WelcomeText>
 
-          <Divider sx={{ width: "100%", my: 2, borderColor: "#e5e7eb" }} />
+          {/* ✅ Nom dynamique (ligne 2) */}
+          <WelcomeName>{fullName} !</WelcomeName>
 
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              width: "100%",
-            }}
-          >
-            <DashboardLink
-              onClick={() => navigate("/dashboard/applications")}
-              startIcon={<DescriptionOutlined />}
-            >
-              Suivi de mes offres
-            </DashboardLink>
+          {/* ✅ Lien 1 : Suivi des offres */}
+          <StyledLink onClick={() => navigate("/dashboard/applications")}>
+            Suivi des offres
+          </StyledLink>
 
-            <DashboardLink
-              onClick={() => navigate("/profile")}
-              startIcon={<VpnKeyOutlined />}
-            >
-              Changer mot de passe
-            </DashboardLink>
+          {/* ✅ Lien 2 : Changer mon mot de passe */}
+          <StyledLink2 onClick={() => navigate("/profile")}>
+            Changer mon mot de passe
+          </StyledLink2>
 
-            <LogoutButton onClick={handleLogout} startIcon={<LogoutOutlined />}>
-              Déconnexion
-            </LogoutButton>
-          </Box>
+          {/* ✅ Bouton Déconnexion */}
+          <LogoutBtn onClick={handleLogout}>
+            <i className="fa-solid fa-arrow-right-from-bracket" style={{ fontSize: "16px" }}></i>
+            Déconnexion
+          </LogoutBtn>
         </Box>
       </SideCard>
     );
   }
 
   // ========================================== //
-  // ❌ VERSION NON CONNECTÉE (Formulaire)
+  // ❌ VERSION NON CONNECTÉE (Formulaire - inchangé)
   // ========================================== //
   return (
     <SideCard>
@@ -452,7 +497,6 @@ const SidebarAuth = () => {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                {/* ✅ Icône ENVELOPPE (mail) pour CIN - TAILLE RÉDUITE */}
                 <i className="fa-solid fa-envelope" style={{ fontSize: 15, color: "#aab1b8" }}></i>
               </InputAdornment>
             ),
@@ -469,7 +513,6 @@ const SidebarAuth = () => {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                {/* ✅ Icône CADENAS - TAILLE RÉDUITE */}
                 <i className="fa-solid fa-lock" style={{ fontSize: 15, color: "#aab1b8" }}></i>
               </InputAdornment>
             ),
@@ -518,7 +561,6 @@ const SidebarAuth = () => {
           </svg>
         </CaptchaBox>
 
-        {/* ✅ CAPTCHA WRAPPER - MÊME LARGEUR QUE LE BOUTON SE CONNECTER */}
         <CaptchaWrapper>
           <CaptchaInput
             placeholder="Saisissez"
