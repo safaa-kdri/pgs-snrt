@@ -2,8 +2,8 @@
 // ✅ CORRECTION : Ajout de DEPARTEMENT dans authorize + route /application/:applicationId
 // ✅ CORRECTION : Ajout de ROLES.ETUDIANT pour le téléchargement de l'engagement
 // ✅ AJOUT : Route PATCH /:id/status pour mettre à jour le statut d'un stage
-// ✅ AJOUT : Routes pour la gestion complète des conventions
-// ✅ AJOUT : Routes pour la gestion des livrables et rapports
+// ✅ AJOUT : Route POST /:id/send-demande-stage pour envoyer la demande à l'étudiant
+// ✅ SUPPRESSION : Routes pour la gestion complète des conventions (signature)
 
 const express = require('express');
 const router = express.Router();
@@ -37,25 +37,6 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({
     storage: storage,
-    fileFilter: fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
-});
-
-// ============================================
-// CONFIGURATION MULTER POUR CONVENTIONS
-// ============================================
-const conventionStorage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/conventions/');
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'convention_' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
-const conventionUpload = multer({
-    storage: conventionStorage,
     fileFilter: fileFilter,
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
@@ -261,6 +242,14 @@ router.get(
     internshipController.generateDemandeStage
 );
 
+// ✅ AJOUTER : Envoyer la demande de stage à l'étudiant (RH)
+router.post(
+    '/:id/send-demande-stage',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_SEND_DEMANDE_STAGE'),
+    internshipController.sendDemandeStageToStudent
+);
+
 // ============================================
 // ✅ ROUTES ÉTUDIANT - DÉPOT DES DOCUMENTS
 // ============================================
@@ -272,51 +261,6 @@ router.post(
     upload.single('document'),
     logAction('INTERNSHIP_UPLOAD_ENGAGEMENT'),
     internshipController.uploadEngagementConfidentialite
-);
-
-// ============================================
-// ✅ ROUTES CONVENTION - GESTION COMPLÈTE
-// ============================================
-
-// 1. ÉTUDIANT - Déposer sa convention
-router.post(
-    '/:id/depot-convention',
-    authorize(ROLES.ETUDIANT),
-    conventionUpload.single('convention'),
-    logAction('INTERNSHIP_DEPOT_CONVENTION'),
-    internshipController.depotConvention
-);
-
-// 2. RH - Récupérer toutes les conventions déposées
-router.get(
-    '/conventions/deposees',
-    authorize(ROLES.RH, ROLES.ADMIN),
-    logAction('INTERNSHIP_GET_DEPOSEES_CONVENTIONS'),
-    internshipController.getDeposeesConventions
-);
-
-// 3. RH - Signer la convention
-router.put(
-    '/:id/sign-convention',
-    authorize(ROLES.RH, ROLES.ADMIN),
-    logAction('INTERNSHIP_SIGN_CONVENTION'),
-    internshipController.signConvention
-);
-
-// 4. RH - Envoyer la convention signée à l'étudiant
-router.post(
-    '/:id/send-convention',
-    authorize(ROLES.RH, ROLES.ADMIN),
-    logAction('INTERNSHIP_SEND_CONVENTION'),
-    internshipController.sendConventionToStudent
-);
-
-// 5. ÉTUDIANT - Télécharger la convention signée
-router.get(
-    '/:id/download-convention',
-    authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.ADMIN),
-    logAction('INTERNSHIP_DOWNLOAD_CONVENTION'),
-    internshipController.downloadConvention
 );
 
 module.exports = router;

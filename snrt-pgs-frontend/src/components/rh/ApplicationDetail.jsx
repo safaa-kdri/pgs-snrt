@@ -7,6 +7,11 @@
 // ✅ AJOUT : Passage à l'étape suivante après génération de la demande
 // ✅ AJOUT : Consultation du rapport déposé par l'étudiant
 // ✅ AJOUT : Gestion des statuts EngagementRecu et EngagementRejete
+// ✅ AJOUT : États pour la demande de stage
+// ✅ AJOUT : Fonctions pour voir et envoyer la demande de stage
+// ✅ SUPPRESSION : Panel des documents (déjà dans le workflow)
+// ✅ SUPPRESSION : Barre de statut "Candidature acceptée"
+// ✅ CORRECTION : handleViewDemandeStage utilise l'API pour générer le PDF
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -151,14 +156,6 @@ const WorkflowCard = styled(Paper)({
   height: "100%",
 });
 
-const DocumentCard = styled(Paper)({
-  borderRadius: "16px",
-  padding: "24px",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-  border: "1px solid #eef1f3",
-  height: "100%",
-});
-
 const StepIconWrapper = styled(Box)(({ active, completed }) => ({
   width: 32,
   height: 32,
@@ -183,21 +180,6 @@ const InfoRow = styled(Box)({
     fontSize: "18px",
   },
 });
-
-const DocItem = styled(Box)(({ verified }) => ({
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  padding: "10px 12px",
-  borderRadius: "10px",
-  backgroundColor: verified ? "#f0fdf4" : "#fafafa",
-  border: verified ? "1px solid #22c55e" : "1px solid #eef1f3",
-  marginBottom: "8px",
-  transition: "all 0.2s ease",
-  "&:hover": {
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-  },
-}));
 
 const StyledStepper = styled(Stepper)({
   "& .MuiStepLabel-label": {
@@ -251,6 +233,10 @@ const ApplicationDetail = () => {
   const [generating, setGenerating] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  
+  // ✅ AJOUT : États pour la demande de stage
+  const [demandeStageFile, setDemandeStageFile] = useState(null);
+  const [demandeStagePath, setDemandeStagePath] = useState(null);
 
   // ============================================
   // FONCTIONS UTILITAIRES
@@ -587,7 +573,7 @@ const ApplicationDetail = () => {
     }
   };
 
-  // Générer la demande de stage pour le Directeur
+  // ✅ Générer la demande de stage pour le Directeur (MODIFIÉE)
   const handleGenerateDemandeStage = async () => {
     setGenerating(true);
     try {
@@ -602,11 +588,33 @@ const ApplicationDetail = () => {
         responseType: 'blob'
       });
 
+      // ✅ Stocker le chemin du fichier
+      const contentDisposition = response.headers['content-disposition'];
+      let fileName = `Demande_Stage_Directeur_${application?.etudiantId?.prenom || ''}_${application?.etudiantId?.nom || ''}.pdf`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (match && match[1]) {
+          fileName = match[1].replace(/['"]/g, '');
+        }
+      }
+
+      // ✅ Stocker le chemin pour les actions ultérieures
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
+      
+      // ✅ Stocker les informations de la demande
+      setDemandeStageFile({
+        blob: blob,
+        url: url,
+        fileName: fileName
+      });
+      
+      // ✅ Créer un chemin virtuel pour l'affichage
+      setDemandeStagePath(`/uploads/demandes/demande_stage_${stageId}.pdf`);
+
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Demande_Stage_Directeur_${application?.etudiantId?.prenom || ''}_${application?.etudiantId?.nom || ''}.pdf`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -624,6 +632,76 @@ const ApplicationDetail = () => {
     } catch (error) {
       console.error("Erreur génération demande:", error);
       setError(error.response?.data?.message || "Erreur lors de la génération");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // ✅ Voir la demande de stage générée (CORRIGÉE - utilise l'API)
+  const handleViewDemandeStage = async () => {
+    try {
+      const stageId = internship?._id || application?._id;
+      
+      console.log('🔍 [handleViewDemandeStage] stageId:', stageId);
+      console.log('🔍 [handleViewDemandeStage] internship?.statut:', internship?.statut);
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      // Vérifier que la demande a été générée
+      if (internship?.statut !== 'DemandeEnvoyee' && internship?.statut !== 'EnAttenteValidationDirecteur') {
+        setError("La demande de stage n'a pas encore été générée");
+        return;
+      }
+
+      console.log('✅ [handleViewDemandeStage] Génération du PDF...');
+      
+      // Appeler l'API pour générer/télécharger la demande
+      const response = await api.get(`/internships/${stageId}/generate-demande-stage`, {
+        responseType: 'blob'
+      });
+
+      console.log('✅ [handleViewDemandeStage] PDF reçu, taille:', response.data.size);
+      
+      // Créer un blob URL pour visualiser le PDF
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Ouvrir le PDF dans un nouvel onglet
+      window.open(url, '_blank');
+      
+      // Libérer l'URL après un délai
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 10000);
+    } catch (error) {
+      console.error("❌ Erreur visualisation demande:", error);
+      setError(error.response?.data?.message || "Erreur lors de la visualisation de la demande");
+    }
+  };
+
+  // ✅ Envoyer la demande de stage à l'étudiant (NOUVELLE FONCTION)
+  const handleSendDemandeStageToStudent = async () => {
+    setGenerating(true);
+    try {
+      const stageId = internship?._id || application._id;
+      
+      if (!stageId) {
+        setError("ID du stage non trouvé");
+        return;
+      }
+
+      // Appeler l'API pour envoyer la demande par email
+      await api.post(`/internships/${stageId}/send-demande-stage`);
+      
+      setSuccess("Demande de stage envoyée à l'étudiant avec succès !");
+      setTimeout(() => setSuccess(""), 3000);
+      fetchApplicationDetail();
+    } catch (error) {
+      console.error("Erreur envoi demande:", error);
+      setError(error.response?.data?.message || "Erreur lors de l'envoi");
     } finally {
       setGenerating(false);
     }
@@ -1063,13 +1141,13 @@ const ApplicationDetail = () => {
           </Box>
         );
 
-      // ✅ ÉTAPE 4 : DIRECTEUR - Demande de stage
+      // ✅ ÉTAPE 4 : DIRECTEUR - Demande de stage (MODIFIÉE)
       case 4:
         return (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {isDemandeEnvoyee
-                ? "La demande de stage a été générée. Imprimez-la, faites-la signer et cacheter par le Directeur."
+                ? "La demande de stage a été générée. Vous pouvez la visualiser, la télécharger ou l'envoyer à l'étudiant."
                 : "Générez la demande de stage pour le Directeur."}
             </Typography>
             
@@ -1092,25 +1170,55 @@ const ApplicationDetail = () => {
                 <Alert severity="success" sx={{ borderRadius: '8px', mb: 2 }}>
                   La demande de stage a été générée avec succès.
                 </Alert>
-                <ActionButton
-                  variant="outlined"
-                  startIcon={<Print />}
-                  onClick={handleGenerateDemandeStage}
-                  sx={{
-                    borderColor: "#2d3748",
-                    color: "#2d3748",
-                    mt: 1,
-                  }}
-                >
-                  Télécharger à nouveau
-                </ActionButton>
+                
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 2 }}>
+                  <ActionButton
+                    variant="outlined"
+                    startIcon={<Visibility />}
+                    onClick={handleViewDemandeStage}
+                    disabled={generating}
+                    sx={{
+                      borderColor: "#2d3748",
+                      color: "#2d3748",
+                    }}
+                  >
+                    Voir la demande
+                  </ActionButton>
+                  
+                  <ActionButton
+                    variant="outlined"
+                    startIcon={<Download />}
+                    onClick={handleGenerateDemandeStage}
+                    disabled={generating}
+                    sx={{
+                      borderColor: "#148aa0",
+                      color: "#148aa0",
+                    }}
+                  >
+                    Télécharger
+                  </ActionButton>
+                  
+                  <ActionButton
+                    variant="contained"
+                    startIcon={<Send />}
+                    onClick={handleSendDemandeStageToStudent}
+                    disabled={generating}
+                    sx={{
+                      backgroundColor: "#22c55e",
+                      "&:hover": { backgroundColor: "#16a34a" },
+                    }}
+                  >
+                    {generating ? "Envoi en cours..." : "Envoyer à l'étudiant"}
+                  </ActionButton>
+                </Box>
+                
                 <Alert severity="info" sx={{ mt: 2, borderRadius: "8px" }}>
                   <Typography variant="body2">
                     <strong>Prochaine étape :</strong> Après signature et cachet du Directeur, 
                     vous pouvez passer à l'étape "Clôture" pour consulter le rapport de l'étudiant.
                   </Typography>
                 </Alert>
-                {/* ✅ Bouton pour passer manuellement à l'étape suivante */}
+                
                 {activeStep === 4 && (
                   <ActionButton
                     variant="contained"
@@ -1472,49 +1580,9 @@ const ApplicationDetail = () => {
         </Grid>
       </InfoCard>
 
-      {/* ===== BANNIÈRE STATUT ===== */}
-      <StatusBanner status={application.statut}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <CheckCircle
-            sx={{
-              color:
-                application.statut === "Acceptee" ||
-                application.statut === "Cloturee"
-                  ? "#22c55e"
-                  : application.statut === "EnAnalyse"
-                    ? "#d97706"
-                    : "#1d4ed8",
-            }}
-          />
-          <Typography variant="body1" fontWeight={600} color="text.primary">
-            {application.statut === "Acceptee" ||
-            application.statut === "Cloturee"
-              ? "Candidature acceptée"
-              : application.statut === "EnAnalyse"
-                ? "Candidature en analyse par le département"
-                : application.statut === "Refusee"
-                  ? "Candidature refusée"
-                  : "Candidature en cours de traitement"}
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-          {internship && (
-            <Chip
-              label={`Stage: ${internship.statut || "En cours"}`}
-              size="small"
-              sx={{ backgroundColor: "#e0e7ff", color: "#4338ca" }}
-            />
-          )}
-          <Typography variant="caption" color="text.secondary">
-            Mis à jour le {formatDate(application.updatedAt)}
-          </Typography>
-        </Box>
-      </StatusBanner>
-
-      {/* ===== WORKFLOW + DOCUMENTS ===== */}
+      {/* ===== WORKFLOW UNIQUEMENT (DOCUMENTS SUPPRIMÉS) ===== */}
       <Grid container spacing={3}>
-        {/* WORKFLOW - 8 colonnes */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12}>
           <WorkflowCard>
             <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 3 }}>
               Workflow de validation
@@ -1585,55 +1653,6 @@ const ApplicationDetail = () => {
               {renderStepContent(activeStep)}
             </Box>
           </WorkflowCard>
-        </Grid>
-
-        {/* DOCUMENTS - 4 colonnes */}
-        <Grid item xs={12} md={4}>
-          <DocumentCard>
-            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-              Documents
-            </Typography>
-
-            {application.documents?.length > 0 ? (
-              application.documents
-                .filter((doc) => cleanDocumentType(doc.type) !== "Autre")
-                .map((doc, idx) => (
-                  <DocItem key={idx} verified={doc.isVerified}>
-                    {getFileIcon(doc)}
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" fontWeight={500} noWrap>
-                        {doc.nomOriginal || doc.nom || "Document"}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {cleanDocumentType(doc.type)}
-                        {doc.isVerified && " • Vérifié"}
-                      </Typography>
-                    </Box>
-                    <Tooltip title="Voir">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          const href = buildFileHref(doc);
-                          if (href) window.open(href, "_blank");
-                          else setError("Impossible de visualiser ce document");
-                        }}
-                        sx={{ color: "#2d3748" }}
-                      >
-                        <Visibility fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </DocItem>
-                ))
-            ) : (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ py: 2, textAlign: "center" }}
-              >
-                Aucun document déposé
-              </Typography>
-            )}
-          </DocumentCard>
         </Grid>
       </Grid>
 

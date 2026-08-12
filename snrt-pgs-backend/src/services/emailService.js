@@ -1,5 +1,6 @@
 // src/services/emailService.js
 const nodemailer = require('nodemailer');
+const fs = require('fs');
 const { CONFIG } = require('../config/constants');
 const logger = require('../utils/logger');
 
@@ -317,6 +318,48 @@ async function sendAttestationStage({ to, studentName, pdfPath }) {
 }
 
 // ============================================
+// ✅ ENVOYER LA DEMANDE DE STAGE À L'ÉTUDIANT
+// ============================================
+async function sendDemandeStageToStudent({ to, studentName, pdfPath }) {
+    // Vérifier que le fichier existe
+    if (!fs.existsSync(pdfPath)) {
+        throw new Error(`Fichier PDF introuvable: ${pdfPath}`);
+    }
+
+    const html = baseTemplate(
+        'Demande de stage - SNRT',
+        `<p>Bonjour <strong>${studentName}</strong>,</p>
+         <p>Veuillez trouver ci-joint la demande de stage destinée au Directeur.</p>
+         <p>Vous devez :</p>
+         <ol>
+             <li>Imprimer ce document</li>
+             <li>Le faire signer et cacheter par le Directeur</li>
+             <li>Le retourner à la Direction des Ressources Humaines</li>
+         </ol>
+         <p>Nous vous remercions pour votre collaboration.</p>
+         <br>
+         <p>Cordialement,</p>
+         <p><strong>Direction des Ressources Humaines</strong></p>
+         <p>SNRT</p>`
+    );
+
+    await sendMail({
+        to,
+        subject: `Demande de stage - SNRT`,
+        html,
+        text: `Bonjour ${studentName}, veuillez trouver ci-joint la demande de stage destinée au Directeur.`,
+        attachments: [
+            {
+                filename: `Demande_Stage_Directeur_${studentName.replace(/\s/g, '_')}.pdf`,
+                path: pdfPath,
+            }
+        ]
+    });
+
+    logger.info(`Email demande de stage envoyé à ${to}`);
+}
+
+// ============================================
 // EXPORTS
 // ============================================
 module.exports = {
@@ -338,4 +381,5 @@ module.exports = {
   sendDemandeDirecteurEmail,
   sendFicheSigneeEtudiant,
   sendAttestationStage,
+  sendDemandeStageToStudent,
 };

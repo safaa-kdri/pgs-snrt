@@ -5,8 +5,7 @@
 // ✅ CORRECTION : Permettre à l'étudiant de voir son stage avec vérification de permission
 // ✅ CORRECTION : uploadEngagementConfidentialite - utilisation de 'id' au lieu de 'internshipId' + logs
 // ✅ AJOUT : updateInternshipStatus - Mettre à jour le statut d'un stage
-// ✅ AJOUT : Gestion complète des conventions (dépôt, signature, envoi, téléchargement)
-// ✅ AJOUT : getDeposeesConventions - Récupérer toutes les conventions déposées
+// ✅ AJOUT : sendDemandeStageToStudent - Envoyer la demande de stage à l'étudiant
 
 const mongoose = require('mongoose');
 const Internship = require('../models/Internship');
@@ -1148,6 +1147,87 @@ exports.sendEngagementToStudent = async (req, res) => {
 };
 
 // ============================================
+// ✅ RH - ENVOYER LA DEMANDE DE STAGE À L'ÉTUDIANT
+// ============================================
+exports.sendDemandeStageToStudent = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        console.log('🔍 [sendDemandeStageToStudent] ID reçu:', id);
+
+        const internship = await Internship.findById(id)
+            .populate('etudiantId')
+            .populate('offreId');
+
+        if (!internship) {
+            console.log('❌ [sendDemandeStageToStudent] Stage non trouvé');
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        console.log('✅ [sendDemandeStageToStudent] Stage trouvé:', internship._id);
+        console.log('✅ [sendDemandeStageToStudent] Statut actuel:', internship.statut);
+
+        // Vérifier que la demande a été générée
+        if (internship.statut !== 'DemandeEnvoyee' && internship.statut !== 'EnAttenteValidationDirecteur') {
+            console.log('❌ [sendDemandeStageToStudent] Statut invalide:', internship.statut);
+            return res.status(400).json({
+                success: false,
+                message: 'La demande de stage n\'a pas encore été générée'
+            });
+        }
+
+        // Vérifier que l'étudiant existe et a un email
+        if (!internship.etudiantId || !internship.etudiantId.email) {
+            console.log('❌ [sendDemandeStageToStudent] Étudiant sans email');
+            return res.status(400).json({
+                success: false,
+                message: 'L\'étudiant associé n\'a pas d\'adresse email'
+            });
+        }
+
+        console.log('📧 [sendDemandeStageToStudent] Envoi à:', internship.etudiantId.email);
+
+        // Générer le PDF
+        const internshipData = {
+            _id: internship._id,
+            etudiantId: internship.etudiantId,
+            dateDebut: internship.dateDebut,
+            dateFin: internship.dateFin,
+            etudiantNom: `${internship.etudiantId?.prenom || ''} ${internship.etudiantId?.nom || ''}`.trim()
+        };
+
+        const pdfPath = await pdfService.generateDemandeStage(internshipData);
+        console.log('✅ [sendDemandeStageToStudent] PDF généré:', pdfPath);
+
+        // Envoyer l'email avec le PDF en pièce jointe
+        await emailService.sendDemandeStageToStudent({
+            to: internship.etudiantId.email,
+            studentName: `${internship.etudiantId.prenom} ${internship.etudiantId.nom}`,
+            pdfPath: pdfPath,
+        });
+
+        console.log(`✅ [sendDemandeStageToStudent] Email envoyé à ${internship.etudiantId.email}`);
+        logger.info(`Demande de stage envoyée à l'étudiant ${internship.etudiantId.email}`);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Demande de stage envoyée à l\'étudiant avec succès'
+        });
+
+    } catch (error) {
+        console.error('❌ [sendDemandeStageToStudent] Erreur:', error);
+        logger.error(`Erreur sendDemandeStageToStudent: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// ============================================
 // AFFECTER UN ENCADRANT
 // ============================================
 exports.assignSupervisor = async (req, res) => {
@@ -1465,258 +1545,6 @@ exports.updateInternshipStatus = async (req, res) => {
 };
 
 // ============================================
-// ✅ CONVENTION - GESTION COMPLÈTE
-// ============================================
-
-// 1. ÉTUDIANT - DÉPOSER SA CONVENTION
-// ============================================
-exports.depotConvention = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const file = req.file;
-
-        if (!file) {
-            return res.status(400).json({
-                success: false,
-                message: 'Aucun fichier fourni'
-            });
-        }
-
-        const internship = await Internship.findById(id)
-            .populate('etudiantId')
-            .populate('offreId');
-
-        if (!internship) {
-            return res.status(404).json({
-                success: false,
-                message: 'Stage non trouvé'
-            });
-        }
-
-        if (internship.etudiantId._id.toString() !== req.user._id.toString()) {
-            return res.status(403).json({
-                success: false,
-                message: 'Vous n\'êtes pas autorisé à déposer une convention pour ce stage'
-            });
-        }
-
-        if (internship.statut !== 'EnCours' && internship.statut !== 'Acceptee') {
-            return res.status(400).json({
-                success: false,
-                message: 'Le stage n\'est pas dans un état permettant le dépôt de convention'
-            });
-        }
-
-        internship.convention = {
-            nomOriginal: file.originalname,
-            chemin: file.path,
-            statut: 'DeposeeEtudiant',
-            dateDepot: new Date(),
-            signedByRH: false,
-        };
-
-        await internship.save();
-
-        logger.info(`Convention déposée pour le stage ${id} par ${req.user.email}`);
-
-        return res.status(200).json({
-            success: true,
-            message: 'Convention déposée avec succès',
-            data: internship.convention
-        });
-
-    } catch (error) {
-        logger.error(`Erreur depotConvention: ${error.message}`);
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-// 2. RH - RÉCUPÉRER TOUTES LES CONVENTIONS DÉPOSÉES
-// ============================================
-exports.getDeposeesConventions = async (req, res) => {
-    try {
-        const conventions = await Internship.find({
-            'convention.statut': 'DeposeeEtudiant'
-        })
-            .populate('etudiantId', 'nom prenom email')
-            .populate('offreId', 'titre typeStage')
-            .populate('encadrantId', 'nom prenom')
-            .sort({ 'convention.dateDepot': -1 });
-
-        return res.status(200).json({
-            success: true,
-            count: conventions.length,
-            data: conventions
-        });
-
-    } catch (error) {
-        logger.error(`Erreur getDeposeesConventions: ${error.message}`);
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-// 3. RH - SIGNER LA CONVENTION
-// ============================================
-exports.signConvention = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { signature } = req.body;
-
-        if (!signature) {
-            return res.status(400).json({
-                success: false,
-                message: 'La signature est obligatoire'
-            });
-        }
-
-        const internship = await Internship.findById(id)
-            .populate('etudiantId')
-            .populate('offreId');
-
-        if (!internship) {
-            return res.status(404).json({
-                success: false,
-                message: 'Stage non trouvé'
-            });
-        }
-
-        if (!internship.convention || internship.convention.statut !== 'DeposeeEtudiant') {
-            return res.status(400).json({
-                success: false,
-                message: 'Aucune convention déposée en attente de signature'
-            });
-        }
-
-        internship.convention.statut = 'SigneeRH';
-        internship.convention.signatureRH = signature;
-        internship.convention.signedByRH = true;
-        internship.convention.dateSignatureRH = new Date();
-        internship.convention.signeePar = req.user._id;
-
-        await internship.save();
-
-        logger.info(`Convention signée par RH pour le stage ${id}`);
-
-        return res.status(200).json({
-            success: true,
-            message: 'Convention signée avec succès',
-            data: internship.convention
-        });
-
-    } catch (error) {
-        logger.error(`Erreur signConvention: ${error.message}`);
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-// 4. RH - ENVOYER LA CONVENTION SIGNÉE À L'ÉTUDIANT
-// ============================================
-exports.sendConventionToStudent = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const internship = await Internship.findById(id)
-            .populate('etudiantId')
-            .populate('offreId');
-
-        if (!internship) {
-            return res.status(404).json({
-                success: false,
-                message: 'Stage non trouvé'
-            });
-        }
-
-        if (!internship.convention || internship.convention.statut !== 'SigneeRH') {
-            return res.status(400).json({
-                success: false,
-                message: 'La convention n\'a pas encore été signée par le RH'
-            });
-        }
-
-        internship.convention.statut = 'EnvoyeeEtudiant';
-        internship.convention.dateEnvoi = new Date();
-
-        await internship.save();
-
-        logger.info(`Convention envoyée à l'étudiant pour le stage ${id}`);
-
-        return res.status(200).json({
-            success: true,
-            message: 'Convention envoyée à l\'étudiant avec succès'
-        });
-
-    } catch (error) {
-        logger.error(`Erreur sendConventionToStudent: ${error.message}`);
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-// 5. ÉTUDIANT - TÉLÉCHARGER LA CONVENTION SIGNÉE
-// ============================================
-exports.downloadConvention = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const internship = await Internship.findById(id)
-            .populate('etudiantId');
-
-        if (!internship) {
-            return res.status(404).json({
-                success: false,
-                message: 'Stage non trouvé'
-            });
-        }
-
-        if (internship.etudiantId._id.toString() !== req.user._id.toString()) {
-            return res.status(403).json({
-                success: false,
-                message: 'Vous n\'êtes pas autorisé à télécharger cette convention'
-            });
-        }
-
-        if (!internship.convention || internship.convention.statut !== 'EnvoyeeEtudiant') {
-            return res.status(400).json({
-                success: false,
-                message: 'La convention n\'est pas encore disponible au téléchargement'
-            });
-        }
-
-        const filePath = internship.convention.chemin;
-        if (!filePath) {
-            return res.status(404).json({
-                success: false,
-                message: 'Fichier de convention non trouvé'
-            });
-        }
-
-        res.download(filePath, 'Convention_Stage_Signee.pdf', (err) => {
-            if (err) {
-                logger.error(`Erreur téléchargement convention: ${err.message}`);
-            }
-        });
-
-    } catch (error) {
-        logger.error(`Erreur downloadConvention: ${error.message}`);
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-// ============================================
 // ✅ EXPORTS
 // ============================================
 module.exports = {
@@ -1739,15 +1567,10 @@ module.exports = {
     generateEngagementConfidentialite: exports.generateEngagementConfidentialite,
     generateDemandeStage: exports.generateDemandeStage,
     sendEngagementToStudent: exports.sendEngagementToStudent,
+    sendDemandeStageToStudent: exports.sendDemandeStageToStudent,
     assignSupervisor: exports.assignSupervisor,
     getDepartmentInternships: exports.getDepartmentInternships,
     getInternshipReport: exports.getInternshipReport,
     defineSubject: exports.defineSubject,
     updateInternshipStatus: exports.updateInternshipStatus,
-    // ✅ NOUVELLES FONCTIONS CONVENTION
-    depotConvention: exports.depotConvention,
-    getDeposeesConventions: exports.getDeposeesConventions,
-    signConvention: exports.signConvention,
-    sendConventionToStudent: exports.sendConventionToStudent,
-    downloadConvention: exports.downloadConvention,
 };

@@ -2,6 +2,7 @@
 // Installation: npm install pdfkit
 // ✅ CORRECTION : Utiliser le fichier PDF existant dans uploads/engagements/
 // ✅ AJOUT : Génération de la demande de stage avec logo SNRT - Style professionnel
+// ✅ MODIFICATION : generateDemandeStage - Derniers ajustements pour correspondre exactement à l'original SNRT
 
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
@@ -9,13 +10,13 @@ const path = require('path');
 const logger = require('../utils/logger');
 
 // ============================================
-// CONFIGURATION DES MARGES (2.5cm haut, 2cm bas, 3cm gauche, 2.8cm droite)
+// CONFIGURATION DES MARGES (ajustées pour correspondre à l'original)
 // ============================================
 const MARGINS = {
-    top: 70,    // 2.5 cm
-    bottom: 60,  // 2 cm
-    left: 85,    // 3 cm
-    right: 80    // 2.8 cm
+    top: 70,
+    bottom: 55,
+    left: 85,
+    right: 80
 };
 
 // ============================================
@@ -48,16 +49,10 @@ exports.generateAttestation = async (internship) => {
         const stream = fs.createWriteStream(filePath);
         doc.pipe(stream);
 
-        // ============================================
-        // POLICES - Times New Roman
-        // ============================================
         const FONT = 'Times-Roman';
         const FONT_BOLD = 'Times-Bold';
         const FONT_ITALIC = 'Times-Italic';
 
-        // ============================================
-        // LOGO
-        // ============================================
         const logoPath = path.join(__dirname, '../../uploads/images/snrt-logo.jpg');
         if (fs.existsSync(logoPath)) {
             const centerX = (doc.page.width - MARGINS.left - MARGINS.right) / 2 + MARGINS.left;
@@ -105,7 +100,6 @@ exports.generateAttestation = async (internship) => {
 
         doc.moveDown(3);
 
-        // Pied de page
         const footerY = doc.page.height - MARGINS.bottom - 30;
         doc.moveTo(MARGINS.left, footerY)
            .lineTo(doc.page.width - MARGINS.right, footerY)
@@ -408,7 +402,7 @@ exports.deletePDF = async (filePath) => {
 
 // ============================================
 // ✅ GÉNÉRER LA DEMANDE DE STAGE POUR LE DIRECTEUR
-// ✅ Style professionnel - Times New Roman - Logo centré
+// ✅ Version finale ajustée pour correspondre exactement à l'original SNRT
 // ============================================
 exports.generateDemandeStage = async (internshipData) => {
     return new Promise((resolve, reject) => {
@@ -439,194 +433,245 @@ exports.generateDemandeStage = async (internshipData) => {
             doc.pipe(writeStream);
 
             // ============================================
-            // POLICES - Times New Roman uniquement
+            // POLICES - Times New Roman
             // ============================================
             const FONT = 'Times-Roman';
             const FONT_BOLD = 'Times-Bold';
             const FONT_ITALIC = 'Times-Italic';
             const FONT_SIZE = 14;
-            const FONT_SIZE_FOOTER = 9;
+            const FONT_SIZE_FOOTER = 7.5;
 
             // ============================================
-            // LOGO - Centré, taille réduite
+            // 1. LOGO
             // ============================================
-            const logoPath = path.join(__dirname, '../../uploads/images/snrt-logo.jpg');
-            const logoExists = fs.existsSync(logoPath);
+            const logoPath = path.join(__dirname, '../../uploads/images/SNRT-logo-scanned.jpg');
+            let logoExists = fs.existsSync(logoPath);
+            
+            if (!logoExists) {
+                const fallbackLogoPath = path.join(__dirname, '../../uploads/images/snrt-logo.jpg');
+                logoExists = fs.existsSync(fallbackLogoPath);
+            }
 
-            const pageWidth = doc.page.width - MARGINS.left - MARGINS.right;
             const centerX = doc.page.width / 2;
 
             if (logoExists) {
                 try {
-                    const logoWidth = 90;   // Taille réduite
-                    const logoHeight = 35;
-                    const logoX = centerX - (logoWidth / 2);
-                    const logoY = MARGINS.top - 5;
-                    
-                    doc.image(logoPath, logoX, logoY, {
-                        width: logoWidth,
-                        height: logoHeight,
-                        align: 'center'
+                    const logoMaxWidth = 230;
+                    const logoMaxHeight = 98;
+                    const logoX = centerX - (logoMaxWidth / 2);
+                    const logoY = MARGINS.top - 14;
+
+                    const finalLogoPath = fs.existsSync(path.join(__dirname, '../../uploads/images/SNRT-logo-scanned.jpg'))
+                        ? path.join(__dirname, '../../uploads/images/SNRT-logo-scanned.jpg')
+                        : path.join(__dirname, '../../uploads/images/snrt-logo.jpg');
+
+                    doc.image(finalLogoPath, logoX, logoY, {
+                        fit: [logoMaxWidth, logoMaxHeight],
+                        align: 'center',
+                        valign: 'top'
                     });
-                    
-                    // Espace après le logo (1 cm)
-                    doc.moveDown(1.8);
+
+                    doc.y = logoY + logoMaxHeight + 17;
+                    doc.x = MARGINS.left;
                 } catch (err) {
                     logger.warn(`Erreur chargement logo: ${err.message}`);
                     doc.moveDown(0.5);
                 }
             } else {
-                logger.warn(`Logo non trouvé: ${logoPath}`);
+                logger.warn(`Logo non trouvé`);
                 doc.moveDown(0.5);
             }
 
             // ============================================
-            // LETTRE "A" (centrée, en gras, plus grande)
+            // 2. LETTRE "A"
             // ============================================
             doc.font(FONT_BOLD)
-               .fontSize(16)
+               .fontSize(18)
                .text('A', { align: 'center' })
                .moveDown(0.8);
 
             // ============================================
-            // DESTINATAIRE (2 lignes, centré, gras)
+            // 3. DESTINATAIRE
             // ============================================
+            doc.font(FONT_BOLD)
+               .fontSize(13.5)
+               .text('Monsieur le Directeur Adjoint Chargé des Infrastructures et des Systèmes', { align: 'center', lineGap: 1 })
+               .text("d'Information", { align: 'center', lineGap: 1 })
+               .moveDown(2.5);
+
+            // ============================================
+            // 4. OBJET
+            // ============================================
+            doc.x = MARGINS.left;
+
             doc.font(FONT_BOLD)
                .fontSize(FONT_SIZE)
-               .text('Monsieur le Directeur Adjoint', { align: 'center' })
-               .text('Chargé des Infrastructures et des Systèmes d\'Information', { align: 'center' })
-               .moveDown(0.8);
-
-            // ============================================
-            // OBJET
-            // ============================================
-            // "Objet :" en gras, le reste en normal, nom en gras
-            doc.font(FONT_BOLD)
-               .fontSize(FONT_SIZE)
-               .text('Objet :', { continued: true });
-            
-            doc.font(FONT)
-               .text(' Demande de stage concernant : ', { continued: true });
-            
-            doc.font(FONT_BOLD)
-               .text(etudiantNom || 'Nom Prénom')
-               .moveDown(0.8);
-
-            // ============================================
-            // CORPS DU TEXTE (justifié, interligne 1.5)
-            // ============================================
-            const dateFormatted = new Date().toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: 'long',
-                year: 'numeric'
-            });
-
-            const dateDebutFormatted = new Date(dateDebut).toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: 'long',
-                year: 'numeric'
-            });
-
-            const dateFinFormatted = new Date(dateFin).toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: 'long',
-                year: 'numeric'
-            });
+               .text('Objet : ', { continued: true, lineGap: 4 });
 
             doc.font(FONT)
-               .fontSize(FONT_SIZE)
+               .text(`Demande de stage concernant : ${etudiantNom || 'Nom Prénom'}`)
+               .moveDown(1.8);
+
+            // ============================================
+            // 5. PARAGRAPHE - Espacement augmenté (lineGap: 14)
+            // ============================================
+            doc.x = MARGINS.left;
+
+            const formatDateToFrench = (date) => {
+                if (!date) return '';
+                const d = new Date(date);
+                const day = String(d.getDate()).padStart(2, '0');
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                return `${day}/${month}/${year}`;
+            };
+
+            const dateFormatted = formatDateToFrench(new Date());
+            const dateDebutFormatted = formatDateToFrench(dateDebut);
+            const dateFinFormatted = formatDateToFrench(dateFin);
+
+            const studentName = etudiantNom || 'Nom Prénom';
+
+            // ✅ lineGap augmenté à 14 pour plus d'espace entre les lignes
+            doc.font(FONT)
+               .fontSize(13.8)
                .text(
-                   `Faisant suite à votre accord de stage concernant "${etudiantNom || 'Nom Prénom'}" pour la période du ${dateDebutFormatted} au ${dateFinFormatted} au sein de votre direction ; j'ai l'honneur de vous demander de bien vouloir renseigner la fiche de stage ci-jointe, afin de confirmer la période du stage et de la retourner à la Direction des Ressources Humaines.`,
+                   `Faisant suite à votre accord de stage concernant ${studentName} pour la période du ${dateDebutFormatted} au ${dateFinFormatted} au sein de votre direction ; j'ai l'honneur de vous demander de bien vouloir renseigner la fiche de stage ci-jointe, afin de confirmer la période du stage et de la retourner à la Direction des Ressources Humaines.`,
                    {
                        align: 'justify',
-                       lineGap: 4  // interligne 1.5
+                       lineGap: 14 // ✅ Augmenté de 10 à 14 pour plus d'espace
                    }
-               )
-               .moveDown(0.8);
+               );
 
             // ============================================
-            // SIGNATURE + DATE
+            // BLOC BAS DE PAGE - Cachet descendu pour alignement avec la date
             // ============================================
-            // Signature à gauche
-            doc.font(FONT_BOLD)
-               .fontSize(FONT_SIZE)
-               .text('La Direction des Ressources Humaines', {
-                   align: 'left',
-                   continued: false
-               });
+            const pageBottom = doc.page.height;
 
-            doc.moveDown(0.2)
-               .font(FONT_ITALIC)
-               .fontSize(FONT_SIZE)
-               .text('(Signature et cachet)', {
-                   align: 'left',
-                   continued: false
-               });
+            // Pied de page
+            const footerY = pageBottom - MARGINS.bottom - 45;
 
-            // Date à droite (même niveau que la signature)
-            const dateY = doc.y;
-            doc.font(FONT)
-               .fontSize(FONT_SIZE)
-               .text(`Fait à Rabat le : ${dateFormatted}`, {
-                   align: 'right',
-                   continued: false
-               })
-               .moveDown(1.5);
+            // NB
+            const nbY = footerY - 70;
 
-            // ============================================
-            // NB (en gras, 2 lignes)
-            // ============================================
-            doc.font(FONT_BOLD)
-               .fontSize(FONT_SIZE)
-               .text('NB :', { continued: true });
+            // ✅ CACHET - Descendu davantage pour alignement avec la date
+            const cachetWidth = 172;
+            const cachetHeight = 115;
+            const cachetGapToNB = 45;
             
-            doc.font(FONT)
-               .text(' Le stagiaire doit présenter à la Direction des Ressources Humaines la présente lettre')
-               .text('pour toute demande d\'attestation de stage.', { indent: 20 })
-               .moveDown(1.2);
+            const cachetPath = path.join(__dirname, '../../uploads/images/cachet-snrt-original.png');
+            const cachetExists = fs.existsSync(cachetPath);
+            const finalCachetPath = cachetExists 
+                ? cachetPath 
+                : path.join(__dirname, '../../uploads/images/Signature-et-cachet-1.png');
+            
+            const cachetX = MARGINS.left + 37;
+            // ✅ Descendu davantage pour alignement avec la date (augmenté la valeur de descente)
+            const cachetY = nbY - cachetGapToNB - cachetHeight - 30; // Descendu (était -45)
+
+            // DATE - alignée avec le cachet
+            const dateWidth = 200;
+            const dateX = doc.page.width - MARGINS.right - 200 + 15;
+            const dateY = cachetY + (cachetHeight / 2) + 28; // Ajusté pour alignement
 
             // ============================================
-            // LIGNE DE SÉPARATION + PIED DE PAGE
+            // CACHET + SIGNATURE DRH
             // ============================================
-            const footerY = doc.page.height - MARGINS.bottom - 45;
-            doc.moveTo(MARGINS.left, footerY)
-               .lineTo(doc.page.width - MARGINS.right, footerY)
-               .strokeColor('#cccccc')
+            if (fs.existsSync(finalCachetPath)) {
+                try {
+                    doc.image(finalCachetPath, cachetX, cachetY, {
+                        width: cachetWidth,
+                        height: cachetHeight,
+                    });
+                    logger.info(`Cachet ajouté à la demande de stage`);
+                } catch (err) {
+                    logger.warn(`Erreur chargement cachet: ${err.message}`);
+                }
+            } else {
+                logger.warn(`Cachet non trouvé: ${finalCachetPath}`);
+            }
+
+            // ============================================
+            // DATE - Alignée à droite
+            // ============================================
+            doc.font(FONT)
+               .fontSize(13)
+               .text(`Fait à Rabat le : ${dateFormatted}`, dateX, dateY, {
+                   width: dateWidth,
+                   align: 'right'
+               });
+
+            // ============================================
+            // NB
+            // ============================================
+            doc.x = MARGINS.left;
+            doc.y = nbY;
+
+            doc.font(FONT_BOLD)
+               .fontSize(13.5)
+               .text('NB : ', { continued: true });
+
+            doc.font(FONT)
+               .fontSize(13.5)
+               .text(
+                   'Le stagiaire doit présenter à la Direction des Ressources Humaines la présente lettre pour toute demande d\'attestation de stage.',
+                   { lineGap: 1 }
+               );
+
+            // ============================================
+            // LIGNE HORIZONTALE
+            // ============================================
+            const footerLineInset = 40;
+            doc.moveTo(footerLineInset, footerY)
+               .lineTo(doc.page.width - footerLineInset, footerY)
+               .strokeColor('#888888')
                .lineWidth(0.5)
                .stroke();
 
-            // Pied de page (centré, taille 9pt, interligne réduit)
+            // ============================================
+            // PIED DE PAGE
+            // ============================================
+            const footerTextMargin = MARGINS.left;
+            const footerTextWidth = doc.page.width - (footerTextMargin * 2);
+
+            doc.x = footerTextMargin;
+            doc.y = footerY + 8;
+
             doc.font(FONT)
                .fontSize(FONT_SIZE_FOOTER)
                .text(
                    'SNRT SA, Capital social : 1 275 000 000,00 Dirhams – Siège social : 1, Rue El Brihi - Rabat 10.000 - Maroc',
                    {
+                       width: footerTextWidth,
                        align: 'center',
-                       lineGap: 1,
+                       lineGap: 0,
                        continued: false
                    }
                )
                .text(
                    'Tél. : +212 (0)5 37 66 91 90 / +212 (0)5 37 68 52 00 – Fax : +212 (0)5 37 72 20 47',
                    {
+                       width: footerTextWidth,
                        align: 'center',
-                       lineGap: 1,
+                       lineGap: 0,
                        continued: false
                    }
                )
                .text(
                    'R.C. : 60485 – T.P. : 25197490 – I.F. : 3304097 – I.C.E. : 000211903000067',
                    {
+                       width: footerTextWidth,
                        align: 'center',
-                       lineGap: 1,
+                       lineGap: 0,
                        continued: false
                    }
                )
                .text(
                    'Site Web : www.snrt.ma',
                    {
+                       width: footerTextWidth,
                        align: 'center',
-                       lineGap: 1,
+                       lineGap: 0,
                        continued: false
                    }
                );
@@ -653,11 +698,9 @@ exports.generateDemandeStage = async (internshipData) => {
 
 // ============================================
 // GÉNÉRER LE PDF D'ENGAGEMENT DE CONFIDENTIALITÉ
-// Utiliser le fichier PDF existant dans uploads/engagements/
 // ============================================
 exports.generateEngagementConfidentialite = async (internshipData) => {
     try {
-        // Chemin du fichier PDF existant dans uploads/engagements/
         const pdfPath = path.join(
             __dirname,
             '../../uploads/engagements/PSRH-PR01-EN10-A ENGAGEMENT DE CONFIDENTIALITE RESERVE AUX STAGIAIRES.pdf'
@@ -665,19 +708,15 @@ exports.generateEngagementConfidentialite = async (internshipData) => {
 
         logger.info(`[generateEngagementConfidentialite] Recherche du fichier: ${pdfPath}`);
 
-        // Vérifier que le fichier existe
         if (fs.existsSync(pdfPath)) {
             logger.info(`[generateEngagementConfidentialite] Fichier trouvé: ${pdfPath}`);
 
-            // Créer le dossier temporaire si nécessaire
             const tempDir = path.join(__dirname, '../../uploads/engagements');
             ensureDirectoryExists(tempDir);
 
-            // Copier le fichier avec un nom unique pour le stage
             const fileName = `engagement_confidentialite_${internshipData._id || Date.now()}.pdf`;
             const destPath = path.join(tempDir, fileName);
 
-            // Copier le fichier
             fs.copyFileSync(pdfPath, destPath);
 
             logger.info(`[generateEngagementConfidentialite] Fichier copié: ${destPath}`);
@@ -685,19 +724,17 @@ exports.generateEngagementConfidentialite = async (internshipData) => {
             return destPath;
         }
 
-        // Fallback : Le fichier n'existe pas, générer un PDF simple
         logger.warn(`[generateEngagementConfidentialite] Fichier non trouvé: ${pdfPath}, génération du fallback...`);
         return await generateEngagementFallback(internshipData);
 
     } catch (error) {
         logger.error(`[generateEngagementConfidentialite] Erreur: ${error.message}`);
-        // Fallback en cas d'erreur
         return await generateEngagementFallback(internshipData);
     }
 };
 
 // ============================================
-// FALLBACK : Générer un PDF simple si le fichier n'existe pas
+// FALLBACK
 // ============================================
 const generateEngagementFallback = async (internshipData) => {
     try {
