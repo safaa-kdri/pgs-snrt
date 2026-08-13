@@ -1,9 +1,18 @@
 // src/components/student/DepotCandidature.jsx
 // ✅ WORKFLOW DE CANDIDATURE EN 3 ÉTAPES
-// ✅ ÉTAPE 1 - INFORMATIONS UNIVERSITAIRES
+// ✅ ÉTAPE 1 - INFORMATIONS UNIVERSITAIRES (4 CHAMPS UNIQUEMENT)
 // ✅ ÉTAPE 2 - FICHE DE DEMANDE DE STAGE (TÉLÉCHARGEMENT UNIQUEMENT)
-// ✅ ÉTAPE 3 - PIÈCES JUSTIFICATIVES AVEC LIGNES ALIGNÉES
+// ✅ ÉTAPE 3 - PIÈCES JUSTIFICATIVES - CRÉATION ET SOUMISSION FINALE
 // ✅ STYLE WORKFLOW - CERCLES SANS NUMÉROS
+// ✅ MODIFICATION : Suppression de la création automatique au chargement
+// ✅ MODIFICATION : NE PAS créer la candidature à l'étape 1
+// ✅ MODIFICATION : Création et soumission à l'étape 3 (createAndSubmitCandidature)
+// ✅ MODIFICATION : Garder uniquement les 4 champs qui existent dans UtilisateurExterne
+// ✅ MODIFICATION : Suppression des fonctions de sauvegarde intermédiaires
+// ✅ CORRECTION : Message d'erreur professionnel sans emojis
+// ✅ SUPPRESSION : Vérification au chargement (le message n'apparaît qu'à la soumission)
+// ✅ CORRECTION : handleFileUpload - Envoyer le type correctement avec le document
+// ✅ CORRECTION : Mapping correct entre l'étiquette et le type de document
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
@@ -40,7 +49,6 @@ const StepCard = styled(Paper)({
     border: '1px solid #eef1f3',
 });
 
-// ✅ Carte Étape 3 - Très large, presque sans marges
 const StepCardWide = styled(Paper)({
     borderRadius: '16px',
     padding: '24px 24px',
@@ -79,7 +87,6 @@ const SectionTitle = styled(Typography)({
     marginBottom: '20px',
 });
 
-// ✅ Titre Étape 3 - Centré
 const SectionTitleCentered = styled(Typography)({
     fontFamily: 'Inter, sans-serif',
     fontWeight: 700,
@@ -189,29 +196,6 @@ const WorkflowContainer = styled(Box)({
     marginRight: 'auto',
 });
 
-const DateTextField = styled(TextField)({
-    '& .MuiOutlinedInput-root': {
-        borderRadius: '10px',
-        backgroundColor: '#ffffff',
-        height: '44px',
-        '& fieldset': { borderColor: '#d1d5db' },
-        '&:hover fieldset': { borderColor: '#d1d5db' },
-        '&.Mui-focused fieldset': { borderColor: '#148aa0' },
-    },
-    '& .MuiInputBase-input': {
-        padding: '0 14px',
-        fontSize: '14px',
-        color: '#1a2332',
-        fontFamily: 'Inter, sans-serif',
-    },
-    '& .MuiInputLabel-root': {
-        fontFamily: 'Inter, sans-serif',
-        fontSize: '14px',
-        color: '#6d7884',
-        '&.Mui-focused': { color: '#148aa0' },
-    },
-});
-
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -222,12 +206,11 @@ const DepotCandidature = () => {
     const { id } = useParams();
     const { user } = useAuth();
 
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [etapeActuelle, setEtapeActuelle] = useState(1);
-    const [applicationId, setApplicationId] = useState(id || null);
     const [offerId, setOfferId] = useState(null);
     const [offerTitle, setOfferTitle] = useState('');
 
@@ -239,18 +222,16 @@ const DepotCandidature = () => {
         } else {
             console.warn('⚠️ [DepotCandidature] Aucune offreId dans location.state');
         }
+        // ✅ NE PAS faire de vérification automatique ici
+        setLoading(false);
     }, [location]);
 
+    // ✅ Garder uniquement les 4 champs qui existent dans UtilisateurExterne
     const [formData, setFormData] = useState({
         universite: '',
-        etablissement: '',
         filiere: '',
         niveau: '',
-        anneeUniversitaire: '',
-        typeStageDemande: '',
-        dureeStage: '',
-        dateDebutPrevue: '',
-        dateFinPrevue: '',
+        annee: '',
     });
 
     const [ficheAccepte, setFicheAccepte] = useState(false);
@@ -259,171 +240,36 @@ const DepotCandidature = () => {
     const [documentIds, setDocumentIds] = useState([]);
     const [uploading, setUploading] = useState(false);
 
-    useEffect(() => {
-        if (id) {
-            loadWorkflowState();
-        } else if (offerId) {
-            createNewApplication();
-        } else {
-            setLoading(false);
-        }
-    }, [id, offerId]);
-
-    const createNewApplication = async () => {
-        if (!offerId) {
-            setError('Aucune offre sélectionnée');
-            setLoading(false);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            setError('');
-
-            const existingResponse = await api.get('/applications', {
-                params: { 
-                    offreId: offerId, 
-                    etudiantId: user?.id 
-                }
-            });
-            
-            const existingApp = existingResponse.data?.data?.find(
-                app => app.offreId?._id === offerId || app.offreId === offerId
-            );
-            
-            if (existingApp) {
-                setApplicationId(existingApp._id);
-                setSuccess('Candidature récupérée avec succès');
-                setTimeout(() => setSuccess(''), 3000);
-                
-                if (existingApp.statut === 'Brouillon' || existingApp.statut === 'BROUILLON') {
-                    await loadWorkflowStateWithId(existingApp._id);
-                } else {
-                    setSuccess('Vous avez déjà soumis une candidature pour cette offre');
-                    setTimeout(() => {
-                        navigate(`/dashboard/application/${existingApp._id}`);
-                    }, 2000);
-                }
-                return;
-            }
-
-            const response = await api.post('/applications', {
-                offreId: offerId,
-                commentaire: 'Candidature créée via le workflow'
-            });
-            
-            if (response.data.success) {
-                setApplicationId(response.data.data._id);
-                setSuccess('Candidature créée avec succès');
-                setTimeout(() => setSuccess(''), 3000);
-            }
-        } catch (error) {
-            console.error('❌ Erreur création candidature:', error);
-            
-            if (error.response?.data?.message?.includes('existe déjà')) {
-                try {
-                    const retryResponse = await api.get('/applications', {
-                        params: { offreId: offerId, etudiantId: user?.id }
-                    });
-                    const retryApp = retryResponse.data?.data?.[0];
-                    if (retryApp) {
-                        setApplicationId(retryApp._id);
-                        setSuccess('Candidature récupérée avec succès');
-                        setTimeout(() => setSuccess(''), 3000);
-                        await loadWorkflowStateWithId(retryApp._id);
-                        return;
-                    }
-                } catch (e) {
-                    console.error('Erreur récupération:', e);
-                }
-            }
-            
-            setError(error.response?.data?.message || 'Erreur lors de la création');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadWorkflowStateWithId = async (appId) => {
-        try {
-            const response = await api.get(`/applications/${appId}/workflow/state`);
-            const data = response.data.data;
-
-            setEtapeActuelle(data.workflowEtape || 1);
-            setFormData({
-                universite: data.universite || '',
-                etablissement: data.etablissement || '',
-                filiere: data.filiere || '',
-                niveau: data.niveau || '',
-                anneeUniversitaire: data.anneeUniversitaire || '',
-                typeStageDemande: data.typeStageDemande || '',
-                dureeStage: data.dureeStage || '',
-                dateDebutPrevue: data.dateDebutPrevue ? new Date(data.dateDebutPrevue).toISOString().split('T')[0] : '',
-                dateFinPrevue: data.dateFinPrevue ? new Date(data.dateFinPrevue).toISOString().split('T')[0] : '',
-            });
-            setFicheAccepte(data.ficheAccepte || false);
-            if (data.documents) {
-                setDocumentIds(data.documents);
-            }
-        } catch (error) {
-            console.error('❌ Erreur chargement workflow:', error);
-            setError('Erreur lors du chargement de votre candidature');
-        }
-    };
-
-    const loadWorkflowState = async () => {
-        try {
-            const response = await api.get(`/applications/${id}/workflow/state`);
-            const data = response.data.data;
-
-            setEtapeActuelle(data.workflowEtape || 1);
-            setFormData({
-                universite: data.universite || '',
-                etablissement: data.etablissement || '',
-                filiere: data.filiere || '',
-                niveau: data.niveau || '',
-                anneeUniversitaire: data.anneeUniversitaire || '',
-                typeStageDemande: data.typeStageDemande || '',
-                dureeStage: data.dureeStage || '',
-                dateDebutPrevue: data.dateDebutPrevue ? new Date(data.dateDebutPrevue).toISOString().split('T')[0] : '',
-                dateFinPrevue: data.dateFinPrevue ? new Date(data.dateFinPrevue).toISOString().split('T')[0] : '',
-            });
-            setFicheAccepte(data.ficheAccepte || false);
-            if (data.documents) {
-                setDocumentIds(data.documents);
-            }
-        } catch (error) {
-            console.error('❌ Erreur chargement workflow:', error);
-            setError('Erreur lors du chargement de votre candidature');
-        } finally {
-            setLoading(false);
-        }
-    };
+    // ✅ SUPPRIMER toute vérification automatique au chargement
 
     const handleFormChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
         setError('');
     };
 
+    // ============================================
+    // ✅ handleNext - NE PAS créer la candidature à l'étape 1
+    // ============================================
     const handleNext = async () => {
         if (etapeActuelle === 1) {
             if (!formData.universite || !formData.filiere || !formData.niveau) {
                 setError('Veuillez remplir les champs obligatoires (Université, Filière, Niveau)');
                 return;
             }
-            await saveEtape1();
+            setEtapeActuelle(2);
+            setError('');
         } else if (etapeActuelle === 2) {
             if (!ficheAccepte) {
                 setError('Vous devez confirmer que vous avez téléchargé la fiche avant de continuer');
                 return;
             }
-            await saveEtape2();
+            setEtapeActuelle(3);
+            setError('');
         } else if (etapeActuelle === 3) {
-            await submitCandidature();
+            // ✅ C'est ICI qu'on crée la candidature et qu'on la soumet
+            await createAndSubmitCandidature();
             return;
         }
-        setEtapeActuelle(etapeActuelle + 1);
-        setError('');
     };
 
     const handlePrev = () => {
@@ -433,50 +279,15 @@ const DepotCandidature = () => {
         }
     };
 
-    const saveEtape1 = async () => {
+    // ============================================
+    // ✅ createAndSubmitCandidature - Vérification UNIQUEMENT à la soumission
+    // ============================================
+    const createAndSubmitCandidature = async () => {
         try {
             setSaving(true);
-            const payload = {
-                universite: formData.universite,
-                etablissement: formData.etablissement,
-                filiere: formData.filiere,
-                niveau: formData.niveau,
-                anneeUniversitaire: formData.anneeUniversitaire,
-                typeStageDemande: formData.typeStageDemande,
-                dureeStage: formData.dureeStage,
-                dateDebutPrevue: formData.dateDebutPrevue || null,
-                dateFinPrevue: formData.dateFinPrevue || null,
-            };
-
-            await api.post(`/applications/${applicationId}/workflow/etape1`, payload);
-            setSuccess('Informations sauvegardées');
-            setTimeout(() => setSuccess(''), 3000);
-        } catch (error) {
-            setError(error.response?.data?.message || 'Erreur lors de la sauvegarde');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const saveEtape2 = async () => {
-        try {
-            setSaving(true);
-            await api.post(`/applications/${applicationId}/workflow/etape2`, {
-                ficheAccepte: ficheAccepte
-            });
-            setSuccess('Fiche de demande téléchargée');
-            setTimeout(() => setSuccess(''), 3000);
-        } catch (error) {
-            setError(error.response?.data?.message || 'Erreur lors de la sauvegarde');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const submitCandidature = async () => {
-        try {
-            setSaving(true);
+            setError('');
             
+            // 1. Vérifier que tous les documents sont déposés
             const requiredDocs = ['Photo', 'LettreMotivation', 'CV', 'AttestationScolarite', 'LettreRecommandation', 'CIN', 'Assurance', 'FicheEngagement'];
             const missingDocs = requiredDocs.filter(doc => !documents[doc]);
             
@@ -486,41 +297,118 @@ const DepotCandidature = () => {
                 return;
             }
             
-            await api.post(`/applications/${applicationId}/workflow/submit`, {
-                documents: documentIds
+            // 2. Vérifier qu'on a un offerId
+            if (!offerId) {
+                setError('Aucune offre sélectionnée');
+                setSaving(false);
+                return;
+            }
+            
+            // ✅ 3. VÉRIFICATION UNIQUE ICI - Vérifier si l'étudiant a déjà postulé
+            try {
+                const checkResponse = await api.get('/applications', {
+                    params: { 
+                        offreId: offerId, 
+                        etudiantId: user?.id 
+                    }
+                });
+                
+                const existingApps = checkResponse.data?.data || [];
+                const hasSubmitted = existingApps.some(app => 
+                    app.statut === 'Soumise' || app.statut === 'Acceptee'
+                );
+                
+                if (hasSubmitted) {
+                    setError('Vous avez déjà soumis une candidature pour cette offre. Une seule candidature par offre est autorisée.');
+                    setSaving(false);
+                    return;
+                }
+            } catch (checkError) {
+                console.warn('Erreur lors de la vérification:', checkError);
+                // Continuer quand même, le backend fera la vérification
+            }
+            
+            // 4. CRÉER la candidature
+            const createResponse = await api.post('/applications', {
+                offreId: offerId,
+                commentaire: 'Candidature soumise via le workflow',
+                documents: documentIds,
+                universite: formData.universite,
+                filiere: formData.filiere,
+                niveau: formData.niveau,
+                annee: formData.annee,
+                ficheAccepte: ficheAccepte,
             });
-            setSuccess('🎉 Votre candidature a été déposée avec succès !');
+            
+            if (!createResponse.data.success) {
+                setError(createResponse.data.message || 'Erreur lors de la création de la candidature');
+                setSaving(false);
+                return;
+            }
+            
+            setSuccess('Votre candidature a été déposée avec succès.');
             setTimeout(() => {
                 navigate('/dashboard/applications');
             }, 3000);
+            
         } catch (error) {
-            setError(error.response?.data?.message || 'Erreur lors de la soumission');
+            console.error('❌ Erreur soumission:', error);
+            console.error('❌ Réponse:', error.response?.data);
+            console.error('❌ Status:', error.response?.status);
+            
+            // ✅ Gestion des erreurs professionnelle (sans emojis)
+            const statusCode = error.response?.status;
+            const errorMsg = error.response?.data?.message || error.message;
+            
+            if (statusCode === 400) {
+                // ✅ Erreur 400 : Déjà une candidature
+                if (errorMsg?.includes('existe déjà') || errorMsg?.includes('déjà soumis')) {
+                    setError('Vous avez déjà soumis une candidature pour cette offre. Une seule candidature par offre est autorisée.');
+                } else {
+                    setError(errorMsg);
+                }
+            } else if (statusCode === 500) {
+                // ✅ Erreur 500 : Problème serveur
+                setError('Une erreur technique est survenue. Veuillez réessayer ultérieurement ou contacter le support.');
+                console.error('Erreur serveur 500 - Détails:', error.response?.data);
+            } else {
+                setError(errorMsg || 'Erreur lors de la soumission de la candidature.');
+            }
         } finally {
             setSaving(false);
         }
     };
 
+    // ============================================
+    // ✅ CORRECTION : handleFileUpload - Envoyer le type correctement
+    // ============================================
     const handleFileUpload = async (type, file) => {
         if (!file) return;
         setUploading(true);
         try {
             const formData = new FormData();
             formData.append('document', file);
-            formData.append('type', type);
+            formData.append('type', type);  // ✅ Le type est bien envoyé
+
+            console.log('📤 [handleFileUpload] Upload du document:', {
+                type: type,
+                fileName: file.name
+            });
 
             const response = await api.post('/documents', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
+            console.log('✅ [handleFileUpload] Réponse:', response.data);
+
             const docId = response.data.data._id;
             setDocumentIds([...documentIds, docId]);
             setDocuments({ ...documents, [type]: file });
 
-            await api.post(`/applications/${applicationId}/documents`, { documentId: docId });
-
             setSuccess(`${type} déposé avec succès`);
             setTimeout(() => setSuccess(''), 3000);
         } catch (error) {
+            console.error('❌ Erreur lors du dépôt du document:', error);
             setError('Erreur lors du dépôt du document');
         } finally {
             setUploading(false);
@@ -543,7 +431,7 @@ const DepotCandidature = () => {
     };
 
     // ============================================
-    // RENDER - ÉTAPE 1
+    // RENDER - ÉTAPE 1 (4 champs uniquement)
     // ============================================
 
     const renderEtape1 = () => (
@@ -558,15 +446,6 @@ const DepotCandidature = () => {
                     value={formData.universite}
                     onChange={handleFormChange}
                     placeholder="Ex: Université Hassan II"
-                />
-
-                <StyledTextField
-                    fullWidth
-                    label="Établissement / Faculté *"
-                    name="etablissement"
-                    value={formData.etablissement}
-                    onChange={handleFormChange}
-                    placeholder="Ex: Faculté des Sciences"
                 />
 
                 <StyledTextField
@@ -590,48 +469,10 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Année universitaire"
-                    name="anneeUniversitaire"
-                    value={formData.anneeUniversitaire}
+                    name="annee"
+                    value={formData.annee}
                     onChange={handleFormChange}
                     placeholder="Ex: 2025-2026"
-                />
-
-                <StyledTextField
-                    fullWidth
-                    label="Type de stage *"
-                    name="typeStageDemande"
-                    value={formData.typeStageDemande}
-                    onChange={handleFormChange}
-                    placeholder="Ex: PFE"
-                />
-
-                <StyledTextField
-                    fullWidth
-                    label="Durée du stage"
-                    name="dureeStage"
-                    value={formData.dureeStage}
-                    onChange={handleFormChange}
-                    placeholder="Ex: 3 mois"
-                />
-
-                <DateTextField
-                    fullWidth
-                    type="date"
-                    label="Date prévue de début *"
-                    name="dateDebutPrevue"
-                    value={formData.dateDebutPrevue}
-                    onChange={handleFormChange}
-                    InputLabelProps={{ shrink: true }}
-                />
-
-                <DateTextField
-                    fullWidth
-                    type="date"
-                    label="Date prévue de fin *"
-                    name="dateFinPrevue"
-                    value={formData.dateFinPrevue}
-                    onChange={handleFormChange}
-                    InputLabelProps={{ shrink: true }}
                 />
             </Box>
 
@@ -714,7 +555,7 @@ const DepotCandidature = () => {
     );
 
     // ============================================
-    // RENDER - ÉTAPE 3 - LIGNES AVEC PLUS D'ESPACE POUR LE NOM
+    // RENDER - ÉTAPE 3
     // ============================================
 
     const renderDocumentRow = (label, type, required = true) => {
@@ -732,7 +573,6 @@ const DepotCandidature = () => {
                 overflow: 'hidden',
                 flexShrink: 0,
             }}>
-                {/* Colonne 1 - Nom du document - PLUS LARGE */}
                 <Box sx={{
                     minWidth: '240px',
                     maxWidth: '240px',
@@ -767,7 +607,6 @@ const DepotCandidature = () => {
                     )}
                 </Box>
 
-                {/* Colonne 2 - Bouton "Choisir un fichier" - Déplacé vers la droite */}
                 <Box
                     sx={{
                         width: '155px',
@@ -800,41 +639,31 @@ const DepotCandidature = () => {
                             height: '26px',
                             minWidth: '135px',
                             maxWidth: '135px',
-
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-
                             padding: '0 4px',
                             margin: 0,
-
                             borderRadius: '4px',
                             border: '1px solid #d1d5db',
-
                             backgroundColor: '#f3f4f6',
                             color: '#1a2332',
-
                             fontFamily: 'Inter, sans-serif',
                             fontSize: '11px',
                             fontWeight: 400,
                             lineHeight: 1,
-
                             textTransform: 'none',
                             whiteSpace: 'nowrap',
-
                             boxShadow: 'none',
-
                             '&:hover': {
                                 backgroundColor: '#e9ecef',
                                 borderColor: '#c5cbd1',
                                 boxShadow: 'none',
                             },
-
                             '& .MuiButton-startIcon': {
                                 margin: 0,
                                 marginRight: '4px',
                             },
-
                             '& .MuiButton-startIcon i': {
                                 flexShrink: 0,
                             },
@@ -848,18 +677,15 @@ const DepotCandidature = () => {
                             accept=".pdf,.jpg,.jpeg,.png"
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
-
                                 if (file) {
                                     handleFileUpload(type, file);
                                 }
-
                                 e.target.value = '';
                             }}
                         />
                     </Button>
                 </Box>
 
-                {/* Séparateur vertical à DROITE du bouton - UNIQUEMENT ICI */}
                 <Box sx={{ 
                     width: '2px', 
                     height: '24px', 
@@ -868,7 +694,6 @@ const DepotCandidature = () => {
                     borderRadius: '1px',
                 }} />
 
-                {/* Colonne 3 - Nom du fichier / Aucun fichier choisi */}
                 <Box sx={{
                     flex: 1,
                     padding: '0 14px',
@@ -886,7 +711,6 @@ const DepotCandidature = () => {
                     </Typography>
                 </Box>
 
-                {/* Séparateur vertical - dernier */}
                 <Box sx={{ 
                     width: '2px', 
                     height: '24px', 
@@ -895,7 +719,6 @@ const DepotCandidature = () => {
                     borderRadius: '1px',
                 }} />
 
-                {/* Colonne 4 - Icône trombone */}
                 <Box sx={{
                     width: '36px',
                     minWidth: '36px',
@@ -910,6 +733,7 @@ const DepotCandidature = () => {
         );
     };
 
+    // ✅ MAPPING CORRECT entre l'étiquette et le type de document
     const renderEtape3 = () => (
         <StepCardWide>
             <SectionTitleCentered>Pièces justificatives</SectionTitleCentered>
@@ -936,14 +760,15 @@ const DepotCandidature = () => {
                 DOCUMENTS À DÉPOSER :
             </Typography>
 
+            {/* ✅ Mapping correct entre l'étiquette et le type de document */}
             {renderDocumentRow('Photo d\'identité', 'Photo')}
             {renderDocumentRow('Lettre de motivation', 'LettreMotivation')}
             {renderDocumentRow('CV', 'CV')}
-            {renderDocumentRow('Attestation de scolarité', 'AttestationScolarite')}
+            {renderDocumentRow('Attestation de scolarité', 'AttestationScolarite')}  {/* ✅ Correction */}
             {renderDocumentRow('Lettre de recommandation', 'LettreRecommandation')}
             {renderDocumentRow('Copie CIN', 'CIN')}
             {renderDocumentRow('Assurance', 'Assurance')}
-            {renderDocumentRow('Fiche de demande de stage', 'FicheEngagement')}
+            {renderDocumentRow('Fiche de demande de stage', 'FicheEngagement')}  {/* ✅ Correction */}
 
             <Box sx={{ 
                 mt: 2, 

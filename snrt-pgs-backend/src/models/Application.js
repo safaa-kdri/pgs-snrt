@@ -1,4 +1,6 @@
 // src/models/Application.js
+// ✅ VÉRIFIER que le statut "EnCoursCreation" existe dans l'enum
+
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
 const { APPLICATION_STATUS, INTERVIEW_TYPES, INTERVIEW_RESULTS } = require('../config/constants');
@@ -14,8 +16,16 @@ const ApplicationSchema = new mongoose.Schema({
     },
     statut: {
         type: String,
-        enum: Object.values(APPLICATION_STATUS),
-        default: APPLICATION_STATUS.BROUILLON
+        enum: [
+            'EnCoursCreation',  // ✅ AJOUTER CE STATUT
+            'Brouillon',
+            'Soumise',
+            'EnAnalyse',
+            'Entretien',
+            'Acceptee',
+            'Refusee'
+        ],
+        default: APPLICATION_STATUS.EN_COURS_CREATION  // ✅ Utiliser la constante
     },
     commentaire: String,
     
@@ -76,16 +86,11 @@ const ApplicationSchema = new mongoose.Schema({
     }],
     
     // ============================================
-    // ✅ NOUVEAUX CHAMPS POUR LE WORKFLOW DE CANDIDATURE
+    // ✅ WORKFLOW DE CANDIDATURE - UNIQUEMENT LES 4 CHAMPS
     // ============================================
     
-    // 📚 ÉTAPE 1 - INFORMATIONS UNIVERSITAIRES
+    // 📚 ÉTAPE 1 - INFORMATIONS UNIVERSITAIRES (4 champs)
     universite: {
-        type: String,
-        default: '',
-        trim: true
-    },
-    etablissement: {
         type: String,
         default: '',
         trim: true
@@ -100,31 +105,13 @@ const ApplicationSchema = new mongoose.Schema({
         default: '',
         trim: true
     },
-    anneeUniversitaire: {
+    annee: {  // ✅ NOUVEAU : correspond au champ "annee" de UtilisateurExterne
         type: String,
         default: '',
         trim: true
-    },
-    typeStageDemande: {
-        type: String,
-        default: '',
-        trim: true
-    },
-    dureeStage: {
-        type: String,
-        default: '',
-        trim: true
-    },
-    dateDebutPrevue: {
-        type: Date,
-        default: null
-    },
-    dateFinPrevue: {
-        type: Date,
-        default: null
     },
     
-    // ✅ ÉTAPE 2 - FICHE DE DEMANDE DE STAGE (CORRIGÉ)
+    // ✅ ÉTAPE 2 - FICHE DE DEMANDE DE STAGE
     ficheAccepte: {
         type: Boolean,
         default: false
@@ -148,14 +135,6 @@ const ApplicationSchema = new mongoose.Schema({
     workflowComplete: {
         type: Boolean,
         default: false
-    },
-    dateDebutReelle: {
-        type: Date,
-        default: null
-    },
-    dateFinReelle: {
-        type: Date,
-        default: null
     },
 
 }, {

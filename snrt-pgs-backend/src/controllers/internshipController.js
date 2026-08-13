@@ -6,8 +6,11 @@
 // ✅ CORRECTION : uploadEngagementConfidentialite - utilisation de 'id' au lieu de 'internshipId' + logs
 // ✅ AJOUT : updateInternshipStatus - Mettre à jour le statut d'un stage
 // ✅ AJOUT : sendDemandeStageToStudent - Envoyer la demande de stage à l'étudiant
+// ✅ AJOUT : downloadDemandeStage - Télécharger la demande de stage existante pour l'étudiant
 
 const mongoose = require('mongoose');
+const path = require('path');
+const fs = require('fs');
 const Internship = require('../models/Internship');
 const Application = require('../models/Application');
 const Offer = require('../models/Offer');
@@ -914,11 +917,9 @@ exports.generateAttestation = async (req, res) => {
 
 // ============================================
 // ✅ ÉTUDIANT - DÉPOSER LE PDF D'ENGAGEMENT SIGNÉ
-// ✅ CORRECTION : Utilisation de 'id' au lieu de 'internshipId' + logs
 // ============================================
 exports.uploadEngagementConfidentialite = async (req, res) => {
     try {
-        // ✅ CORRECTION : Utiliser 'id' car la route est '/:id/upload-engagement'
         const { id } = req.params;
         const file = req.file;
 
@@ -934,7 +935,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
             });
         }
 
-        // ✅ Vérifier que l'ID est valide
         if (!mongoose.Types.ObjectId.isValid(id)) {
             console.log('❌ [uploadEngagementConfidentialite] ID invalide:', id);
             return res.status(400).json({
@@ -957,7 +957,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
         console.log('✅ [uploadEngagementConfidentialite] Étudiant du stage:', internship.etudiantId);
         console.log('✅ [uploadEngagementConfidentialite] Utilisateur connecté:', req.user?._id);
 
-        // ✅ Vérifier que l'utilisateur est authentifié
         if (!req.user) {
             console.log('❌ [uploadEngagementConfidentialite] Utilisateur non authentifié');
             return res.status(401).json({
@@ -966,18 +965,14 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
             });
         }
 
-        // ✅ Vérifier que l'étudiant est bien le propriétaire du stage
         if (internship.etudiantId.toString() !== req.user._id.toString()) {
             console.log('❌ [uploadEngagementConfidentialite] Accès refusé: étudiant non propriétaire');
-            console.log(`   Stage.etudiantId: ${internship.etudiantId.toString()}`);
-            console.log(`   req.user._id: ${req.user._id.toString()}`);
             return res.status(403).json({
                 success: false,
                 message: 'Vous n\'êtes pas autorisé à déposer ce document'
             });
         }
 
-        // ✅ Ajouter le livrable
         internship.livrables.push({
             nom: 'Engagement Confidentialité Signé',
             type: 'Autre',
@@ -1078,6 +1073,9 @@ exports.generateDemandeStage = async (req, res) => {
 
         const pdfPath = await pdfService.generateDemandeStage(internshipData);
 
+        // ✅ S'assurer que le fichier est sauvegardé avec le bon nom
+        // pdfService.generateDemandeStage sauvegarde déjà le fichier dans uploads/demandes/
+
         internship.statut = 'DemandeEnvoyee';
         await internship.save();
 
@@ -1091,6 +1089,94 @@ exports.generateDemandeStage = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Erreur lors de la génération de la demande de stage'
+        });
+    }
+};
+
+// ============================================
+// ✅ ÉTUDIANT - TÉLÉCHARGER LA DEMANDE DE STAGE EXISTANTE
+// ============================================
+exports.downloadDemandeStage = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // ✅ Vérifier que le stage existe
+        const internship = await Internship.findById(id)
+            .populate('etudiantId');
+
+        if (!internship) {
+            console.log('❌ [downloadDemandeStage] Stage non trouvé');
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        // ✅ Vérifier que l'étudiant est bien le propriétaire (si c'est un étudiant)
+        if (req.user?.role === 'Etudiant') {
+            if (internship.etudiantId._id.toString() !== req.user._id.toString()) {
+                console.log('❌ [downloadDemandeStage] Accès refusé - étudiant non propriétaire');
+                return res.status(403).json({
+                    success: false,
+                    message: 'Vous n\'êtes pas autorisé à accéder à cette demande'
+                });
+            }
+        }
+
+        // ✅ Vérifier que la demande a été générée (statut DemandeEnvoyee ou supérieur)
+        const statutsValides = ['DemandeEnvoyee', 'ValideParDirecteur', 'Cloturee', 'Termine'];
+        if (!statutsValides.includes(internship.statut)) {
+            console.log('❌ [downloadDemandeStage] Demande non encore générée, statut:', internship.statut);
+            return res.status(400).json({
+                success: false,
+                message: 'La demande de stage n\'a pas encore été générée'
+            });
+        }
+
+        // ✅ Vérifier que le fichier existe
+        const dir = path.join(__dirname, '../../uploads/demandes');
+        const fileName = `demande_stage_${id}.pdf`;
+        const filePath = path.join(dir, fileName);
+
+        console.log('🔍 [downloadDemandeStage] Recherche du fichier:', filePath);
+
+        // Vérifier si le fichier existe
+        if (!fs.existsSync(filePath)) {
+            console.log('❌ [downloadDemandeStage] Fichier non trouvé:', filePath);
+            
+            // ✅ Fallback : Si le fichier n'existe pas, générer une nouvelle demande (seulement pour RH/Admin)
+            if (req.user?.role === 'RH' || req.user?.role === 'Administrateur') {
+                console.log('🔄 [downloadDemandeStage] Fichier non trouvé, régénération pour RH/Admin...');
+                return exports.generateDemandeStage(req, res);
+            }
+            
+            return res.status(404).json({
+                success: false,
+                message: 'Le fichier de demande de stage n\'a pas été trouvé. Veuillez contacter le service RH.'
+            });
+        }
+
+        // ✅ Envoyer le fichier
+        res.download(filePath, `Demande_Stage_${internship.etudiantId.prenom || ''}_${internship.etudiantId.nom || ''}.pdf`, (err) => {
+            if (err) {
+                console.error('❌ Erreur téléchargement demande:', err.message);
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        success: false,
+                        message: 'Erreur lors du téléchargement'
+                    });
+                }
+            } else {
+                console.log('✅ [downloadDemandeStage] Demande téléchargée avec succès');
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur downloadDemandeStage:', error);
+        logger.error(`Erreur downloadDemandeStage: ${error.message}`);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors du téléchargement de la demande'
         });
     }
 };
@@ -1170,7 +1256,6 @@ exports.sendDemandeStageToStudent = async (req, res) => {
         console.log('✅ [sendDemandeStageToStudent] Stage trouvé:', internship._id);
         console.log('✅ [sendDemandeStageToStudent] Statut actuel:', internship.statut);
 
-        // Vérifier que la demande a été générée
         if (internship.statut !== 'DemandeEnvoyee' && internship.statut !== 'EnAttenteValidationDirecteur') {
             console.log('❌ [sendDemandeStageToStudent] Statut invalide:', internship.statut);
             return res.status(400).json({
@@ -1179,7 +1264,6 @@ exports.sendDemandeStageToStudent = async (req, res) => {
             });
         }
 
-        // Vérifier que l'étudiant existe et a un email
         if (!internship.etudiantId || !internship.etudiantId.email) {
             console.log('❌ [sendDemandeStageToStudent] Étudiant sans email');
             return res.status(400).json({
@@ -1190,7 +1274,6 @@ exports.sendDemandeStageToStudent = async (req, res) => {
 
         console.log('📧 [sendDemandeStageToStudent] Envoi à:', internship.etudiantId.email);
 
-        // Générer le PDF
         const internshipData = {
             _id: internship._id,
             etudiantId: internship.etudiantId,
@@ -1202,7 +1285,6 @@ exports.sendDemandeStageToStudent = async (req, res) => {
         const pdfPath = await pdfService.generateDemandeStage(internshipData);
         console.log('✅ [sendDemandeStageToStudent] PDF généré:', pdfPath);
 
-        // Envoyer l'email avec le PDF en pièce jointe
         await emailService.sendDemandeStageToStudent({
             to: internship.etudiantId.email,
             studentName: `${internship.etudiantId.prenom} ${internship.etudiantId.nom}`,
@@ -1504,7 +1586,6 @@ exports.updateInternshipStatus = async (req, res) => {
             });
         }
 
-        // ✅ Vérifier que l'ID est valide
         if (!mongoose.Types.ObjectId.isValid(id)) {
             console.log('❌ [updateInternshipStatus] ID invalide:', id);
             return res.status(400).json({
@@ -1566,6 +1647,7 @@ module.exports = {
     uploadEngagementConfidentialite: exports.uploadEngagementConfidentialite,
     generateEngagementConfidentialite: exports.generateEngagementConfidentialite,
     generateDemandeStage: exports.generateDemandeStage,
+    downloadDemandeStage: exports.downloadDemandeStage,
     sendEngagementToStudent: exports.sendEngagementToStudent,
     sendDemandeStageToStudent: exports.sendDemandeStageToStudent,
     assignSupervisor: exports.assignSupervisor,

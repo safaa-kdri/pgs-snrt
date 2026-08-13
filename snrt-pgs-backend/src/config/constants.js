@@ -1,5 +1,6 @@
 // src/config/constants.js
 // ✅ AJOUTER LA CONSTANTE DOCUMENT_TYPES
+// ✅ AJOUTER EN_COURS_CREATION
 
 require('dotenv').config();
 
@@ -41,7 +42,9 @@ const CONCOURS_DOCUMENT_TYPES = [
 ];
 
 
+// ✅ AJOUTER EN_COURS_CREATION
 const APPLICATION_STATUS = Object.freeze({
+  EN_COURS_CREATION: 'EnCoursCreation',
   BROUILLON: 'Brouillon',
   SOUMISE: 'Soumise',
   EN_ANALYSE: 'EnAnalyse',
@@ -66,18 +69,18 @@ const PASSWORD_MIN_LENGTH = Object.freeze({
 
 // ✅ AJOUT : TYPES DE DOCUMENTS
 const DOCUMENT_TYPES = Object.freeze([
-  'CV',
-  'LettreMotivation',
-  'LettreRecommandation',
-  'AttestationScolarite',
-  'Attestation',
-  'ReleveNotes',
-  'Convention',
-  'Photo',
-  'CIN',
-  'Assurance',
-  'FicheEngagement',
-  'Autre'
+    'CV',
+    'LettreMotivation',
+    'LettreRecommandation',
+    'AttestationScolarite',  // ✅ Présent
+    'Attestation',
+    'ReleveNotes',
+    'Convention',
+    'Photo',
+    'CIN',
+    'Assurance',
+    'FicheEngagement',  // ✅ Présent
+    'Autre'
 ]);
 
 const CONFIG = Object.freeze({
@@ -156,7 +159,7 @@ module.exports = {
   APPLICATION_STATUS,
   REFUSAL_REASONS,
   PASSWORD_MIN_LENGTH,
-  DOCUMENT_TYPES, // ✅ EXPORT DE LA NOUVELLE CONSTANTE
+  DOCUMENT_TYPES,
   CONFIG,
   assertRequiredEnv,
 };

@@ -1,9 +1,13 @@
 // src/controllers/applicationController.js
 // ✅ CORRECTION : Ajout de la transition EnAnalyse -> Acceptee + vérification du rôle
 // ✅ AJOUT : Vérification des conflits de stage en cours
-// ✅ AJOUT : Workflow de candidature en 3 étapes (saveEtape1, saveEtape2, submitWorkflow, getWorkflowState)
 // ✅ AJOUT : getDepartmentApplications pour le département
-// ✅ CORRECTION : Renommer engagementAccepte en ficheAccepte pour l'étape 2
+// ✅ MODIFICATION : createApplication - Création directe avec statut "Soumise"
+// ✅ MODIFICATION : createApplication - Accepter les données des étapes 1 et 2
+// ✅ SUPPRESSION : Fonctions de workflow intermédiaires (saveEtape1, saveEtape2, submitWorkflow)
+// ✅ CONSERVÉ : getWorkflowState pour la consultation des candidatures existantes
+// ✅ AJOUT : Envoi automatique de l'engagement quand le statut passe à Acceptee
+// ✅ AJOUT : Imports manquants (pdfService, emailService)
 
 const Application = require('../models/Application');
 const Document = require('../models/Document');
@@ -14,6 +18,8 @@ const UtilisateurExterne = require('../models/UtilisateurExterne');
 const { APPLICATION_STATUS, ROLES, STAFF_TREATMENT_ROLES } = require('../config/constants');
 const { sendApplicationStatusChangedEmail, sendApplicationSubmittedEmail } = require('../services/emailService');
 const { assertDepartmentOwnsOffer, departmentOfferIds } = require('../utils/departmentScope');
+const pdfService = require('../services/pdfService');
+const emailService = require('../services/emailService');
 const logger = require('../utils/logger');
 
 
@@ -146,8 +152,91 @@ const checkStudentAvailability = async (etudiantId, dateDebut, dateFin) => {
     };
 };
 
+// ============================================
+// ✅ NOUVELLE FONCTION : Envoi automatique de l'engagement
+// ============================================
+const sendEngagementAutomatically = async (application) => {
+    try {
+        // 1. Récupérer ou créer le stage
+        let internship = await Internship.findOne({ applicationId: application._id });
+        
+        if (!internship) {
+            // Créer le stage si nécessaire
+            internship = await Internship.create({
+                etudiantId: application.etudiantId._id,
+                offreId: application.offreId._id,
+                applicationId: application._id,
+                dateDebut: application.offreId.dateDebut || new Date(),
+                dateFin: application.offreId.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                statut: 'EnCours',
+                encadrantId: null
+            });
+            console.log(`✅ [sendEngagementAutomatically] Stage créé: ${internship._id}`);
+        }
+
+        // 2. Générer l'engagement
+        const internshipData = {
+            _id: internship._id,
+            etudiantId: application.etudiantId,
+            offreId: application.offreId,
+            dateDebut: internship.dateDebut,
+            dateFin: internship.dateFin,
+            etudiantNom: `${application.etudiantId.prenom} ${application.etudiantId.nom}`
+        };
+
+        const pdfPath = await pdfService.generateEngagementConfidentialite(internshipData);
+        console.log(`✅ [sendEngagementAutomatically] PDF généré: ${pdfPath}`);
+
+        // 3. Envoyer l'email
+        await emailService.sendEngagementConfidentialiteEmail({
+            to: application.etudiantId.email,
+            studentName: `${application.etudiantId.prenom} ${application.etudiantId.nom}`,
+            pdfPath: pdfPath,
+        });
+        console.log(`✅ [sendEngagementAutomatically] Email envoyé à ${application.etudiantId.email}`);
+
+        // 4. Mettre à jour le statut du stage
+        internship.statut = 'EngagementEnvoye';
+        await internship.save();
+
+        // 5. Ajouter à l'historique de l'application
+        application.historique.push({
+            date: new Date(),
+            ancienStatut: application.statut,
+            nouveauStatut: application.statut,
+            commentaire: 'Engagement de confidentialité envoyé automatiquement à l\'étudiant',
+            auteurId: application.traiteurId || application.updatedBy
+        });
+        await application.save();
+
+        // 6. Notification à l'étudiant
+        await Notification.create({
+            type: 'InApp',
+            titre: 'Engagement de confidentialité',
+            message: `Un engagement de confidentialité vous a été envoyé par email pour votre stage "${application.offreId?.titre || ''}". Veuillez le signer et le déposer.`,
+            lien: `/dashboard/application/${application._id}`,
+            userId: application.etudiantId._id,
+            userModel: 'UtilisateurExterne',
+        });
+
+        return true;
+
+    } catch (error) {
+        console.error('❌ [sendEngagementAutomatically] Erreur:', error);
+        throw error;
+    }
+};
+
+// ============================================
+// ✅ MODIFICATION : createApplication - Création directe avec statut "Soumise"
+// ✅ SUPPRESSION AUTOMATIQUE DES BROUILLONS EXISTANTS
+// ============================================
 exports.createApplication = async (req, res) => {
     try {
+        console.log('🔍 [createApplication] Début...');
+        console.log('🔍 [createApplication] req.user:', req.user);
+        console.log('🔍 [createApplication] req.body:', req.body);
+
         if (req.user?.role !== ROLES.ETUDIANT) {
             return res.status(403).json({
                 success: false,
@@ -156,7 +245,23 @@ exports.createApplication = async (req, res) => {
         }
 
         const etudiantId = req.user.id;
-        const { offreId, commentaire, documents } = req.body;
+        const { 
+            offreId, 
+            commentaire, 
+            documents,
+            universite,
+            filiere,
+            niveau,
+            annee,
+            ficheAccepte
+        } = req.body;
+
+        if (!offreId) {
+            return res.status(400).json({
+                success: false,
+                message: 'L\'ID de l\'offre est obligatoire'
+            });
+        }
 
         const offer = await Offer.findById(offreId);
 
@@ -167,19 +272,39 @@ exports.createApplication = async (req, res) => {
             });
         }
 
-        const existingApplication = await Application.findOne({
+        // ✅ 1. Vérifier s'il existe déjà une candidature SOUMISE
+        const existingSubmitted = await Application.findOne({
             etudiantId,
-            offreId
+            offreId,
+            statut: APPLICATION_STATUS.SOUMISE
         });
 
-        if (existingApplication) {
+        if (existingSubmitted) {
             return res.status(400).json({
                 success: false,
-                message: 'Une candidature existe déjà pour cette offre'
+                message: 'Vous avez déjà soumis une candidature pour cette offre'
             });
         }
 
-        // ✅ VÉRIFICATION : L'étudiant a-t-il un stage en cours qui chevauche la période ?
+        // ✅ 2. Vérifier s'il existe une candidature en cours (Brouillon ou EnCoursCreation) et la supprimer automatiquement
+        const existingDraft = await Application.findOne({
+            etudiantId,
+            offreId,
+            statut: { $in: ['Brouillon', 'EnCoursCreation'] }
+        });
+
+        if (existingDraft) {
+            console.log(`🗑️ Suppression automatique de l'ancienne candidature en cours: ${existingDraft._id}`);
+            await Application.deleteOne({ _id: existingDraft._id });
+            
+            // Supprimer également les documents associés à cette candidature
+            await Document.updateMany(
+                { applicationId: existingDraft._id },
+                { applicationId: null }
+            );
+        }
+
+        // ✅ 3. VÉRIFICATION : L'étudiant a-t-il un stage en cours ?
         if (offer.dateDebut && offer.dateFin) {
             const availability = await checkStudentAvailability(
                 etudiantId,
@@ -191,14 +316,12 @@ exports.createApplication = async (req, res) => {
                 const stage = availability.currentInternship;
                 return res.status(400).json({
                     success: false,
-                    message: `Vous ne pouvez pas postuler à cette offre car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
-                    data: {
-                        currentInternship: availability.currentPeriod
-                    }
+                    message: `Vous ne pouvez pas postuler à cette offre car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`
                 });
             }
         }
 
+        // ✅ 4. Vérifier que les documents appartiennent à l'étudiant
         let safeDocuments = [];
         if (documents && documents.length > 0) {
             const foundDocuments = await Document.find({ _id: { $in: documents } }).select('candidatId');
@@ -215,23 +338,67 @@ exports.createApplication = async (req, res) => {
             safeDocuments = documents;
         }
 
+        // ✅ 5. Créer la candidature avec TOUTES les données - Statut "Soumise"
         const application = await Application.create({
             etudiantId,
             offreId,
-            commentaire,
+            commentaire: commentaire || 'Candidature soumise',
             documents: safeDocuments,
-            statut: APPLICATION_STATUS.BROUILLON,
+            statut: APPLICATION_STATUS.SOUMISE,
             createdBy: req.user?._id,
-            workflowEtape: 1,
-            workflowComplete: false
+            workflowEtape: 3,
+            workflowComplete: true,
+            dateSoumission: new Date(),
+            universite: universite || '',
+            filiere: filiere || '',
+            niveau: niveau || '',
+            annee: annee || '',
+            ficheAccepte: ficheAccepte || false,
         });
+
+        // ✅ 6. Ajouter à l'historique
+        if (!application.historique) application.historique = [];
+        application.historique.push({
+            ancienStatut: null,
+            nouveauStatut: APPLICATION_STATUS.SOUMISE,
+            commentaire: 'Candidature soumise avec succès',
+            auteurId: req.user?._id,
+            date: new Date()
+        });
+
+        await application.save();
+
+        // ✅ 7. Mettre à jour les documents avec l'applicationId
+        if (safeDocuments.length > 0) {
+            await Document.updateMany(
+                { _id: { $in: safeDocuments } },
+                { applicationId: application._id }
+            );
+        }
+
+        // ✅ 8. Notification
+        await notifyStudentApplicationSubmitted(application);
+
+        console.log(`✅ Candidature créée avec succès: ${application._id}`);
 
         return res.status(201).json({
             success: true,
-            message: 'Candidature créée avec succès',
+            message: 'Candidature soumise avec succès',
             data: application
         });
+
     } catch (error) {
+        console.error('❌ Erreur createApplication:', error);
+        console.error('❌ Stack:', error.stack);
+        
+        // ✅ Gestion de l'erreur de duplication
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vous avez déjà soumis une candidature pour cette offre. Une seule candidature par offre est autorisée.'
+            });
+        }
+        
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la création de la candidature',
@@ -473,6 +640,9 @@ exports.submitApplication = async (req, res) => {
     }
 };
 
+// ============================================
+// ✅ MODIFIÉ : changeApplicationStatus avec envoi automatique de l'engagement
+// ============================================
 exports.changeApplicationStatus = async (req, res) => {
     try {
         // ✅ CORRECTION : Vérifier explicitement le rôle
@@ -496,7 +666,8 @@ exports.changeApplicationStatus = async (req, res) => {
         }
 
         const application = await Application.findById(req.params.id)
-            .populate('offreId', 'dateDebut dateFin titre');
+            .populate('offreId', 'dateDebut dateFin titre')
+            .populate('etudiantId', 'nom prenom email');
 
         if (!application) {
             return res.status(404).json({
@@ -541,6 +712,7 @@ exports.changeApplicationStatus = async (req, res) => {
             }
         }
 
+        // ✅ Mettre à jour le statut
         application.statut = statut;
         application.commentaire = commentaire || application.commentaire;
         application.traiteurId = req.user?._id;
@@ -557,6 +729,20 @@ exports.changeApplicationStatus = async (req, res) => {
 
         await application.save();
 
+        // ✅ NOUVEAU : Si le statut passe à "Acceptee", envoyer l'engagement automatiquement
+        if (statut === APPLICATION_STATUS.ACCEPTEE && ancienStatut !== APPLICATION_STATUS.ACCEPTEE) {
+            console.log(`📧 [changeApplicationStatus] Statut Acceptee - Envoi automatique de l'engagement pour l'application ${application._id}`);
+            
+            try {
+                await sendEngagementAutomatically(application);
+                console.log(`✅ [changeApplicationStatus] Engagement envoyé automatiquement pour ${application._id}`);
+            } catch (engagementError) {
+                console.error(`❌ [changeApplicationStatus] Erreur envoi engagement:`, engagementError);
+                // On continue, la notification sera envoyée mais l'engagement a échoué
+            }
+        }
+
+        // ✅ Notification à l'étudiant
         await notifyStudentStatusChanged(application, statut);
 
         return res.status(200).json({
@@ -564,7 +750,9 @@ exports.changeApplicationStatus = async (req, res) => {
             message: 'Statut de candidature modifié avec succès',
             data: application
         });
+
     } catch (error) {
+        console.error('❌ Erreur changeApplicationStatus:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors du changement de statut',
@@ -763,344 +951,8 @@ exports.getDepartmentApplications = async (req, res) => {
 };
 
 // ============================================
-// ✅ WORKFLOW DE CANDIDATURE EN 3 ÉTAPES
+// ✅ CONSERVÉ : Récupérer l'état du workflow pour les candidatures existantes
 // ============================================
-
-/**
- * ÉTAPE 1 - Sauvegarder les informations universitaires
- * POST /api/v1/applications/:id/workflow/etape1
- */
-exports.saveEtape1 = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const {
-            universite,
-            etablissement,
-            filiere,
-            niveau,
-            anneeUniversitaire,
-            typeStageDemande,
-            dureeStage,
-            dateDebutPrevue,
-            dateFinPrevue
-        } = req.body;
-
-        // Vérifier que l'application existe
-        const application = await Application.findById(id);
-
-        if (!application) {
-            return res.status(404).json({
-                success: false,
-                message: 'Candidature non trouvée'
-            });
-        }
-
-        // Vérifier que l'étudiant est le propriétaire
-        if (application.etudiantId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({
-                success: false,
-                message: 'Vous n\'êtes pas autorisé à modifier cette candidature'
-            });
-        }
-
-        // Vérifier que la candidature est en brouillon ou en cours
-        if (application.statut === APPLICATION_STATUS.SOUMISE) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cette candidature a déjà été soumise, vous ne pouvez plus la modifier'
-            });
-        }
-
-        // Mettre à jour les champs
-        application.universite = universite || application.universite || '';
-        application.etablissement = etablissement || application.etablissement || '';
-        application.filiere = filiere || application.filiere || '';
-        application.niveau = niveau || application.niveau || '';
-        application.anneeUniversitaire = anneeUniversitaire || application.anneeUniversitaire || '';
-        application.typeStageDemande = typeStageDemande || application.typeStageDemande || '';
-        application.dureeStage = dureeStage || application.dureeStage || '';
-        application.dateDebutPrevue = dateDebutPrevue || application.dateDebutPrevue || null;
-        application.dateFinPrevue = dateFinPrevue || application.dateFinPrevue || null;
-        application.workflowEtape = 1;
-        application.updatedBy = req.user?._id;
-
-        await application.save();
-
-        logger.info(`✅ Étape 1 sauvegardée pour l'application ${id} par l'étudiant ${req.user._id}`);
-
-        res.status(200).json({
-            success: true,
-            message: 'Informations universitaires sauvegardées avec succès',
-            data: {
-                id: application._id,
-                workflowEtape: application.workflowEtape,
-                universite: application.universite,
-                etablissement: application.etablissement,
-                filiere: application.filiere,
-                niveau: application.niveau,
-                anneeUniversitaire: application.anneeUniversitaire,
-                typeStageDemande: application.typeStageDemande,
-                dureeStage: application.dureeStage,
-                dateDebutPrevue: application.dateDebutPrevue,
-                dateFinPrevue: application.dateFinPrevue
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Erreur saveEtape1:', error);
-        logger.error(`Erreur saveEtape1: ${error.message}`);
-        res.status(500).json({
-            success: false,
-            message: 'Erreur lors de la sauvegarde des informations universitaires',
-            error: error.message
-        });
-    }
-};
-
-/**
- * ✅ ÉTAPE 2 - Sauvegarder la confirmation de téléchargement de la fiche de demande
- * POST /api/v1/applications/:id/workflow/etape2
- */
-exports.saveEtape2 = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { ficheAccepte } = req.body;
-
-        const application = await Application.findById(id);
-
-        if (!application) {
-            return res.status(404).json({
-                success: false,
-                message: 'Candidature non trouvée'
-            });
-        }
-
-        // Vérifier que l'étudiant est le propriétaire
-        if (application.etudiantId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({
-                success: false,
-                message: 'Vous n\'êtes pas autorisé à modifier cette candidature'
-            });
-        }
-
-        // Vérifier que la candidature est en brouillon ou en cours
-        if (application.statut === APPLICATION_STATUS.SOUMISE) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cette candidature a déjà été soumise'
-            });
-        }
-
-        // Vérifier que l'étape 1 est complétée
-        if (!application.universite && !application.filiere) {
-            return res.status(400).json({
-                success: false,
-                message: 'Veuillez d\'abord renseigner vos informations universitaires (Étape 1)'
-            });
-        }
-
-        // ✅ CORRECTION : Sauvegarder ficheAccepte au lieu de engagementAccepte
-        application.ficheAccepte = ficheAccepte === true;
-        if (ficheAccepte) {
-            application.ficheDateAccepte = new Date();
-        }
-        application.workflowEtape = 2;
-        application.updatedBy = req.user?._id;
-
-        await application.save();
-
-        logger.info(`✅ Étape 2 sauvegardée pour l'application ${id} par l'étudiant ${req.user._id}`);
-
-        res.status(200).json({
-            success: true,
-            message: ficheAccepte ? 'Fiche de demande de stage confirmée' : 'Confirmation annulée',
-            data: {
-                id: application._id,
-                workflowEtape: application.workflowEtape,
-                ficheAccepte: application.ficheAccepte,
-                ficheDateAccepte: application.ficheDateAccepte
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Erreur saveEtape2:', error);
-        logger.error(`Erreur saveEtape2: ${error.message}`);
-        res.status(500).json({
-            success: false,
-            message: 'Erreur lors de la sauvegarde de la confirmation',
-            error: error.message
-        });
-    }
-};
-
-/**
- * ✅ ÉTAPE 3 - Soumettre la candidature complète
- * POST /api/v1/applications/:id/workflow/submit
- */
-exports.submitWorkflow = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { documents } = req.body;
-
-        const application = await Application.findById(id)
-            .populate('offreId', 'titre dateDebut dateFin');
-
-        if (!application) {
-            return res.status(404).json({
-                success: false,
-                message: 'Candidature non trouvée'
-            });
-        }
-
-        // Vérifier que l'étudiant est le propriétaire
-        if (application.etudiantId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({
-                success: false,
-                message: 'Vous n\'êtes pas autorisé à modifier cette candidature'
-            });
-        }
-
-        // Vérifier que la candidature est en brouillon
-        if (application.statut === APPLICATION_STATUS.SOUMISE) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cette candidature a déjà été soumise'
-            });
-        }
-
-        // Vérifier que l'étape 1 est complétée
-        if (!application.universite && !application.filiere) {
-            return res.status(400).json({
-                success: false,
-                message: 'Veuillez d\'abord renseigner vos informations universitaires (Étape 1)'
-            });
-        }
-
-        // ✅ CORRECTION : Vérifier que la fiche a été acceptée (étape 2)
-        if (!application.ficheAccepte) {
-            return res.status(400).json({
-                success: false,
-                message: 'Vous devez confirmer que vous avez téléchargé la fiche de demande de stage avant de soumettre votre candidature (Étape 2)'
-            });
-        }
-
-        // Vérifier qu'il y a des documents
-        if (!documents || documents.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Vous devez déposer au moins un document avant de soumettre votre candidature'
-            });
-        }
-
-        // ✅ VÉRIFICATION : L'étudiant a-t-il un stage en cours qui chevauche la période ?
-        if (application.offreId && application.offreId.dateDebut && application.offreId.dateFin) {
-            const availability = await checkStudentAvailability(
-                application.etudiantId,
-                application.offreId.dateDebut,
-                application.offreId.dateFin
-            );
-
-            if (!availability.available) {
-                const stage = availability.currentInternship;
-                return res.status(400).json({
-                    success: false,
-                    message: `Vous ne pouvez pas soumettre cette candidature car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
-                    data: {
-                        currentInternship: availability.currentPeriod,
-                        requestedPeriod: {
-                            dateDebut: application.offreId.dateDebut,
-                            dateFin: application.offreId.dateFin
-                        }
-                    }
-                });
-            }
-        }
-
-        // Ajouter les documents à la candidature
-        if (documents && documents.length > 0) {
-            const foundDocuments = await Document.find({ _id: { $in: documents } }).select('candidatId');
-            const allOwnedByCaller =
-                foundDocuments.length === documents.length &&
-                foundDocuments.every((doc) => doc.candidatId.toString() === req.user._id.toString());
-
-            if (!allOwnedByCaller) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Vous ne pouvez associer que vos propres documents à votre candidature'
-                });
-            }
-            
-            // Ajouter les documents s'ils ne sont pas déjà présents
-            const existingDocIds = application.documents.map(d => d.toString());
-            const newDocs = documents.filter(d => !existingDocIds.includes(d));
-            if (newDocs.length > 0) {
-                application.documents = [...application.documents, ...newDocs];
-                
-                // Mettre à jour les documents avec l'applicationId
-                await Document.updateMany(
-                    { _id: { $in: newDocs } },
-                    { applicationId: application._id }
-                );
-            }
-        }
-
-        // Vérifier qu'il y a un CV
-        const docs = await Document.find({ _id: { $in: application.documents } }).select('type');
-        const hasCv = docs.some((doc) => doc.type === 'CV');
-        if (!hasCv) {
-            return res.status(400).json({
-                success: false,
-                message: 'Un CV est obligatoire avant de soumettre la candidature'
-            });
-        }
-
-        // Changer le statut
-        const ancienStatut = application.statut;
-        application.statut = APPLICATION_STATUS.SOUMISE;
-        application.dateSoumission = new Date();
-        application.workflowEtape = 3;
-        application.workflowComplete = true;
-        application.updatedBy = req.user?._id;
-
-        // Ajouter à l'historique
-        if (!application.historique) application.historique = [];
-        application.historique.push({
-            ancienStatut,
-            nouveauStatut: APPLICATION_STATUS.SOUMISE,
-            commentaire: 'Candidature soumise via le workflow en 3 étapes',
-            auteurId: req.user?._id,
-            date: new Date()
-        });
-
-        await application.save();
-
-        // Notification à l'étudiant
-        await notifyStudentApplicationSubmitted(application);
-
-        logger.info(`✅ Candidature soumise avec succès pour l'application ${id} par l'étudiant ${req.user._id}`);
-
-        res.status(200).json({
-            success: true,
-            message: 'Votre candidature a été déposée avec succès !',
-            data: {
-                id: application._id,
-                statut: application.statut,
-                workflowComplete: application.workflowComplete,
-                documentsCount: application.documents.length,
-                dateSoumission: application.dateSoumission
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Erreur submitWorkflow:', error);
-        logger.error(`Erreur submitWorkflow: ${error.message}`);
-        res.status(500).json({
-            success: false,
-            message: 'Erreur lors de la soumission de la candidature',
-            error: error.message
-        });
-    }
-};
 
 /**
  * Récupérer l'état du workflow
@@ -1134,17 +986,12 @@ exports.getWorkflowState = async (req, res) => {
                 workflowEtape: application.workflowEtape || 1,
                 workflowComplete: application.workflowComplete || false,
                 statut: application.statut,
-                // Étape 1
+                // ✅ 4 champs
                 universite: application.universite || '',
-                etablissement: application.etablissement || '',
                 filiere: application.filiere || '',
                 niveau: application.niveau || '',
-                anneeUniversitaire: application.anneeUniversitaire || '',
-                typeStageDemande: application.typeStageDemande || '',
-                dureeStage: application.dureeStage || '',
-                dateDebutPrevue: application.dateDebutPrevue || null,
-                dateFinPrevue: application.dateFinPrevue || null,
-                // ✅ Étape 2 - CORRECTION : ficheAccepte au lieu de engagementAccepte
+                annee: application.annee || '',
+                // ✅ Étape 2
                 ficheAccepte: application.ficheAccepte || false,
                 ficheDateAccepte: application.ficheDateAccepte || null,
                 // Documents

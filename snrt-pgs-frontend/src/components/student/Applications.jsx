@@ -1,5 +1,9 @@
 // src/components/student/Applications.jsx
-// ✅ AJOUT : Bouton "Déposer une candidature" pour accéder au workflow
+// ✅ CORRECTION : Suppression du bouton "Déposer une candidature"
+// ✅ NOUVEAU : 4 STATUTS SIMPLIFIÉS POUR L'ÉTUDIANT
+// ✅ AJOUT : Statut "EnCoursCreation" dans le mapping
+// ✅ CORRECTION : "En cours de traitement" → "En cours"
+// ✅ MODIFICATION : Afficher TOUTES les candidatures (pas seulement Soumise)
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +36,6 @@ import {
     FilterList,
     Event,
     Description,
-    Add,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useAuth } from '../../hooks/useAuth';
@@ -56,32 +59,53 @@ const StyledTableCell = styled(TableCell)({
     color: '#1a2332',
 });
 
-// ✅ STATUTS COMPLETS DU WORKFLOW - Libellés professionnels pour l'étudiant
+// ✅ NOUVEAU : 4 STATUTS SIMPLIFIÉS AVEC COULEURS
 const StatusChip = styled(Chip)(({ status }) => {
+    // Mapper les statuts backend vers les 4 catégories
+    const getCategory = (s) => {
+        const map = {
+            // ✅ Statut "Brouillon" - Gris
+            'Brouillon': 'Brouillon',
+            'EnCoursCreation': 'Brouillon',
+            // ✅ Statut 1 : "Soumise" - Bleu
+            'Soumise': 'Soumise',
+            'EnAnalyse': 'Soumise',
+            'Entretien': 'Soumise',
+            // ✅ Statut 2 : "En cours" - Orange
+            'Acceptee': 'En cours',
+            'EngagementEnvoye': 'En cours',
+            'EngagementRecu': 'En cours',
+            'EngagementValide': 'En cours',
+            'EngagementRejete': 'En cours',
+            // ✅ Statut 3 : "Acceptée" - Vert
+            'DemandeEnvoyee': 'Acceptée',
+            'ValideParDirecteur': 'Acceptée',
+            'Cloturee': 'Acceptée',
+            'Termine': 'Acceptée',
+            'EnCours': 'Acceptée',
+            // ✅ Statut 4 : "Refusée" - Rouge
+            'Refusee': 'Refusée',
+        };
+        return map[s] || s;
+    };
+
+    const category = getCategory(status);
+    
     const colors = {
         'Brouillon': { bg: '#e5e7eb', text: '#6b7280' },
         'Soumise': { bg: '#dbeafe', text: '#1d4ed8' },
-        'EnAnalyse': { bg: '#fef3c7', text: '#d97706' },
-        'Entretien': { bg: '#f3e8ff', text: '#6b21a8' },
-        'Acceptee': { bg: '#d1fae5', text: '#065f46' },
-        'Refusee': { bg: '#fee2e2', text: '#991b1b' },
-        'EngagementEnvoye': { bg: '#d1fae5', text: '#065f46' },
-        'EngagementRecu': { bg: '#d1fae5', text: '#065f46' },
-        'EngagementValide': { bg: '#d1fae5', text: '#065f46' },
-        'EngagementRejete': { bg: '#fee2e2', text: '#991b1b' },
-        'DemandeEnvoyee': { bg: '#d1fae5', text: '#065f46' },
-        'ValideParDirecteur': { bg: '#d1fae5', text: '#065f46' },
-        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
-        'Termine': { bg: '#d1fae5', text: '#065f46' },
-        'EnCours': { bg: '#d1fae5', text: '#065f46' },
+        'En cours': { bg: '#fef3c7', text: '#d97706' },
+        'Acceptée': { bg: '#d1fae5', text: '#065f46' },
+        'Refusée': { bg: '#fee2e2', text: '#991b1b' },
     };
-    const color = colors[status] || colors['Soumise'];
+    const color = colors[category] || colors['Soumise'];
     return {
         backgroundColor: color.bg,
         color: color.text,
-        fontWeight: 500,
-        fontSize: '11px',
-        height: '24px',
+        fontWeight: 600,
+        fontSize: '12px',
+        height: '28px',
+        padding: '0 14px',
     };
 });
 
@@ -124,18 +148,30 @@ const Applications = () => {
         filterApplications();
     }, [applications, searchTerm]);
 
+    // ✅ MODIFICATION : Afficher TOUTES les candidatures (pas seulement Soumise)
     const fetchApplications = async () => {
         setLoading(true);
         setError('');
         try {
+            // ✅ NE PAS filtrer par statut - Récupérer toutes les candidatures
             const response = await api.get('/applications', {
                 params: { etudiantId: user?.id }
             });
             
             const data = response.data?.data || response.data?.applications || [];
             
+            console.log('📊 [fetchApplications] Candidatures brutes:', data.length);
+            
+            // ✅ Filtrer pour ne pas afficher les brouillons (en cours de création)
+            const filteredData = data.filter(app => 
+                app.statut !== 'Brouillon' && 
+                app.statut !== 'EnCoursCreation'
+            );
+            
+            console.log('📊 [fetchApplications] Candidatures après filtrage:', filteredData.length);
+            
             const applicationsWithStage = await Promise.all(
-                data.map(async (app) => {
+                filteredData.map(async (app) => {
                     try {
                         const stageRes = await api.get(`/internships/application/${app._id}`);
                         if (stageRes.data?.data) {
@@ -147,7 +183,7 @@ const Applications = () => {
                             };
                         }
                     } catch (e) {
-                        // Pas de stage associé
+                        console.warn('Aucun stage pour application:', app._id);
                     }
                     return {
                         ...app,
@@ -161,7 +197,7 @@ const Applications = () => {
             setApplications(applicationsWithStage);
             setFilteredApplications(applicationsWithStage);
         } catch (error) {
-            console.error('Erreur chargement candidatures:', error);
+            console.error('❌ Erreur chargement candidatures:', error);
             setError(
                 error.response?.data?.message || 
                 'Erreur lors du chargement des candidatures'
@@ -188,44 +224,53 @@ const Applications = () => {
         setFilteredApplications(filtered);
     };
 
+    // ✅ NOUVEAU : 4 STATUTS SIMPLIFIÉS POUR L'ÉTUDIANT
     const getStatusLabel = (status) => {
-        const labels = {
+        const statusMap = {
+            // ✅ Statut "Brouillon"
             'Brouillon': 'Brouillon',
+            'EnCoursCreation': 'Brouillon',
+            // ✅ Statut 1 : "Soumise"
             'Soumise': 'Soumise',
-            'EnAnalyse': 'En cours d\'analyse',
-            'Entretien': 'Entretien planifié',
-            'Acceptee': 'Acceptée',
+            'EnAnalyse': 'Soumise',
+            'Entretien': 'Soumise',
+            // ✅ Statut 2 : "En cours"
+            'Acceptee': 'En cours',
+            'EngagementEnvoye': 'En cours',
+            'EngagementRecu': 'En cours',
+            'EngagementValide': 'En cours',
+            'EngagementRejete': 'En cours',
+            // ✅ Statut 3 : "Acceptée"
+            'DemandeEnvoyee': 'Acceptée',
+            'ValideParDirecteur': 'Acceptée',
+            'Cloturee': 'Acceptée',
+            'Termine': 'Acceptée',
+            'EnCours': 'Acceptée',
+            // ✅ Statut 4 : "Refusée"
             'Refusee': 'Refusée',
-            'EngagementEnvoye': 'Engagement envoyé',
-            'EngagementRecu': 'Engagement reçu',
-            'EngagementValide': 'Engagement validé',
-            'EngagementRejete': 'Engagement rejeté',
-            'DemandeEnvoyee': 'Demande envoyée',
-            'ValideParDirecteur': 'Validé par le Directeur',
-            'Cloturee': 'Stage clôturé',
-            'Termine': 'Stage terminé',
-            'EnCours': 'Stage en cours',
         };
-        return labels[status] || status;
+        return statusMap[status] || status;
     };
 
+    // ✅ NOUVEAU : PROGRESSION SIMPLIFIÉE
     const getProgression = (statut) => {
         const map = {
             'Brouillon': 0,
+            'EnCoursCreation': 0,
             'Soumise': 20,
-            'EnAnalyse': 40,
-            'Entretien': 60,
-            'Acceptee': 100,
-            'Refusee': 100,
-            'EngagementEnvoye': 100,
-            'EngagementRecu': 100,
-            'EngagementValide': 100,
-            'EngagementRejete': 100,
+            'EnAnalyse': 20,
+            'Entretien': 20,
+            'Acceptee': 40,
+            'EngagementEnvoye': 40,
+            'EngagementRecu': 60,
+            'EngagementValide': 80,
+            'EngagementRejete': 60,
             'DemandeEnvoyee': 100,
             'ValideParDirecteur': 100,
             'Cloturee': 100,
             'Termine': 100,
             'EnCours': 100,
+            'Refusee': 100,
         };
         return map[statut] || 0;
     };
@@ -247,11 +292,6 @@ const Applications = () => {
         return 'Stage';
     };
 
-    const handleDeposerCandidature = () => {
-        // ✅ Rediriger vers la liste des offres pour choisir une offre
-        navigate('/offres');
-    };
-
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -271,21 +311,6 @@ const Applications = () => {
                         {filteredApplications.length} candidature(s) trouvée(s)
                     </Typography>
                 </Box>
-                {/* ✅ AJOUT : Bouton pour déposer une nouvelle candidature */}
-                <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    onClick={handleDeposerCandidature}
-                    sx={{
-                        backgroundColor: '#148aa0',
-                        borderRadius: '10px',
-                        textTransform: 'none',
-                        fontFamily: 'Inter, sans-serif',
-                        '&:hover': { backgroundColor: '#0b7890' },
-                    }}
-                >
-                    Déposer une candidature
-                </Button>
             </PageHeader>
 
             {error && (
@@ -343,14 +368,6 @@ const Applications = () => {
                                     <Typography variant="body1" color="text.secondary">
                                         Aucune candidature trouvée
                                     </Typography>
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={<Add />}
-                                        onClick={handleDeposerCandidature}
-                                        sx={{ mt: 2, borderRadius: '10px', textTransform: 'none' }}
-                                    >
-                                        Déposer une candidature
-                                    </Button>
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -358,6 +375,7 @@ const Applications = () => {
                                 const displayStatut = app.stageStatut || app.statut;
                                 const progress = getProgression(displayStatut);
                                 const type = getTypeStage(app);
+                                const statusLabel = getStatusLabel(displayStatut);
                                 return (
                                     <TableRow key={app._id || app.id} hover>
                                         <TableCell>
@@ -409,7 +427,7 @@ const Applications = () => {
                                         </TableCell>
                                         <TableCell>
                                             <StatusChip
-                                                label={getStatusLabel(displayStatut)}
+                                                label={statusLabel}
                                                 status={displayStatut}
                                                 size="small"
                                             />

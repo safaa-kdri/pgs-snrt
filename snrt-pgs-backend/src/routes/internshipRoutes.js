@@ -3,6 +3,7 @@
 // ✅ CORRECTION : Ajout de ROLES.ETUDIANT pour le téléchargement de l'engagement
 // ✅ AJOUT : Route PATCH /:id/status pour mettre à jour le statut d'un stage
 // ✅ AJOUT : Route POST /:id/send-demande-stage pour envoyer la demande à l'étudiant
+// ✅ AJOUT : Route GET /:id/download-demande-stage pour télécharger la demande existante
 // ✅ SUPPRESSION : Routes pour la gestion complète des conventions (signature)
 
 const express = require('express');
@@ -248,6 +249,14 @@ router.post(
     authorize(ROLES.RH, ROLES.ADMIN),
     logAction('INTERNSHIP_SEND_DEMANDE_STAGE'),
     internshipController.sendDemandeStageToStudent
+);
+
+// ✅ NOUVEAU : Télécharger la demande de stage existante (pour l'étudiant)
+router.get(
+    '/:id/download-demande-stage',
+    authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_DOWNLOAD_DEMANDE_STAGE'),
+    internshipController.downloadDemandeStage
 );
 
 // ============================================

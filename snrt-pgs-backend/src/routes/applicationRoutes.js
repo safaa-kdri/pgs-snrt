@@ -1,4 +1,7 @@
 // src/routes/applicationRoutes.js
+// ✅ CORRECTION : Suppression des routes pour les fonctions de workflow supprimées
+// ✅ CONSERVÉ : getWorkflowState pour la consultation des candidatures existantes
+
 const express = require('express');
 const router = express.Router();
 
@@ -26,47 +29,46 @@ router.get(
   applicationController.getDepartmentApplications
 );
 
-router.post('/', validate(createApplicationSchema), applicationController.createApplication);
+// ✅ Création directe d'une candidature (avec statut "Soumise")
+router.post(
+  '/',
+  validate(createApplicationSchema),
+  applicationController.createApplication
+);
+
 router.get('/', applicationController.getAllApplications);
 router.get('/:id', applicationController.getApplicationById);
 router.put('/:id', validate(updateApplicationSchema), applicationController.updateApplication);
 router.delete('/:id', applicationController.deleteApplication);
 
+// Soumettre une candidature (depuis brouillon)
 router.patch('/:id/submit', applicationController.submitApplication);
-router.patch('/:id/status', validate(changeApplicationStatusSchema), applicationController.changeApplicationStatus);
+
+// Changer le statut d'une candidature (RH / Département / Admin)
+router.patch(
+  '/:id/status',
+  validate(changeApplicationStatusSchema),
+  applicationController.changeApplicationStatus
+);
+
 router.get('/:id/history', applicationController.getApplicationHistory);
-router.patch('/:id/documents', validate(addDocumentToApplicationSchema), applicationController.addDocumentToApplication);
+router.patch(
+  '/:id/documents',
+  validate(addDocumentToApplicationSchema),
+  applicationController.addDocumentToApplication
+);
 
 // ============================================
-// ✅ NOUVELLES ROUTES - WORKFLOW DE CANDIDATURE EN 3 ÉTAPES
+// ✅ CONSERVÉE - Récupérer l'état du workflow
 // ============================================
 
-// ÉTAPE 1 - Sauvegarder les informations universitaires
-router.post(
-  '/:id/workflow/etape1',
-  authorize(ROLES.ETUDIANT),
-  applicationController.saveEtape1
-);
-
-// ÉTAPE 2 - Sauvegarder l'acceptation de l'engagement
-router.post(
-  '/:id/workflow/etape2',
-  authorize(ROLES.ETUDIANT),
-  applicationController.saveEtape2
-);
-
-// ÉTAPE 3 - Soumettre la candidature complète
-router.post(
-  '/:id/workflow/submit',
-  authorize(ROLES.ETUDIANT),
-  applicationController.submitWorkflow
-);
-
-// Récupérer l'état du workflow
+// Récupérer l'état du workflow pour une candidature existante
 router.get(
   '/:id/workflow/state',
   authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.DEPARTEMENT, ROLES.ADMIN),
   applicationController.getWorkflowState
 );
+
+
 
 module.exports = router;
