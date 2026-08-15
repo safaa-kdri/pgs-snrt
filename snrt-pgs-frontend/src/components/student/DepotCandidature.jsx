@@ -13,6 +13,7 @@
 // ✅ SUPPRESSION : Vérification au chargement (le message n'apparaît qu'à la soumission)
 // ✅ CORRECTION : handleFileUpload - Envoyer le type correctement avec le document
 // ✅ CORRECTION : Mapping correct entre l'étiquette et le type de document
+// ✅ AJOUT : Logs pour vérifier les données envoyées dans createAndSubmitCandidature
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
@@ -281,6 +282,7 @@ const DepotCandidature = () => {
 
     // ============================================
     // ✅ createAndSubmitCandidature - Vérification UNIQUEMENT à la soumission
+    // ✅ AJOUT : Logs pour vérifier les données envoyées
     // ============================================
     const createAndSubmitCandidature = async () => {
         try {
@@ -304,6 +306,17 @@ const DepotCandidature = () => {
                 return;
             }
             
+            // ✅ LOG : Vérifier les données avant l'envoi
+            console.log('📤 [createAndSubmitCandidature] Données à envoyer:', {
+                offreId: offerId,
+                documents: documentIds,
+                universite: formData.universite,
+                filiere: formData.filiere,
+                niveau: formData.niveau,
+                annee: formData.annee,
+                ficheAccepte: ficheAccepte,
+            });
+
             // ✅ 3. VÉRIFICATION UNIQUE ICI - Vérifier si l'étudiant a déjà postulé
             try {
                 const checkResponse = await api.get('/applications', {
@@ -340,6 +353,8 @@ const DepotCandidature = () => {
                 ficheAccepte: ficheAccepte,
             });
             
+            console.log('📥 [createAndSubmitCandidature] Réponse du serveur:', createResponse.data);
+
             if (!createResponse.data.success) {
                 setError(createResponse.data.message || 'Erreur lors de la création de la candidature');
                 setSaving(false);
@@ -432,6 +447,7 @@ const DepotCandidature = () => {
 
     // ============================================
     // RENDER - ÉTAPE 1 (4 champs uniquement)
+    // ✅ VÉRIFIER QUE LES CHAMPS SONT BIEN MAPPÉS
     // ============================================
 
     const renderEtape1 = () => (
@@ -442,7 +458,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Université *"
-                    name="universite"
+                    name="universite"  // ✅ Correspond à formData.universite
                     value={formData.universite}
                     onChange={handleFormChange}
                     placeholder="Ex: Université Hassan II"
@@ -451,7 +467,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Filière *"
-                    name="filiere"
+                    name="filiere"     // ✅ Correspond à formData.filiere
                     value={formData.filiere}
                     onChange={handleFormChange}
                     placeholder="Ex: Informatique"
@@ -460,7 +476,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Niveau d'études *"
-                    name="niveau"
+                    name="niveau"      // ✅ Correspond à formData.niveau
                     value={formData.niveau}
                     onChange={handleFormChange}
                     placeholder="Ex: Master 2"
@@ -469,7 +485,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Année universitaire"
-                    name="annee"
+                    name="annee"       // ✅ Correspond à formData.annee
                     value={formData.annee}
                     onChange={handleFormChange}
                     placeholder="Ex: 2025-2026"

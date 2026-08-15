@@ -1,13 +1,20 @@
 // src/controllers/applicationController.js
-// ✅ CORRECTION : Ajout de la transition EnAnalyse -> Acceptee + vérification du rôle
-// ✅ AJOUT : Vérification des conflits de stage en cours
-// ✅ AJOUT : getDepartmentApplications pour le département
-// ✅ MODIFICATION : createApplication - Création directe avec statut "Soumise"
-// ✅ MODIFICATION : createApplication - Accepter les données des étapes 1 et 2
-// ✅ SUPPRESSION : Fonctions de workflow intermédiaires (saveEtape1, saveEtape2, submitWorkflow)
-// ✅ CONSERVÉ : getWorkflowState pour la consultation des candidatures existantes
-// ✅ AJOUT : Envoi automatique de l'engagement quand le statut passe à Acceptee
-// ✅ AJOUT : Imports manquants (pdfService, emailService)
+// CORRECTION : Ajout de la transition EnAnalyse -> Acceptee + vérification du rôle
+// AJOUT : Vérification des conflits de stage en cours
+// AJOUT : getDepartmentApplications pour le département
+// MODIFICATION : createApplication - Création directe avec statut "Soumise"
+// MODIFICATION : createApplication - Accepter les données des étapes 1 et 2
+// SUPPRESSION : Fonctions de workflow intermédiaires (saveEtape1, saveEtape2, submitWorkflow)
+// CONSERVÉ : getWorkflowState pour la consultation des candidatures existantes
+// AJOUT : Envoi automatique de l'engagement quand le statut passe à Acceptee
+// AJOUT : Imports manquants (pdfService, emailService)
+// AJOUT : refuseConflictingApplications - Refus automatique des candidatures conflictuelles
+// AJOUT : Restriction RH - Le RH ne peut pas accepter directement
+// AJOUT : Transitions d'engagement - EngagementRecu -> EngagementValide/Rejete, EngagementValide -> DemandeEnvoyee
+// AJOUT : Vérification statut identique dans changeApplicationStatus
+// CORRECTION : Récupération de etudiantId dans sendEngagementAutomatically
+// CORRECTION : Ajout de logs pour les champs dans createApplication
+// CORRECTION : Vérification si le stage existe déjà dans sendEngagementAutomatically pour éviter les doublons
 
 const Application = require('../models/Application');
 const Document = require('../models/Document');
@@ -85,18 +92,22 @@ async function notifyStudentApplicationSubmitted(application) {
 
 const STATUTS = Object.values(APPLICATION_STATUS);
 
-// ✅ CORRECTION : Ajouter la transition EnAnalyse -> Acceptee
+// CORRECTION : Ajouter la transition EnAnalyse -> Acceptee
+// AJOUT : Transitions d'engagement
 const TRANSITIONS_AUTORISEES = {
     [APPLICATION_STATUS.BROUILLON]: [APPLICATION_STATUS.SOUMISE],
     [APPLICATION_STATUS.SOUMISE]: [APPLICATION_STATUS.EN_ANALYSE, APPLICATION_STATUS.REFUSEE],
     [APPLICATION_STATUS.EN_ANALYSE]: [
         APPLICATION_STATUS.ENTRETIEN,
-        APPLICATION_STATUS.ACCEPTEE,  // ✅ AJOUTÉ
+        APPLICATION_STATUS.ACCEPTEE,
         APPLICATION_STATUS.REFUSEE,
     ],
     [APPLICATION_STATUS.ENTRETIEN]: [APPLICATION_STATUS.ACCEPTEE, APPLICATION_STATUS.REFUSEE],
     [APPLICATION_STATUS.ACCEPTEE]: [],
     [APPLICATION_STATUS.REFUSEE]: [],
+    // AJOUT : Transitions d'engagement
+    'EngagementRecu': ['EngagementValide', 'EngagementRejete'],
+    'EngagementValide': ['DemandeEnvoyee'],
 };
 
 const canChangeStatus = (ancienStatut, nouveauStatut) => {
@@ -111,10 +122,10 @@ const isOwnerOrStaff = (req, etudiantIdField) => {
 };
 
 /**
- * ✅ Vérifier si un étudiant a un stage en cours pendant une période donnée
+ * Verifier si un etudiant a un stage en cours pendant une periode donnee
  */
 const checkStudentAvailability = async (etudiantId, dateDebut, dateFin) => {
-    // Statuts considérés comme "stage en cours"
+    // Statuts consideres comme "stage en cours"
     const activeStatuses = [
         'EnCours', 
         'EngagementEnvoye', 
@@ -132,7 +143,7 @@ const checkStudentAvailability = async (etudiantId, dateDebut, dateFin) => {
         return { available: true, currentInternship: null };
     }
 
-    // Vérifier si les périodes se chevauchent
+    // Verifier si les periodes se chevauchent
     const newStart = new Date(dateDebut);
     const newEnd = new Date(dateFin);
     const currentStart = new Date(currentInternship.dateDebut);
@@ -153,89 +164,172 @@ const checkStudentAvailability = async (etudiantId, dateDebut, dateFin) => {
 };
 
 // ============================================
-// ✅ NOUVELLE FONCTION : Envoi automatique de l'engagement
+// AJOUT : Fonction pour refuser automatiquement les candidatures conflictuelles
+// ============================================
+
+/**
+ * Refuser automatiquement les candidatures conflictuelles
+ */
+const refuseConflictingApplications = async (acceptedApplication) => {
+    try {
+        const etudiantId = acceptedApplication.etudiantId._id;
+        const offreId = acceptedApplication.offreId._id;
+        const dateDebut = acceptedApplication.offreId.dateDebut;
+        const dateFin = acceptedApplication.offreId.dateFin;
+
+        // Trouver toutes les autres candidatures de l'etudiant (qui ne sont pas refusees)
+        const otherApplications = await Application.find({
+            etudiantId: etudiantId,
+            _id: { $ne: acceptedApplication._id },
+            statut: { $nin: ['Refusee', 'Acceptee'] }
+        }).populate('offreId', 'dateDebut dateFin');
+
+        const applicationsToRefuse = [];
+
+        for (const app of otherApplications) {
+            if (app.offreId && app.offreId.dateDebut && app.offreId.dateFin) {
+                // Verifier le chevauchement de periode
+                const hasOverlap = (
+                    new Date(dateDebut) <= new Date(app.offreId.dateFin) &&
+                    new Date(dateFin) >= new Date(app.offreId.dateDebut)
+                );
+
+                if (hasOverlap) {
+                    applicationsToRefuse.push(app);
+                }
+            }
+        }
+
+        // Refuser les candidatures conflictuelles
+        for (const app of applicationsToRefuse) {
+            const ancienStatut = app.statut;
+            app.statut = APPLICATION_STATUS.REFUSEE;
+            app.commentaire = `Refus automatique : Etudiant accepte a un autre stage pour la meme periode (${new Date(dateDebut).toLocaleDateString('fr-FR')} - ${new Date(dateFin).toLocaleDateString('fr-FR')})`;
+            
+            if (!app.historique) app.historique = [];
+            app.historique.push({
+                ancienStatut,
+                nouveauStatut: APPLICATION_STATUS.REFUSEE,
+                commentaire: app.commentaire,
+                date: new Date()
+            });
+            
+            await app.save();
+            
+            // Notifier l'etudiant
+            await notifyStudentStatusChanged(app, APPLICATION_STATUS.REFUSEE);
+            
+            console.log(`[refuseConflictingApplications] Candidature ${app._id} refusee automatiquement`);
+        }
+
+        return applicationsToRefuse.length;
+    } catch (error) {
+        console.error('Erreur refuseConflictingApplications:', error);
+        throw error;
+    }
+};
+
+// ============================================
+// FONCTION : Envoi automatique de l'engagement
+// CORRECTION : Vérification si le stage existe déjà pour éviter les doublons
 // ============================================
 const sendEngagementAutomatically = async (application) => {
     try {
-        // 1. Récupérer ou créer le stage
+        // 1. Rechercher le stage existant
         let internship = await Internship.findOne({ applicationId: application._id });
         
-        if (!internship) {
-            // Créer le stage si nécessaire
+        // Recuperer les IDs correctement
+        const etudiantId = application.etudiantId?._id || application.etudiantId;
+        const offreId = application.offreId?._id || application.offreId;
+        
+        // Recuperer l'etudiant complet
+        const etudiant = await UtilisateurExterne.findById(etudiantId);
+        if (!etudiant) {
+            console.error('[sendEngagementAutomatically] Etudiant non trouve');
+            throw new Error('Etudiant non trouve');
+        }
+        
+        // Si le stage existe deja, ne pas le recréer
+        if (internship) {
+            console.log(`[sendEngagementAutomatically] Stage deja existant: ${internship._id}`);
+        } else {
+            // Creer le stage seulement s'il n'existe pas
             internship = await Internship.create({
-                etudiantId: application.etudiantId._id,
-                offreId: application.offreId._id,
+                etudiantId: etudiantId,
+                offreId: offreId,
                 applicationId: application._id,
-                dateDebut: application.offreId.dateDebut || new Date(),
-                dateFin: application.offreId.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                dateDebut: application.offreId?.dateDebut || new Date(),
+                dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 statut: 'EnCours',
                 encadrantId: null
             });
-            console.log(`✅ [sendEngagementAutomatically] Stage créé: ${internship._id}`);
+            console.log(`[sendEngagementAutomatically] Stage cree: ${internship._id}`);
         }
 
-        // 2. Générer l'engagement
+        // 2. Generer l'engagement
         const internshipData = {
             _id: internship._id,
-            etudiantId: application.etudiantId,
+            etudiantId: etudiant,
             offreId: application.offreId,
             dateDebut: internship.dateDebut,
             dateFin: internship.dateFin,
-            etudiantNom: `${application.etudiantId.prenom} ${application.etudiantId.nom}`
+            etudiantNom: `${etudiant.prenom || ''} ${etudiant.nom || ''}`.trim()
         };
 
         const pdfPath = await pdfService.generateEngagementConfidentialite(internshipData);
-        console.log(`✅ [sendEngagementAutomatically] PDF généré: ${pdfPath}`);
+        console.log(`[sendEngagementAutomatically] PDF genere: ${pdfPath}`);
 
         // 3. Envoyer l'email
         await emailService.sendEngagementConfidentialiteEmail({
-            to: application.etudiantId.email,
-            studentName: `${application.etudiantId.prenom} ${application.etudiantId.nom}`,
+            to: etudiant.email,
+            studentName: `${etudiant.prenom} ${etudiant.nom}`,
             pdfPath: pdfPath,
         });
-        console.log(`✅ [sendEngagementAutomatically] Email envoyé à ${application.etudiantId.email}`);
+        console.log(`[sendEngagementAutomatically] Email envoye a ${etudiant.email}`);
 
-        // 4. Mettre à jour le statut du stage
+        // 4. Mettre a jour le statut du stage
         internship.statut = 'EngagementEnvoye';
         await internship.save();
 
-        // 5. Ajouter à l'historique de l'application
+        // 5. Ajouter a l'historique de l'application
+        if (!application.historique) application.historique = [];
         application.historique.push({
             date: new Date(),
             ancienStatut: application.statut,
             nouveauStatut: application.statut,
-            commentaire: 'Engagement de confidentialité envoyé automatiquement à l\'étudiant',
-            auteurId: application.traiteurId || application.updatedBy
+            commentaire: 'Engagement de confidentialite envoye automatiquement a l\'etudiant',
+            auteurId: application.traiteurId || application.updatedBy || null
         });
         await application.save();
 
-        // 6. Notification à l'étudiant
+        // 6. Notification a l'etudiant
         await Notification.create({
             type: 'InApp',
-            titre: 'Engagement de confidentialité',
-            message: `Un engagement de confidentialité vous a été envoyé par email pour votre stage "${application.offreId?.titre || ''}". Veuillez le signer et le déposer.`,
+            titre: 'Engagement de confidentialite',
+            message: `Un engagement de confidentialite vous a ete envoye par email pour votre stage "${application.offreId?.titre || ''}". Veuillez le signer et le deposer.`,
             lien: `/dashboard/application/${application._id}`,
-            userId: application.etudiantId._id,
+            userId: etudiantId,
             userModel: 'UtilisateurExterne',
         });
 
         return true;
 
     } catch (error) {
-        console.error('❌ [sendEngagementAutomatically] Erreur:', error);
+        console.error('[sendEngagementAutomatically] Erreur:', error);
         throw error;
     }
 };
 
 // ============================================
-// ✅ MODIFICATION : createApplication - Création directe avec statut "Soumise"
-// ✅ SUPPRESSION AUTOMATIQUE DES BROUILLONS EXISTANTS
+// MODIFICATION : createApplication - Creation directe avec statut "Soumise"
+// SUPPRESSION AUTOMATIQUE DES BROUILLONS EXISTANTS
+// AJOUT : Logs pour verifier les champs
 // ============================================
 exports.createApplication = async (req, res) => {
     try {
-        console.log('🔍 [createApplication] Début...');
-        console.log('🔍 [createApplication] req.user:', req.user);
-        console.log('🔍 [createApplication] req.body:', req.body);
+        console.log('[createApplication] Debut...');
+        console.log('[createApplication] req.user:', req.user);
+        console.log('[createApplication] req.body:', req.body);
 
         if (req.user?.role !== ROLES.ETUDIANT) {
             return res.status(403).json({
@@ -256,6 +350,15 @@ exports.createApplication = async (req, res) => {
             ficheAccepte
         } = req.body;
 
+        // AJOUT : Logs pour verifier les champs
+        console.log('[createApplication] Champs universite:', {
+            universite: universite,
+            filiere: filiere,
+            niveau: niveau,
+            annee: annee,
+            ficheAccepte: ficheAccepte
+        });
+
         if (!offreId) {
             return res.status(400).json({
                 success: false,
@@ -268,11 +371,11 @@ exports.createApplication = async (req, res) => {
         if (!offer) {
             return res.status(404).json({
                 success: false,
-                message: 'Offre non trouvée'
+                message: 'Offre non trouvee'
             });
         }
 
-        // ✅ 1. Vérifier s'il existe déjà une candidature SOUMISE
+        // 1. Verifier s'il existe deja une candidature SOUMISE
         const existingSubmitted = await Application.findOne({
             etudiantId,
             offreId,
@@ -282,11 +385,11 @@ exports.createApplication = async (req, res) => {
         if (existingSubmitted) {
             return res.status(400).json({
                 success: false,
-                message: 'Vous avez déjà soumis une candidature pour cette offre'
+                message: 'Vous avez deja soumis une candidature pour cette offre'
             });
         }
 
-        // ✅ 2. Vérifier s'il existe une candidature en cours (Brouillon ou EnCoursCreation) et la supprimer automatiquement
+        // 2. Verifier s'il existe une candidature en cours (Brouillon ou EnCoursCreation) et la supprimer automatiquement
         const existingDraft = await Application.findOne({
             etudiantId,
             offreId,
@@ -294,17 +397,17 @@ exports.createApplication = async (req, res) => {
         });
 
         if (existingDraft) {
-            console.log(`🗑️ Suppression automatique de l'ancienne candidature en cours: ${existingDraft._id}`);
+            console.log(`Suppression automatique de l'ancienne candidature en cours: ${existingDraft._id}`);
             await Application.deleteOne({ _id: existingDraft._id });
             
-            // Supprimer également les documents associés à cette candidature
+            // Supprimer egalement les documents associes a cette candidature
             await Document.updateMany(
                 { applicationId: existingDraft._id },
                 { applicationId: null }
             );
         }
 
-        // ✅ 3. VÉRIFICATION : L'étudiant a-t-il un stage en cours ?
+        // 3. VERIFICATION : L'etudiant a-t-il un stage en cours ?
         if (offer.dateDebut && offer.dateFin) {
             const availability = await checkStudentAvailability(
                 etudiantId,
@@ -316,12 +419,12 @@ exports.createApplication = async (req, res) => {
                 const stage = availability.currentInternship;
                 return res.status(400).json({
                     success: false,
-                    message: `Vous ne pouvez pas postuler à cette offre car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`
+                    message: `Vous ne pouvez pas postuler a cette offre car vous avez deja un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`
                 });
             }
         }
 
-        // ✅ 4. Vérifier que les documents appartiennent à l'étudiant
+        // 4. Verifier que les documents appartiennent a l'etudiant
         let safeDocuments = [];
         if (documents && documents.length > 0) {
             const foundDocuments = await Document.find({ _id: { $in: documents } }).select('candidatId');
@@ -338,7 +441,15 @@ exports.createApplication = async (req, res) => {
             safeDocuments = documents;
         }
 
-        // ✅ 5. Créer la candidature avec TOUTES les données - Statut "Soumise"
+        // 5. Creer la candidature avec TOUTES les donnees - Statut "Soumise"
+        console.log('[createApplication] Donnees avant creation:', {
+            universite: universite,
+            filiere: filiere,
+            niveau: niveau,
+            annee: annee,
+            ficheAccepte: ficheAccepte
+        });
+
         const application = await Application.create({
             etudiantId,
             offreId,
@@ -356,19 +467,19 @@ exports.createApplication = async (req, res) => {
             ficheAccepte: ficheAccepte || false,
         });
 
-        // ✅ 6. Ajouter à l'historique
+        // 6. Ajouter a l'historique
         if (!application.historique) application.historique = [];
         application.historique.push({
             ancienStatut: null,
             nouveauStatut: APPLICATION_STATUS.SOUMISE,
-            commentaire: 'Candidature soumise avec succès',
+            commentaire: 'Candidature soumise avec succes',
             auteurId: req.user?._id,
             date: new Date()
         });
 
         await application.save();
 
-        // ✅ 7. Mettre à jour les documents avec l'applicationId
+        // 7. Mettre a jour les documents avec l'applicationId
         if (safeDocuments.length > 0) {
             await Document.updateMany(
                 { _id: { $in: safeDocuments } },
@@ -376,32 +487,32 @@ exports.createApplication = async (req, res) => {
             );
         }
 
-        // ✅ 8. Notification
+        // 8. Notification
         await notifyStudentApplicationSubmitted(application);
 
-        console.log(`✅ Candidature créée avec succès: ${application._id}`);
+        console.log(`Candidature creee avec succes: ${application._id}`);
 
         return res.status(201).json({
             success: true,
-            message: 'Candidature soumise avec succès',
+            message: 'Candidature soumise avec succes',
             data: application
         });
 
     } catch (error) {
-        console.error('❌ Erreur createApplication:', error);
-        console.error('❌ Stack:', error.stack);
+        console.error('Erreur createApplication:', error);
+        console.error('Stack:', error.stack);
         
-        // ✅ Gestion de l'erreur de duplication
+        // Gestion de l'erreur de duplication
         if (error.code === 11000) {
             return res.status(400).json({
                 success: false,
-                message: 'Vous avez déjà soumis une candidature pour cette offre. Une seule candidature par offre est autorisée.'
+                message: 'Vous avez deja soumis une candidature pour cette offre. Une seule candidature par offre est autorisee.'
             });
         }
         
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la création de la candidature',
+            message: 'Erreur lors de la creation de la candidature',
             error: error.message
         });
     }
@@ -447,7 +558,7 @@ exports.getAllApplications = async (req, res) => {
         const statusCode = error.statusCode || 500;
         return res.status(statusCode).json({
             success: false,
-            message: statusCode === 500 ? 'Erreur lors de la récupération des candidatures' : error.message,
+            message: statusCode === 500 ? 'Erreur lors de la recuperation des candidatures' : error.message,
             error: statusCode === 500 ? error.message : undefined
         });
     }
@@ -465,7 +576,7 @@ exports.getApplicationById = async (req, res) => {
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
@@ -486,7 +597,7 @@ exports.getApplicationById = async (req, res) => {
         const statusCode = error.statusCode || 500;
         return res.status(statusCode).json({
             success: false,
-            message: statusCode === 500 ? 'Erreur lors de la récupération de la candidature' : error.message,
+            message: statusCode === 500 ? 'Erreur lors de la recuperation de la candidature' : error.message,
             error: statusCode === 500 ? error.message : undefined
         });
     }
@@ -501,7 +612,7 @@ exports.updateApplication = async (req, res) => {
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
@@ -515,7 +626,7 @@ exports.updateApplication = async (req, res) => {
         if (application.statut !== APPLICATION_STATUS.BROUILLON) {
             return res.status(400).json({
                 success: false,
-                message: 'Seule une candidature en brouillon peut être modifiée'
+                message: 'Seule une candidature en brouillon peut etre modifiee'
             });
         }
 
@@ -528,7 +639,7 @@ exports.updateApplication = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Candidature modifiée avec succès',
+            message: 'Candidature modifiee avec succes',
             data: application
         });
     } catch (error) {
@@ -548,7 +659,7 @@ exports.submitApplication = async (req, res) => {
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
@@ -562,11 +673,11 @@ exports.submitApplication = async (req, res) => {
         if (application.statut !== APPLICATION_STATUS.BROUILLON) {
             return res.status(400).json({
                 success: false,
-                message: 'Seule une candidature en brouillon peut être soumise'
+                message: 'Seule une candidature en brouillon peut etre soumise'
             });
         }
 
-        // ✅ VÉRIFICATION : L'étudiant a-t-il un stage en cours qui chevauche la période ?
+        // VERIFICATION : L'etudiant a-t-il un stage en cours qui chevauche la periode ?
         if (application.offreId && application.offreId.dateDebut && application.offreId.dateFin) {
             const availability = await checkStudentAvailability(
                 application.etudiantId,
@@ -578,7 +689,7 @@ exports.submitApplication = async (req, res) => {
                 const stage = availability.currentInternship;
                 return res.status(400).json({
                     success: false,
-                    message: `Vous ne pouvez pas soumettre cette candidature car vous avez déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
+                    message: `Vous ne pouvez pas soumettre cette candidature car vous avez deja un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
                     data: {
                         currentInternship: availability.currentPeriod,
                         requestedPeriod: {
@@ -590,11 +701,11 @@ exports.submitApplication = async (req, res) => {
             }
         }
 
-        // ✅ Vérifier que la candidature a des documents
+        // Verifier que la candidature a des documents
         if (!application.documents || application.documents.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Vous devez déposer au moins un document avant de soumettre votre candidature.'
+                message: 'Vous devez deposer au moins un document avant de soumettre votre candidature.'
             });
         }
 
@@ -618,7 +729,7 @@ exports.submitApplication = async (req, res) => {
         application.historique.push({
             ancienStatut,
             nouveauStatut: APPLICATION_STATUS.SOUMISE,
-            commentaire: 'Candidature soumise par l’étudiant',
+            commentaire: 'Candidature soumise par l\'etudiant',
             auteurId: req.user?._id
         });
 
@@ -628,7 +739,7 @@ exports.submitApplication = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Candidature soumise avec succès',
+            message: 'Candidature soumise avec succes',
             data: application
         });
     } catch (error) {
@@ -641,18 +752,19 @@ exports.submitApplication = async (req, res) => {
 };
 
 // ============================================
-// ✅ MODIFIÉ : changeApplicationStatus avec envoi automatique de l'engagement
+// MODIFIE : changeApplicationStatus avec gestion des conflits
+// AJOUT : Restriction RH - Le RH ne peut pas accepter directement
+// AJOUT : Verification statut identique
 // ============================================
 exports.changeApplicationStatus = async (req, res) => {
     try {
-        // ✅ CORRECTION : Vérifier explicitement le rôle
         const userRole = req.user?.role;
         const allowedRoles = ['RH', 'Departement', 'Administrateur'];
         
         if (!allowedRoles.includes(userRole)) {
             return res.status(403).json({
                 success: false,
-                message: "Vous n'avez pas les droits necessaires pour cette action. Rôle requis: RH, Departement ou Administrateur."
+                message: "Vous n'avez pas les droits necessaires pour cette action. Role requis: RH, Departement ou Administrateur."
             });
         }
 
@@ -665,14 +777,22 @@ exports.changeApplicationStatus = async (req, res) => {
             });
         }
 
+        // RESTRICTION : Le RH ne peut PAS accepter directement
+        if (userRole === 'RH' && statut === APPLICATION_STATUS.ACCEPTEE) {
+            return res.status(403).json({
+                success: false,
+                message: "Le RH ne peut pas accepter une candidature. Seul le Departement peut le faire."
+            });
+        }
+
         const application = await Application.findById(req.params.id)
-            .populate('offreId', 'dateDebut dateFin titre')
+            .populate('offreId', 'dateDebut dateFin titre nbPostes')
             .populate('etudiantId', 'nom prenom email');
 
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
@@ -685,15 +805,26 @@ exports.changeApplicationStatus = async (req, res) => {
 
         const ancienStatut = application.statut;
 
-        if (!canChangeStatus(ancienStatut, statut)) {
-            return res.status(400).json({
-                success: false,
-                message: `Transition non autorisée : ${ancienStatut} vers ${statut}`
+        // SI LE STATUT EST DEJA LE MEME, ON NE FAIT RIEN
+        if (ancienStatut === statut) {
+            console.log(`[changeApplicationStatus] Statut deja ${statut}, aucune modification`);
+            return res.status(200).json({
+                success: true,
+                message: `Le statut est deja : ${statut}`,
+                data: application
             });
         }
 
-        // ✅ VÉRIFICATION : Si on accepte, vérifier qu'il n'y a pas de conflit
-        if (statut === APPLICATION_STATUS.ACCEPTEE && application.offreId) {
+        if (!canChangeStatus(ancienStatut, statut)) {
+            return res.status(400).json({
+                success: false,
+                message: `Transition non autorisee : ${ancienStatut} vers ${statut}`
+            });
+        }
+
+        // VERIFICATION : Si on accepte, verifier les conflits AVANT de modifier
+        if (statut === APPLICATION_STATUS.ACCEPTEE) {
+            // 1. Verifier si l'etudiant a deja un stage en cours
             const availability = await checkStudentAvailability(
                 application.etudiantId,
                 application.offreId.dateDebut,
@@ -704,15 +835,30 @@ exports.changeApplicationStatus = async (req, res) => {
                 const stage = availability.currentInternship;
                 return res.status(400).json({
                     success: false,
-                    message: `Impossible d'accepter cette candidature : l'étudiant a déjà un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`,
-                    data: {
-                        currentInternship: availability.currentPeriod
-                    }
+                    message: `Cet etudiant a deja un stage en cours du ${new Date(stage.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stage.dateFin).toLocaleDateString('fr-FR')} : "${stage.sujetTitre}".`
                 });
             }
+
+            // 2. Verifier le nombre de postes disponibles
+            const offer = application.offreId;
+            if (offer.nbPostes) {
+                const acceptedCount = await Application.countDocuments({
+                    offreId: offer._id,
+                    statut: APPLICATION_STATUS.ACCEPTEE
+                });
+                
+                if (acceptedCount >= offer.nbPostes) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Tous les postes (${offer.nbPostes}) pour cette offre sont deja pourvus.`
+                    });
+                }
+            }
+
+            // 3. Si tout est OK, on peut accepter
         }
 
-        // ✅ Mettre à jour le statut
+        // Mettre a jour le statut
         application.statut = statut;
         application.commentaire = commentaire || application.commentaire;
         application.traiteurId = req.user?._id;
@@ -729,30 +875,33 @@ exports.changeApplicationStatus = async (req, res) => {
 
         await application.save();
 
-        // ✅ NOUVEAU : Si le statut passe à "Acceptee", envoyer l'engagement automatiquement
-        if (statut === APPLICATION_STATUS.ACCEPTEE && ancienStatut !== APPLICATION_STATUS.ACCEPTEE) {
-            console.log(`📧 [changeApplicationStatus] Statut Acceptee - Envoi automatique de l'engagement pour l'application ${application._id}`);
-            
+        // Si accepte, refuser automatiquement les autres candidatures conflictuelles
+        if (statut === APPLICATION_STATUS.ACCEPTEE) {
+            await refuseConflictingApplications(application);
+        }
+
+        // Envoi automatique de l'engagement SI le role est "Departement" et statut "Acceptee"
+        if (statut === APPLICATION_STATUS.ACCEPTEE && userRole === 'Departement') {
+            console.log(`[changeApplicationStatus] Acceptee par Departement - Envoi automatique de l'engagement`);
             try {
                 await sendEngagementAutomatically(application);
-                console.log(`✅ [changeApplicationStatus] Engagement envoyé automatiquement pour ${application._id}`);
+                console.log(`[changeApplicationStatus] Engagement envoye automatiquement`);
             } catch (engagementError) {
-                console.error(`❌ [changeApplicationStatus] Erreur envoi engagement:`, engagementError);
-                // On continue, la notification sera envoyée mais l'engagement a échoué
+                console.error(`[changeApplicationStatus] Erreur envoi engagement:`, engagementError);
             }
         }
 
-        // ✅ Notification à l'étudiant
+        // Notification a l'etudiant
         await notifyStudentStatusChanged(application, statut);
 
         return res.status(200).json({
             success: true,
-            message: 'Statut de candidature modifié avec succès',
+            message: `Statut de candidature modifie avec succes : ${statut}`,
             data: application
         });
 
     } catch (error) {
-        console.error('❌ Erreur changeApplicationStatus:', error);
+        console.error('Erreur changeApplicationStatus:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors du changement de statut',
@@ -770,7 +919,7 @@ exports.getApplicationHistory = async (req, res) => {
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
@@ -796,7 +945,7 @@ exports.getApplicationHistory = async (req, res) => {
     } catch (error) {
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la récupération de l’historique',
+            message: 'Erreur lors de la recuperation de l\'historique',
             error: error.message
         });
     }
@@ -809,7 +958,7 @@ exports.deleteApplication = async (req, res) => {
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
@@ -824,7 +973,7 @@ exports.deleteApplication = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Candidature supprimée avec succès'
+            message: 'Candidature supprimee avec succes'
         });
     } catch (error) {
         return res.status(500).json({
@@ -844,7 +993,7 @@ exports.addDocumentToApplication = async (req, res) => {
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
@@ -860,7 +1009,7 @@ exports.addDocumentToApplication = async (req, res) => {
         if (!document) {
             return res.status(404).json({
                 success: false,
-                message: 'Document non trouvé'
+                message: 'Document non trouve'
             });
         }
 
@@ -874,7 +1023,7 @@ exports.addDocumentToApplication = async (req, res) => {
         if (application.documents.includes(documentId)) {
             return res.status(400).json({
                 success: false,
-                message: 'Ce document est déjà associé à la candidature'
+                message: 'Ce document est deja associe a la candidature'
             });
         }
 
@@ -887,20 +1036,20 @@ exports.addDocumentToApplication = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Document ajouté à la candidature avec succès',
+            message: 'Document ajoute a la candidature avec succes',
             data: application
         });
     } catch (error) {
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de l\'ajout du document à la candidature',
+            message: 'Erreur lors de l\'ajout du document a la candidature',
             error: error.message
         });
     }
 };
 
 // ============================================
-// ✅ RÉCUPÉRER LES CANDIDATURES DU DÉPARTEMENT
+// RECUPERER LES CANDIDATURES DU DEPARTEMENT
 // ============================================
 
 exports.getDepartmentApplications = async (req, res) => {
@@ -910,11 +1059,11 @@ exports.getDepartmentApplications = async (req, res) => {
         if (!departementId) {
             return res.status(403).json({
                 success: false,
-                message: "Votre compte n'est rattaché à aucun département."
+                message: "Votre compte n'est rattache a aucun departement."
             });
         }
 
-        // Récupérer toutes les offres du département
+        // Recuperer toutes les offres du departement
         const offers = await Offer.find({ departementId }).select('_id');
         const offerIds = offers.map(o => o._id);
 
@@ -941,21 +1090,21 @@ exports.getDepartmentApplications = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erreur getDepartmentApplications:', error);
+        console.error('Erreur getDepartmentApplications:', error);
         return res.status(500).json({
             success: false,
-            message: 'Erreur lors de la récupération des candidatures',
+            message: 'Erreur lors de la recuperation des candidatures',
             error: error.message
         });
     }
 };
 
 // ============================================
-// ✅ CONSERVÉ : Récupérer l'état du workflow pour les candidatures existantes
+// CONSERVE : Recuperer l'etat du workflow pour les candidatures existantes
 // ============================================
 
 /**
- * Récupérer l'état du workflow
+ * Recuperer l'etat du workflow
  * GET /api/v1/applications/:id/workflow/state
  */
 exports.getWorkflowState = async (req, res) => {
@@ -967,15 +1116,15 @@ exports.getWorkflowState = async (req, res) => {
         if (!application) {
             return res.status(404).json({
                 success: false,
-                message: 'Candidature non trouvée'
+                message: 'Candidature non trouvee'
             });
         }
 
-        // Vérifier que l'étudiant est le propriétaire ou staff
+        // Verifier que l'etudiant est le proprietaire ou staff
         if (!isOwnerOrStaff(req, application.etudiantId) && req.user?.role !== ROLES.ADMIN) {
             return res.status(403).json({
                 success: false,
-                message: 'Vous n\'avez pas accès à cette candidature'
+                message: 'Vous n\'avez pas acces a cette candidature'
             });
         }
 
@@ -986,12 +1135,12 @@ exports.getWorkflowState = async (req, res) => {
                 workflowEtape: application.workflowEtape || 1,
                 workflowComplete: application.workflowComplete || false,
                 statut: application.statut,
-                // ✅ 4 champs
+                // 4 champs
                 universite: application.universite || '',
                 filiere: application.filiere || '',
                 niveau: application.niveau || '',
                 annee: application.annee || '',
-                // ✅ Étape 2
+                // Etape 2
                 ficheAccepte: application.ficheAccepte || false,
                 ficheDateAccepte: application.ficheDateAccepte || null,
                 // Documents
@@ -1000,11 +1149,11 @@ exports.getWorkflowState = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erreur getWorkflowState:', error);
+        console.error('Erreur getWorkflowState:', error);
         logger.error(`Erreur getWorkflowState: ${error.message}`);
         res.status(500).json({
             success: false,
-            message: 'Erreur lors de la récupération de l\'état du workflow',
+            message: 'Erreur lors de la recuperation de l\'etat du workflow',
             error: error.message
         });
     }

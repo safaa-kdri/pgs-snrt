@@ -8,6 +8,9 @@
 // ✅ SUPPRESSION : Affichage de la date pour les documents
 // ✅ MODIFICATION : Tous les documents affichés sans scrollbar
 // ✅ SUPPRESSION : Bouton "Envoyer l'engagement" (devenu automatique)
+// ✅ MODIFICATION : Le RH valide uniquement les documents (pas l'acceptation)
+// ✅ CORRECTION : Le bouton "Valider les documents" disparaît après validation
+// ✅ CORRECTION : handleValidateDocuments vérifie le statut avant de modifier
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -438,26 +441,53 @@ const ApplicationDetail = () => {
   // WORKFLOW RH - FONCTIONS
   // ============================================
 
+  // ✅ MODIFICATION : Le RH ne fait que valider les documents
+  // ✅ Vérification du statut pour éviter les doublons
   const handleValidateDocuments = async (decision) => {
     setGenerating(true);
     try {
-      if (decision === "accepter") {
+      if (decision === "valider") {
+        // ✅ Vérifier si les documents sont déjà validés
+        if (application?.statut === "EnAnalyse") {
+          setSuccess("Les documents ont déjà été validés.");
+          setDialogAction("");
+          setGenerating(false);
+          handleCloseDialog();
+          return;
+        }
+
+        // ✅ 1. Valider les documents
         await api.patch(
           `/documents/application/${application._id}/validate-all`,
         );
 
+        // ✅ 2. Changer le statut uniquement si "Soumise"
+        if (application?.statut === "Soumise") {
+          await api.patch(`/applications/${application._id}/status`, {
+            statut: "EnAnalyse",
+            commentaire: "Documents validés par le RH"
+          });
+        }
+
         setSuccess(
-          "Documents validés. Candidature acceptée et engagement envoyé à l'étudiant.",
+          "Documents validés. La candidature a été transmise au département pour analyse.",
         );
         setDialogAction("");
         fetchApplicationDetail();
         goToNextStep();
       } else {
+        // Refuser les documents
         await api.patch(`/documents/${application._id}/verify`, {
           statut: "Refuse",
           commentaire: comment || "Non conforme",
         });
-        setSuccess("Documents refusés");
+        
+        await api.patch(`/applications/${application._id}/status`, {
+          statut: "Refusee",
+          commentaire: comment || "Documents non conformes"
+        });
+        
+        setSuccess("Documents refusés - Candidature rejetée");
         setDialogAction("");
         fetchApplicationDetail();
       }
@@ -778,14 +808,13 @@ const ApplicationDetail = () => {
     switch (step) {
       // ============================================
       // ÉTAPE 1 : VALIDATION (Documents + Acceptation)
+      // ✅ NOUVELLE LOGIQUE D'AFFICHAGE
       // ============================================
       case 0:
         return (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Vérifiez les documents de candidature. Une fois validés, la
-              candidature sera acceptée et l'engagement envoyé automatiquement à
-              l'étudiant.
+              Vérifiez les documents de candidature. Une fois validés, la candidature sera transmise au département pour analyse.
             </Typography>
 
             {application?.documents?.length > 0 ? (
@@ -868,28 +897,33 @@ const ApplicationDetail = () => {
               </Typography>
             )}
 
-            {isAccepted ? (
+            {/* ✅ AFFICHAGE SANS EMOJIS */}
+            {application?.statut === "Acceptee" ? (
               <Alert severity="success" sx={{ borderRadius: "8px", mt: 1 }}>
-                Candidature acceptée - Engagement envoyé à l'étudiant.
+                Candidature acceptée - Stage en cours de création.
               </Alert>
-            ) : isRefused ? (
+            ) : application?.statut === "Refusee" ? (
               <Alert severity="error" sx={{ borderRadius: "8px", mt: 1 }}>
                 Candidature refusée
                 {application?.commentaire && `: ${application.commentaire}`}
               </Alert>
-            ) : (
+            ) : application?.statut === "EnAnalyse" ? (
+              <Alert severity="info" sx={{ borderRadius: "8px", mt: 1 }}>
+                Documents déjà validés - En attente de l'analyse du département.
+              </Alert>
+            ) : application?.statut === "Soumise" ? (
               <Box sx={{ display: "flex", gap: 2, mt: 2 }}>
                 <ActionButton
                   variant="contained"
                   startIcon={<ThumbUp />}
-                  onClick={() => handleOpenDialog("accepter")}
+                  onClick={() => handleOpenDialog("valider")}
                   disabled={generating}
                   sx={{
                     backgroundColor: "#22c55e",
                     "&:hover": { backgroundColor: "#16a34a" },
                   }}
                 >
-                  Valider et Accepter
+                  Valider les documents
                 </ActionButton>
                 <ActionButton
                   variant="contained"
@@ -904,6 +938,10 @@ const ApplicationDetail = () => {
                   Refuser
                 </ActionButton>
               </Box>
+            ) : (
+              <Alert severity="info" sx={{ borderRadius: "8px", mt: 1 }}>
+                Statut : {application?.statut || "En cours de traitement"}
+              </Alert>
             )}
           </Box>
         );
@@ -1651,9 +1689,9 @@ const ApplicationDetail = () => {
         }}
       >
         <DialogTitle>
-          {dialogAction === "accepter" && (
+          {dialogAction === "valider" && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <ThumbUp sx={{ color: "#22c55e" }} /> Accepter la candidature
+              <ThumbUp sx={{ color: "#22c55e" }} /> Valider les documents
             </Box>
           )}
           {dialogAction === "refuser" && (
@@ -1664,8 +1702,8 @@ const ApplicationDetail = () => {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body1" sx={{ mb: 2 }}>
-            {dialogAction === "accepter" &&
-              `Êtes-vous sûr de vouloir accepter la candidature de ${student.prenom || ""} ${student.nom || ""} ?`}
+            {dialogAction === "valider" &&
+              `Êtes-vous sûr de vouloir valider les documents de ${student.prenom || ""} ${student.nom || ""} ? La candidature sera transmise au département.`}
             {dialogAction === "refuser" &&
               `Êtes-vous sûr de vouloir refuser la candidature de ${student.prenom || ""} ${student.nom || ""} ?`}
           </Typography>
@@ -1696,19 +1734,19 @@ const ApplicationDetail = () => {
             disabled={generating}
             sx={{
               backgroundColor:
-                dialogAction === "accepter" ? "#22c55e" : "#ef4444",
+                dialogAction === "valider" ? "#22c55e" : "#ef4444",
               borderRadius: "10px",
               textTransform: "none",
               "&:hover": {
                 backgroundColor:
-                  dialogAction === "accepter" ? "#16a34a" : "#dc2626",
+                  dialogAction === "valider" ? "#16a34a" : "#dc2626",
               },
             }}
           >
             {generating
               ? "Traitement..."
-              : dialogAction === "accepter"
-                ? "Accepter"
+              : dialogAction === "valider"
+                ? "Valider"
                 : "Refuser"}
           </Button>
         </DialogActions>

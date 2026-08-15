@@ -1,7 +1,6 @@
 // src/components/department/CandidatureDetail.jsx
-// ✅ VERSION AVEC BOUTON RETOUR POSITIONNÉ COMME LE RH (AU-DESSUS)
-// ✅ CORRECTION : Logs pour déboguer la création du stage
-// ✅ AJOUT : Gestion des erreurs de conflit de stage en cours
+// VERSION COMPLETE CORRIGEE
+// AVEC GESTION DE L'ATTENTE DU STAGE VIA useEffect
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -211,7 +210,7 @@ const ActionButton = styled(Button)({
   fontSize: "13px",
 });
 
-// ✅ BOUTON RETOUR STYLE RH - POSITIONNÉ AU-DESSUS
+// BOUTON RETOUR STYLE RH - POSITIONNE AU-DESSUS
 const BackButton = styled(Button)({
   textTransform: "none",
   color: "#666",
@@ -237,7 +236,7 @@ const DocumentItem = styled(Box)(({ verified }) => ({
   },
 }));
 
-// ✅ Correction: Supprimer l'attribut 'niveau' qui n'est pas utilisé
+// Correction: Supprimer l'attribut 'niveau' qui n'est pas utilise
 const CompetenceTag = styled(Chip)(({ niveau }) => {
   const colors = {
     Débutant: { bg: "#e5e7eb", text: "#6b7280" },
@@ -290,6 +289,9 @@ const CandidatureDetail = () => {
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // ✅ Etat pour l'attente du stage
+  const [waitingForStage, setWaitingForStage] = useState(false);
+
   // Dialog states
   const [openRefuseDialog, setOpenRefuseDialog] = useState(false);
   const [openInterviewDialog, setOpenInterviewDialog] = useState(false);
@@ -321,33 +323,45 @@ const CandidatureDetail = () => {
     fetchEncadrants();
   }, [id]);
 
+  // ✅ useEffect pour détecter la création du stage
+  useEffect(() => {
+    if (waitingForStage && internship?._id) {
+      console.log("[useEffect] Stage detecte:", internship._id);
+      setWaitingForStage(false);
+      setSelectedStageId(internship._id);
+      fetchEncadrants();
+      setOpenAssignDialog(true);
+      setSuccess("Stage cree. Veuillez affecter un encadrant.");
+    }
+  }, [internship, waitingForStage]);
+
   // ============================================
-  // CHARGEMENT DES DONNÉES
+  // CHARGEMENT DES DONNEES
   // ============================================
 
   const fetchApplicationDetail = async () => {
     setLoading(true);
     setError("");
     try {
-      console.log("🔍 [fetchApplicationDetail] ID:", id);
+      console.log("[fetchApplicationDetail] ID:", id);
       const response = await api.get(`/applications/${id}`);
       let data = response.data?.data || response.data;
-      console.log("✅ [fetchApplicationDetail] Application chargée:", data._id);
+      console.log("[fetchApplicationDetail] Application chargee:", data._id);
       setApplication(data);
 
       if (data._id) {
         try {
-          console.log("🔍 [fetchApplicationDetail] Recherche du stage pour application:", data._id);
+          console.log("[fetchApplicationDetail] Recherche du stage pour application:", data._id);
           const stageRes = await api.get(`/internships/application/${data._id}`);
           if (stageRes.data?.data) {
-            console.log("✅ [fetchApplicationDetail] Stage trouvé:", stageRes.data.data._id);
+            console.log("[fetchApplicationDetail] Stage trouve:", stageRes.data.data._id);
             setInternship(stageRes.data.data);
             setSelectedStageId(stageRes.data.data._id);
           } else {
-            console.log("ℹ️ [fetchApplicationDetail] Aucun stage trouvé pour cette candidature");
+            console.log("[fetchApplicationDetail] Aucun stage trouve pour cette candidature");
           }
         } catch (e) {
-          console.log("ℹ️ [fetchApplicationDetail] Erreur lors de la recherche du stage:", e.response?.status);
+          console.log("[fetchApplicationDetail] Erreur lors de la recherche du stage:", e.response?.status);
           setInternship(null);
         }
       }
@@ -356,7 +370,7 @@ const CandidatureDetail = () => {
         setInternalNote(data.commentaireInterne);
       }
     } catch (error) {
-      console.error("❌ Erreur chargement candidature:", error);
+      console.error("Erreur chargement candidature:", error);
       setError(error.response?.data?.message || "Erreur de chargement");
       setApplication(null);
     } finally {
@@ -365,11 +379,11 @@ const CandidatureDetail = () => {
   };
 
   const fetchEncadrants = async () => {
-    console.log("🔍 [fetchEncadrants] Début de la récupération des encadrants");
-    console.log("🔍 [fetchEncadrants] user.departementId:", user?.departementId);
+    console.log("[fetchEncadrants] Debut de la recuperation des encadrants");
+    console.log("[fetchEncadrants] user.departementId:", user?.departementId);
 
     try {
-      console.log("🔍 [fetchEncadrants] Utilisation de /users");
+      console.log("[fetchEncadrants] Utilisation de /users");
       const response = await api.get("/users", {
         params: {
           type: "interne",
@@ -378,7 +392,7 @@ const CandidatureDetail = () => {
       });
 
       const allUsers = response.data?.data || [];
-      console.log("📥 [fetchEncadrants] Tous les utilisateurs internes:", allUsers.length);
+      console.log("[fetchEncadrants] Tous les utilisateurs internes:", allUsers.length);
 
       const encadrantsFiltered = allUsers.filter((u) => {
         const isEncadrant =
@@ -387,7 +401,7 @@ const CandidatureDetail = () => {
         const currentUserDeptId = user?.departementId;
         const isInDepartment = userDeptId === currentUserDeptId;
 
-        console.log(`🔍 [fetchEncadrants] ${u.prenom} ${u.nom}:`, {
+        console.log(`[fetchEncadrants] ${u.prenom} ${u.nom}:`, {
           isEncadrant,
           userDeptId,
           currentUserDeptId,
@@ -397,10 +411,10 @@ const CandidatureDetail = () => {
         return isEncadrant && isInDepartment;
       });
 
-      console.log("📥 [fetchEncadrants] Encadrants filtrés:", encadrantsFiltered.length);
+      console.log("[fetchEncadrants] Encadrants filtres:", encadrantsFiltered.length);
       setEncadrants(encadrantsFiltered);
     } catch (error) {
-      console.error("❌ Erreur chargement encadrants:", error);
+      console.error("Erreur chargement encadrants:", error);
       setEncadrants([]);
     }
   };
@@ -432,7 +446,7 @@ const CandidatureDetail = () => {
         statut: "Refusee",
         commentaire: `Motif: ${refusalReason}${refusalComment ? ` - ${refusalComment}` : ""}`,
       });
-      setSuccess("Candidature refusée avec succès");
+      setSuccess("Candidature refusee avec succes");
       setOpenRefuseDialog(false);
       fetchApplicationDetail();
     } catch (error) {
@@ -475,11 +489,11 @@ const CandidatureDetail = () => {
       return;
     }
     if (interviewForm.type === "visio" && !interviewForm.lienVisio) {
-      setError("Un lien de visioconférence est requis");
+      setError("Un lien de visioconference est requis");
       return;
     }
     if (interviewForm.type === "presentiel" && !interviewForm.lieu) {
-      setError("Un lieu est requis pour un entretien présentiel");
+      setError("Un lieu est requis pour un entretien presentiel");
       return;
     }
 
@@ -499,10 +513,10 @@ const CandidatureDetail = () => {
 
       await api.patch(`/applications/${application._id}/status`, {
         statut: "Entretien",
-        commentaire: `Entretien programmé le ${interviewForm.date} à ${interviewForm.heure}`,
+        commentaire: `Entretien programme le ${interviewForm.date} a ${interviewForm.heure}`,
       });
 
-      setSuccess("Entretien programmé avec succès");
+      setSuccess("Entretien programme avec succes");
       setOpenInterviewDialog(false);
       fetchApplicationDetail();
     } catch (error) {
@@ -523,110 +537,58 @@ const CandidatureDetail = () => {
     setOpenAcceptDialog(false);
   };
 
-  // ✅ CORRECTION : Gestion des erreurs de conflit de stage
+  // ============================================
+  // ✅ VERSION CORRIGEE DE handleConfirmAccept
+  // AVEC GESTION DE L'ATTENTE VIA waitingForStage
+  // ============================================
   const handleConfirmAccept = async () => {
     setSubmitting(true);
     setError("");
     try {
-      console.log("🔍 [handleConfirmAccept] Début de l'acceptation");
-      console.log("🔍 [handleConfirmAccept] Application:", application._id);
-      console.log("🔍 [handleConfirmAccept] Internship actuel:", internship?._id);
+      console.log("[handleConfirmAccept] Debut de l'acceptation");
 
       // 1. Changer le statut de la candidature
       await api.patch(`/applications/${application._id}/status`, {
         statut: "Acceptee",
-        commentaire: "Candidature acceptée par le département",
+        commentaire: "Candidature acceptee par le departement",
       });
 
-      setSuccess("Candidature acceptée avec succès");
+      setSuccess("Candidature acceptee avec succes");
       setOpenAcceptDialog(false);
 
-      let stageId = internship?._id;
-
-      // 2. Créer le stage si nécessaire
-      if (!stageId) {
-        console.log("🔍 [handleConfirmAccept] Aucun stage existant, tentative de création...");
-        const studentId = application.etudiantId?._id || application.etudiantId;
-        const offerId = application.offreId?._id || application.offreId;
-
-        console.log("🔍 [handleConfirmAccept] studentId:", studentId);
-        console.log("🔍 [handleConfirmAccept] offerId:", offerId);
-
-        if (studentId && offerId) {
-          const stageData = {
-            etudiantId: studentId,
-            offreId: offerId,
-            applicationId: application._id,
-            dateDebut: application.offreId?.dateDebut || new Date().toISOString().split("T")[0],
-            dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            encadrantId: null,
-          };
-          console.log("🔍 [handleConfirmAccept] Données du stage:", stageData);
-
-          try {
-            const stageResponse = await api.post("/internships", stageData);
-            console.log("✅ [handleConfirmAccept] Réponse du backend:", stageResponse.data);
-
-            const newInternship = stageResponse.data?.data || stageResponse.data;
-            if (newInternship?._id) {
-              stageId = newInternship._id;
-              setSelectedStageId(stageId);
-              setInternship(newInternship);
-              console.log("✅ [handleConfirmAccept] Stage créé avec ID:", stageId);
-            }
-          } catch (createError) {
-            console.error("❌ [handleConfirmAccept] Erreur création du stage:", createError.response?.data);
-            
-            // ✅ Gérer spécifiquement l'erreur "étudiant déjà en stage"
-            const errorMessage = createError.response?.data?.message || "";
-            if (errorMessage.includes("déjà un stage en cours")) {
-              // Extraire les détails du stage en cours si disponibles
-              const stageData = createError.response?.data?.data?.currentInternship;
-              let detailedMessage = errorMessage;
-              if (stageData) {
-                detailedMessage = `Impossible de créer le stage : l'étudiant a déjà un stage en cours du ${new Date(stageData.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stageData.dateFin).toLocaleDateString('fr-FR')} : "${stageData.sujetTitre || 'Stage sans titre'}".`;
-              }
-              setError(detailedMessage);
-              setSubmitting(false);
-              return;
-            }
-            
-            throw createError;
-          }
-        } else {
-          console.error("❌ [handleConfirmAccept] StudentId ou OfferId manquant:", { studentId, offerId });
-          setError("Informations manquantes pour créer le stage");
-          setSubmitting(false);
-          return;
-        }
-      } else {
-        console.log("🔍 [handleConfirmAccept] Stage déjà existant:", stageId);
-      }
-
-      // 3. Ouvrir le dialogue d'affectation
-      if (stageId) {
-        setSelectedStageId(stageId);
+      // 2. Verifier si le stage existe deja
+      if (internship?._id) {
+        setSelectedStageId(internship._id);
         await fetchEncadrants();
         setOpenAssignDialog(true);
-        setSuccess("Candidature acceptée. Veuillez affecter un encadrant.");
-        console.log("✅ [handleConfirmAccept] Dialogue d'affectation ouvert");
+        setSuccess("Stage cree. Veuillez affecter un encadrant.");
       } else {
-        setError("Impossible de créer le stage. Veuillez réessayer.");
-        console.error("❌ [handleConfirmAccept] stageId est null/undefined");
+        // 3. Attendre la creation du stage
+        setWaitingForStage(true);
+        setSuccess("Creation du stage en cours...");
+        
+        // 4. Recharger les donnees
+        await fetchApplicationDetail();
+        
+        // 5. Timeout de securite (10 secondes)
+        setTimeout(() => {
+          if (waitingForStage) {
+            setWaitingForStage(false);
+            setError("Le stage n'a pas ete cree automatiquement. Veuillez contacter le support.");
+          }
+        }, 10000);
       }
 
-      fetchApplicationDetail();
     } catch (error) {
-      console.error("❌ Erreur acceptation:", error);
-      console.error("❌ Détails de l'erreur:", error.response?.data);
-      
-      // ✅ Gérer les erreurs de conflit de stage
+      console.error("Erreur acceptation:", error);
       const errorMessage = error.response?.data?.message || "Erreur lors de l'acceptation";
-      if (errorMessage.includes("déjà un stage en cours") || errorMessage.includes("stage en cours")) {
+      
+      // Gerer les erreurs de conflit de stage
+      if (errorMessage.includes("deja un stage en cours") || errorMessage.includes("stage en cours")) {
         const stageData = error.response?.data?.data?.currentInternship;
         if (stageData) {
           setError(
-            `L'étudiant a déjà un stage en cours du ${new Date(stageData.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stageData.dateFin).toLocaleDateString('fr-FR')} : "${stageData.sujetTitre || 'Stage sans titre'}".`
+            `L'etudiant a deja un stage en cours du ${new Date(stageData.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(stageData.dateFin).toLocaleDateString('fr-FR')} : "${stageData.sujetTitre || 'Stage sans titre'}"`
           );
         } else {
           setError(errorMessage);
@@ -664,19 +626,19 @@ const CandidatureDetail = () => {
     setSubmitting(true);
     setError("");
     try {
-      console.log("🔍 [handleConfirmAssign] Affectation de l'encadrant:", selectedEncadrant);
-      console.log("🔍 [handleConfirmAssign] Stage ID:", selectedStageId);
+      console.log("[handleConfirmAssign] Affectation de l'encadrant:", selectedEncadrant);
+      console.log("[handleConfirmAssign] Stage ID:", selectedStageId);
       
       await api.put(`/internships/${selectedStageId}/assign-supervisor`, {
         encadrantId: selectedEncadrant,
       });
 
-      setSuccess("Encadrant affecté avec succès");
+      setSuccess("Encadrant affecte avec succes");
       setOpenAssignDialog(false);
       fetchApplicationDetail();
     } catch (error) {
-      console.error("❌ Erreur affectation:", error);
-      console.error("❌ Détails de l'erreur:", error.response?.data);
+      console.error("Erreur affectation:", error);
+      console.error("Details de l'erreur:", error.response?.data);
       setError(error.response?.data?.message || "Erreur lors de l'affectation");
     } finally {
       setSubmitting(false);
@@ -699,7 +661,7 @@ const CandidatureDetail = () => {
         commentaireInterne: comment,
       });
       setInternalNote(comment);
-      setSuccess("Commentaire interne sauvegardé");
+      setSuccess("Commentaire interne sauvegarde");
       setOpenCommentDialog(false);
     } catch (error) {
       console.error("Erreur sauvegarde commentaire:", error);
@@ -719,28 +681,28 @@ const CandidatureDetail = () => {
       Soumise: "Soumise",
       EnAnalyse: "En analyse",
       Entretien: "Entretien",
-      Acceptee: "Acceptée",
-      Refusee: "Refusée",
+      Acceptee: "Acceptee",
+      Refusee: "Refusee",
     };
     return labels[status] || status;
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "Non défini";
+    if (!dateStr) return "Non defini";
     return format(new Date(dateStr), "dd MMM yyyy", { locale: fr });
   };
 
   const getTypeLabel = (type) => {
     const labels = {
-      presentiel: "Présentiel",
+      presentiel: "Presentiel",
       visio: "Visio",
-      telephonique: "Téléphonique",
+      telephonique: "Telephonique",
     };
     return labels[type] || type;
   };
 
   const getEncadrantName = (encadrant) => {
-    if (!encadrant) return "Non affecté";
+    if (!encadrant) return "Non affecte";
     return (
       `${encadrant.prenom || ""} ${encadrant.nom || ""}`.trim() || "Encadrant"
     );
@@ -775,7 +737,7 @@ const CandidatureDetail = () => {
     if (href) {
       window.open(href, "_blank");
     } else {
-      setError("Impossible de télécharger ce document");
+      setError("Impossible de telecharger ce document");
     }
   };
 
@@ -800,14 +762,14 @@ const CandidatureDetail = () => {
     return (
       <PageContainer maxWidth="lg">
         <Alert severity="error" sx={{ borderRadius: "8px" }}>
-          Candidature non trouvée
+          Candidature non trouvee
         </Alert>
         <Button
           startIcon={<ArrowBack />}
           onClick={() => navigate("/department/candidatures")}
           sx={{ mt: 2 }}
         >
-          Retour à la liste
+          Retour a la liste
         </Button>
       </PageContainer>
     );
@@ -831,10 +793,10 @@ const CandidatureDetail = () => {
         startIcon={<ArrowBack />}
         onClick={() => navigate("/department/candidatures")}
       >
-        Retour à la liste
+        Retour a la liste
       </BackButton>
 
-      {/* ===== EN-TÊTE ===== */}
+      {/* ===== EN-TETE ===== */}
       <HeaderSection>
         <HeaderLeft>
           <StyledAvatar>
@@ -854,7 +816,7 @@ const CandidatureDetail = () => {
                 status={application.statut}
               />
               <Chip
-                label={`Postulé le ${formatDate(application.dateSoumission || application.createdAt)}`}
+                label={`Postule le ${formatDate(application.dateSoumission || application.createdAt)}`}
                 size="small"
                 sx={{ backgroundColor: "#f3f4f6", color: "#6b7280" }}
               />
@@ -862,7 +824,7 @@ const CandidatureDetail = () => {
           </Box>
         </HeaderLeft>
 
-        {/* ===== BOUTONS D'ACTION - À DROITE ===== */}
+        {/* ===== BOUTONS D'ACTION - A DROITE ===== */}
         <Stack direction="row" spacing={1}>
           {canAct && (
             <>
@@ -940,7 +902,7 @@ const CandidatureDetail = () => {
               </InfoIcon>
               <Box>
                 <InfoLabel>Email</InfoLabel>
-                <InfoValue>{student.email || "Non renseigné"}</InfoValue>
+                <InfoValue>{student.email || "Non renseigne"}</InfoValue>
               </Box>
             </InfoRow>
             <InfoRow>
@@ -948,8 +910,8 @@ const CandidatureDetail = () => {
                 <Phone sx={{ fontSize: 16 }} />
               </InfoIcon>
               <Box>
-                <InfoLabel>Téléphone</InfoLabel>
-                <InfoValue>{student.telephone || "Non renseigné"}</InfoValue>
+                <InfoLabel>Telephone</InfoLabel>
+                <InfoValue>{student.telephone || "Non renseigne"}</InfoValue>
               </Box>
             </InfoRow>
             <InfoRow>
@@ -958,19 +920,19 @@ const CandidatureDetail = () => {
               </InfoIcon>
               <Box>
                 <InfoLabel>CIN</InfoLabel>
-                <InfoValue>{student.cin || "Non renseigné"}</InfoValue>
+                <InfoValue>{student.cin || "Non renseigne"}</InfoValue>
               </Box>
             </InfoRow>
           </DetailCard>
 
-          {/* Compétences */}
+          {/* Competences */}
           {application.competences && application.competences.length > 0 && (
             <DetailCard>
               <SectionTitle>
                 <SectionIcon color="#8b5cf6">
                   <Assessment sx={{ fontSize: 16 }} />
                 </SectionIcon>
-                Compétences
+                Competences
               </SectionTitle>
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
                 {application.competences.map((comp, idx) => (
@@ -1066,7 +1028,7 @@ const CandidatureDetail = () => {
               ) : (
                 <Box sx={{ textAlign: "center", py: 2 }}>
                   <Typography variant="body2" color="#687480">
-                    Aucun encadrant affecté
+                    Aucun encadrant affecte
                   </Typography>
                   <Button
                     variant="outlined"
@@ -1120,11 +1082,11 @@ const CandidatureDetail = () => {
                         {doc.taille
                           ? `${Math.round(doc.taille / 1024)} KB`
                           : ""}
-                        {doc.isVerified && " • Validé"}
+                        {doc.isVerified && " • Valide"}
                       </Typography>
                     </Box>
                   </Box>
-                  <Tooltip title="Télécharger">
+                  <Tooltip title="Telecharger">
                     <IconButton
                       size="small"
                       onClick={() => handleDownloadDocument(doc)}
@@ -1141,19 +1103,19 @@ const CandidatureDetail = () => {
                 color="#687480"
                 sx={{ textAlign: "center", py: 2 }}
               >
-                Aucun document déposé
+                Aucun document depose
               </Typography>
             )}
           </DetailCard>
 
-          {/* Expériences */}
+          {/* Experiences */}
           {application.experiences && application.experiences.length > 0 && (
             <DetailCard>
               <SectionTitle>
                 <SectionIcon color="#f59e0b">
                   <Work sx={{ fontSize: 16 }} />
                 </SectionIcon>
-                Expériences
+                Experiences
               </SectionTitle>
               {application.experiences.map((exp, idx) => (
                 <Box
@@ -1171,7 +1133,7 @@ const CandidatureDetail = () => {
                     {exp.titre}
                   </Typography>
                   <Typography variant="body2" color="#687480">
-                    {exp.entreprise} • {exp.periode || "Période non spécifiée"}
+                    {exp.entreprise} • {exp.periode || "Periode non specifiee"}
                   </Typography>
                   {exp.description && (
                     <Typography
@@ -1272,7 +1234,7 @@ const CandidatureDetail = () => {
       </Grid>
 
       {/* ========================================== */}
-      {/* DIALOGS - SIMPLIFIÉS */}
+      {/* DIALOGS - SIMPLIFIES */}
       {/* ========================================== */}
 
       {/* --- DIALOG REFUS --- */}
@@ -1285,7 +1247,7 @@ const CandidatureDetail = () => {
         <DialogTitle>Refuser la candidature</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Veuillez sélectionner un motif de refus.
+            Veuillez selectionner un motif de refus.
           </Typography>
           <FormControl fullWidth sx={{ mb: 2 }}>
             <InputLabel>Motif du refus *</InputLabel>
@@ -1362,7 +1324,7 @@ const CandidatureDetail = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Durée (minutes)"
+                label="Duree (minutes)"
                 type="number"
                 value={interviewForm.duree}
                 onChange={(e) =>
@@ -1457,15 +1419,14 @@ const CandidatureDetail = () => {
         <DialogTitle>Accepter la candidature</DialogTitle>
         <DialogContent>
           <Typography variant="body1" sx={{ mb: 2 }}>
-            Êtes-vous sûr de vouloir accepter la candidature de{" "}
+            Etes-vous sur de vouloir accepter la candidature de{" "}
             <strong>
               {student.prenom} {student.nom}
             </strong>{" "}
             ?
           </Typography>
           <Alert severity="info">
-            Une fois acceptée, vous pourrez affecter un encadrant et définir le
-            sujet du stage.
+            Une fois acceptee, vous pourrez affecter un encadrant.
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -1498,7 +1459,7 @@ const CandidatureDetail = () => {
         <DialogTitle>Affecter un encadrant</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Sélectionnez un encadrant parmi les collaborateurs du département.
+            Selectionnez un encadrant parmi les collaborateurs du departement.
           </Typography>
           <FormControl fullWidth>
             <InputLabel>Encadrant *</InputLabel>
@@ -1545,7 +1506,7 @@ const CandidatureDetail = () => {
         <DialogTitle>Commentaire interne</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Ce commentaire est visible uniquement par le département.
+            Ce commentaire est visible uniquement par le departement.
           </Typography>
           <TextField
             label="Commentaire"
