@@ -1,10 +1,81 @@
 // src/models/Internship.js
+// ✅ CORRECTION : Ajout du champ convention pour la gestion des conventions
 // ✅ CORRECTION : encadrantId devient optionnel
 // ✅ AJOUT : Statuts supplémentaires pour le workflow (EngagementValide, EngagementRejete)
+// ✅ AJOUT : Sous-document convention avec tous les champs nécessaires
 
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
 
+// ============================================
+// ✅ SCHEMA DE LA CONVENTION
+// ============================================
+const ConventionSchema = new mongoose.Schema({
+    nomOriginal: {
+        type: String,
+        required: true
+    },
+    nomStocke: {
+        type: String,
+        required: true
+    },
+    chemin: {
+        type: String,
+        required: true
+    },
+    url: {
+        type: String,
+        required: true
+    },
+    mimeType: {
+        type: String,
+        default: 'application/pdf'
+    },
+    taille: {
+        type: Number
+    },
+    dateDepot: {
+        type: Date,
+        default: Date.now
+    },
+    statut: {
+        type: String,
+        enum: ['DeposeeEtudiant', 'SigneeRH', 'EnvoyeeEtudiant', 'Cloturee'],
+        default: 'DeposeeEtudiant'
+    },
+    dateSignature: {
+        type: Date
+    },
+    dateEnvoi: {
+        type: Date
+    },
+    signedByRH: {
+        type: Boolean,
+        default: false
+    },
+    signatureRH: {
+        date: {
+            type: Date,
+            default: Date.now
+        },
+        rhId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'UtilisateurInterne'
+        },
+        rhNom: {
+            type: String
+        },
+        signatureData: {
+            type: String
+        }
+    }
+}, {
+    _id: false
+});
+
+// ============================================
+// ✅ SCHEMA PRINCIPAL INTERNSHIP
+// ============================================
 const InternshipSchema = new mongoose.Schema({
     dateDebut: {
         type: Date,
@@ -115,15 +186,27 @@ const InternshipSchema = new mongoose.Schema({
             },
             note: Number
         }]
+    },
+
+    // ✅ AJOUT : CHAMP CONVENTION
+    convention: {
+        type: ConventionSchema,
+        default: null
     }
 }, {
     timestamps: true
 });
 
+// ============================================
+// ✅ INDEX POUR LES RECHERCHES
+// ============================================
 InternshipSchema.add(BaseSchema);
 
 InternshipSchema.index({ etudiantId: 1 });
 InternshipSchema.index({ encadrantId: 1 });
 InternshipSchema.index({ statut: 1 });
+// ✅ INDEX POUR LA RECHERCHE DES CONVENTIONS
+InternshipSchema.index({ 'convention.statut': 1 });
+InternshipSchema.index({ 'convention.dateDepot': -1 });
 
 module.exports = mongoose.model('Internship', InternshipSchema);

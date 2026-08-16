@@ -1,21 +1,15 @@
 // src/components/student/DepotCandidature.jsx
 // ✅ WORKFLOW DE CANDIDATURE EN 3 ÉTAPES
-// ✅ ÉTAPE 1 - INFORMATIONS UNIVERSITAIRES (4 CHAMPS UNIQUEMENT)
-// ✅ ÉTAPE 2 - FICHE DE DEMANDE DE STAGE (TÉLÉCHARGEMENT UNIQUEMENT)
-// ✅ ÉTAPE 3 - PIÈCES JUSTIFICATIVES - CRÉATION ET SOUMISSION FINALE
-// ✅ STYLE WORKFLOW - CERCLES SANS NUMÉROS
-// ✅ MODIFICATION : Suppression de la création automatique au chargement
-// ✅ MODIFICATION : NE PAS créer la candidature à l'étape 1
-// ✅ MODIFICATION : Création et soumission à l'étape 3 (createAndSubmitCandidature)
-// ✅ MODIFICATION : Garder uniquement les 4 champs qui existent dans UtilisateurExterne
-// ✅ MODIFICATION : Suppression des fonctions de sauvegarde intermédiaires
-// ✅ CORRECTION : Message d'erreur professionnel sans emojis
-// ✅ SUPPRESSION : Vérification au chargement (le message n'apparaît qu'à la soumission)
-// ✅ CORRECTION : handleFileUpload - Envoyer le type correctement avec le document
-// ✅ CORRECTION : Mapping correct entre l'étiquette et le type de document
-// ✅ AJOUT : Logs pour vérifier les données envoyées dans createAndSubmitCandidature
+// ✅ STYLE EXACTEMENT COMME L'IMAGE DE RÉFÉRENCE
+// ✅ ZONE DES TITRES : BLANC (#ffffff)
+// ✅ ZONE "Choisir un fichier" AGRANDIE
+// ✅ ZONE "Pièces justificatives" AGRANDIE - MARGES RÉDUITES
+// ✅ NOMS DE FICHIERS COMPLETS (SANS ELLIPSIS)
+// ✅ COLONNES RÉÉQUILIBRÉES POUR MEILLEURE LISIBILITÉ
+// ✅ MESSAGES DE SUCCÈS AVEC NOMS LISIBLES
+// ✅ ICÔNE TROMBONE CLIQUABLE POUR UPLOAD
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
     Box,
@@ -34,6 +28,21 @@ import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
 // ============================================
+// MAPPING DES TYPES DE DOCUMENTS
+// ============================================
+
+const DOCUMENT_LABELS = {
+    'Photo': 'Photo d\'identité',
+    'LettreMotivation': 'Lettre de motivation',
+    'CV': 'CV',
+    'AttestationScolarite': 'Attestation de scolarité',
+    'LettreRecommandation': 'Lettre de recommandation',
+    'CIN': 'Copie CIN',
+    'Assurance': 'Assurance',
+    'FicheEngagement': 'Fiche de demande de stage',
+};
+
+// ============================================
 // STYLES
 // ============================================
 
@@ -50,9 +59,10 @@ const StepCard = styled(Paper)({
     border: '1px solid #eef1f3',
 });
 
+// ✅ Carte Étape 3 - MARGES TRÈS RÉDUITES
 const StepCardWide = styled(Paper)({
     borderRadius: '16px',
-    padding: '24px 24px',
+    padding: '12px 8px',
     marginTop: '20px',
     backgroundColor: '#f7f7f7',
     boxShadow: 'none',
@@ -93,7 +103,7 @@ const SectionTitleCentered = styled(Typography)({
     fontWeight: 700,
     fontSize: '20px',
     color: '#1a2332',
-    marginBottom: '20px',
+    marginBottom: '16px',
     textAlign: 'center',
 });
 
@@ -165,7 +175,9 @@ const ValidateButton = styled(Button)({
     '&:disabled': { backgroundColor: '#a0c4cd' },
 });
 
-const StepCircle = styled(Box)(({ active }) => ({
+const StepCircle = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'active'
+})(({ active }) => ({
     width: '26px',
     height: '26px',
     borderRadius: '50%',
@@ -177,7 +189,9 @@ const StepCircle = styled(Box)(({ active }) => ({
     zIndex: 2,
 }));
 
-const StepLine = styled(Box)(({ active }) => ({
+const StepLine = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'active'
+})(({ active }) => ({
     flex: 1,
     height: '2px',
     backgroundColor: active ? '#148aa0' : '#d1d5db',
@@ -198,6 +212,132 @@ const WorkflowContainer = styled(Box)({
 });
 
 // ============================================
+// STYLES ÉTAPE 3 - AGRANDIS ET OPTIMISÉS
+// ============================================
+
+const UploadContainer = styled(Box)({
+    width: '100%',
+    maxWidth: '100%',
+    padding: '4px 0 0 0',
+    background: 'transparent',
+    boxSizing: 'border-box',
+    margin: '0 auto',
+});
+
+const UploadRow = styled(Box)({
+    display: 'flex',
+    width: '100%',
+    height: '34px',
+    marginBottom: '6px',
+    border: '1px solid #dddddd',
+    borderRadius: '6px',
+    overflow: 'hidden',
+    background: '#ffffff',
+    boxSizing: 'border-box',
+});
+
+const UploadLabel = styled(Box)({
+    width: '220px',
+    flex: '0 0 220px',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 14px',
+    boxSizing: 'border-box',
+    background: '#ffffff',
+    color: '#555555',
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    fontSize: '12px',
+    fontWeight: 400,
+    lineHeight: 1,
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+});
+
+const UploadButtonZone = styled(Box)({
+    width: '155px',
+    flex: '0 0 155px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#eeeeee',
+    borderLeft: '1px solid #dcdcdc',
+    borderRight: '1px solid #dcdcdc',
+    boxSizing: 'border-box',
+    padding: '0 6px',
+});
+
+const StyledFileButton = styled(Button)({
+    width: '100%',
+    height: '100%',
+    minWidth: '0',
+    padding: '0 4px',
+    borderRadius: '0',
+    background: 'transparent',
+    color: '#555555',
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    fontSize: '12px',
+    fontWeight: 400,
+    textTransform: 'none',
+    boxShadow: 'none',
+    border: 'none',
+    whiteSpace: 'nowrap',
+    overflow: 'visible',
+    '&:hover': {
+        background: '#e0e0e0',
+        boxShadow: 'none',
+    },
+});
+
+const UploadFilename = styled(Box)({
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 14px',
+    background: '#ffffff',
+    color: '#555555',
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    fontSize: '12px',
+    fontWeight: 400,
+    whiteSpace: 'nowrap',
+    overflow: 'visible',
+    boxSizing: 'border-box',
+    minWidth: '150px',
+});
+
+// ✅ ICÔNE TROMBONE CLIQUABLE AVEC EFFET AU SURVOL
+const UploadIcon = styled(Box)({
+    width: '50px',
+    flex: '0 0 50px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#ffffff',
+    borderLeft: '1px solid #dddddd',
+    color: '#444444',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    boxSizing: 'border-box',
+    '&:hover': {
+        background: 'rgba(20, 138, 160, 0.06)',
+        color: '#148aa0',
+    },
+    '& i': {
+        fontSize: '13px',
+        transition: 'color 0.2s ease',
+    },
+    '&:hover i': {
+        color: '#148aa0',
+    },
+});
+
+const UploadSeparator = styled(Box)({
+    width: '100%',
+    height: '1px',
+    marginTop: '12px',
+    background: '#e6e6e6',
+});
+
+// ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
@@ -206,6 +346,9 @@ const DepotCandidature = () => {
     const location = useLocation();
     const { id } = useParams();
     const { user } = useAuth();
+
+    // ✅ Références pour les inputs file
+    const fileInputRefs = useRef({});
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -223,11 +366,9 @@ const DepotCandidature = () => {
         } else {
             console.warn('⚠️ [DepotCandidature] Aucune offreId dans location.state');
         }
-        // ✅ NE PAS faire de vérification automatique ici
         setLoading(false);
     }, [location]);
 
-    // ✅ Garder uniquement les 4 champs qui existent dans UtilisateurExterne
     const [formData, setFormData] = useState({
         universite: '',
         filiere: '',
@@ -241,16 +382,11 @@ const DepotCandidature = () => {
     const [documentIds, setDocumentIds] = useState([]);
     const [uploading, setUploading] = useState(false);
 
-    // ✅ SUPPRIMER toute vérification automatique au chargement
-
     const handleFormChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
         setError('');
     };
 
-    // ============================================
-    // ✅ handleNext - NE PAS créer la candidature à l'étape 1
-    // ============================================
     const handleNext = async () => {
         if (etapeActuelle === 1) {
             if (!formData.universite || !formData.filiere || !formData.niveau) {
@@ -267,7 +403,6 @@ const DepotCandidature = () => {
             setEtapeActuelle(3);
             setError('');
         } else if (etapeActuelle === 3) {
-            // ✅ C'est ICI qu'on crée la candidature et qu'on la soumet
             await createAndSubmitCandidature();
             return;
         }
@@ -280,16 +415,11 @@ const DepotCandidature = () => {
         }
     };
 
-    // ============================================
-    // ✅ createAndSubmitCandidature - Vérification UNIQUEMENT à la soumission
-    // ✅ AJOUT : Logs pour vérifier les données envoyées
-    // ============================================
     const createAndSubmitCandidature = async () => {
         try {
             setSaving(true);
             setError('');
             
-            // 1. Vérifier que tous les documents sont déposés
             const requiredDocs = ['Photo', 'LettreMotivation', 'CV', 'AttestationScolarite', 'LettreRecommandation', 'CIN', 'Assurance', 'FicheEngagement'];
             const missingDocs = requiredDocs.filter(doc => !documents[doc]);
             
@@ -299,14 +429,12 @@ const DepotCandidature = () => {
                 return;
             }
             
-            // 2. Vérifier qu'on a un offerId
             if (!offerId) {
                 setError('Aucune offre sélectionnée');
                 setSaving(false);
                 return;
             }
             
-            // ✅ LOG : Vérifier les données avant l'envoi
             console.log('📤 [createAndSubmitCandidature] Données à envoyer:', {
                 offreId: offerId,
                 documents: documentIds,
@@ -317,7 +445,6 @@ const DepotCandidature = () => {
                 ficheAccepte: ficheAccepte,
             });
 
-            // ✅ 3. VÉRIFICATION UNIQUE ICI - Vérifier si l'étudiant a déjà postulé
             try {
                 const checkResponse = await api.get('/applications', {
                     params: { 
@@ -338,10 +465,8 @@ const DepotCandidature = () => {
                 }
             } catch (checkError) {
                 console.warn('Erreur lors de la vérification:', checkError);
-                // Continuer quand même, le backend fera la vérification
             }
             
-            // 4. CRÉER la candidature
             const createResponse = await api.post('/applications', {
                 offreId: offerId,
                 commentaire: 'Candidature soumise via le workflow',
@@ -371,19 +496,16 @@ const DepotCandidature = () => {
             console.error('❌ Réponse:', error.response?.data);
             console.error('❌ Status:', error.response?.status);
             
-            // ✅ Gestion des erreurs professionnelle (sans emojis)
             const statusCode = error.response?.status;
             const errorMsg = error.response?.data?.message || error.message;
             
             if (statusCode === 400) {
-                // ✅ Erreur 400 : Déjà une candidature
                 if (errorMsg?.includes('existe déjà') || errorMsg?.includes('déjà soumis')) {
                     setError('Vous avez déjà soumis une candidature pour cette offre. Une seule candidature par offre est autorisée.');
                 } else {
                     setError(errorMsg);
                 }
             } else if (statusCode === 500) {
-                // ✅ Erreur 500 : Problème serveur
                 setError('Une erreur technique est survenue. Veuillez réessayer ultérieurement ou contacter le support.');
                 console.error('Erreur serveur 500 - Détails:', error.response?.data);
             } else {
@@ -395,7 +517,7 @@ const DepotCandidature = () => {
     };
 
     // ============================================
-    // ✅ CORRECTION : handleFileUpload - Envoyer le type correctement
+    // ✅ handleFileUpload AVEC MESSAGES LISIBLES
     // ============================================
     const handleFileUpload = async (type, file) => {
         if (!file) return;
@@ -403,7 +525,7 @@ const DepotCandidature = () => {
         try {
             const formData = new FormData();
             formData.append('document', file);
-            formData.append('type', type);  // ✅ Le type est bien envoyé
+            formData.append('type', type);
 
             console.log('📤 [handleFileUpload] Upload du document:', {
                 type: type,
@@ -420,13 +542,22 @@ const DepotCandidature = () => {
             setDocumentIds([...documentIds, docId]);
             setDocuments({ ...documents, [type]: file });
 
-            setSuccess(`${type} déposé avec succès`);
+            // ✅ Utiliser le label lisible pour le message de succès
+            const label = DOCUMENT_LABELS[type] || type;
+            setSuccess(`${label} déposé avec succès`);
             setTimeout(() => setSuccess(''), 3000);
         } catch (error) {
             console.error('❌ Erreur lors du dépôt du document:', error);
             setError('Erreur lors du dépôt du document');
         } finally {
             setUploading(false);
+        }
+    };
+
+    // ✅ Fonction pour déclencher l'upload depuis l'icône
+    const handleIconClick = (type) => {
+        if (fileInputRefs.current[type]) {
+            fileInputRefs.current[type].click();
         }
     };
 
@@ -446,8 +577,7 @@ const DepotCandidature = () => {
     };
 
     // ============================================
-    // RENDER - ÉTAPE 1 (4 champs uniquement)
-    // ✅ VÉRIFIER QUE LES CHAMPS SONT BIEN MAPPÉS
+    // RENDER - ÉTAPE 1
     // ============================================
 
     const renderEtape1 = () => (
@@ -458,7 +588,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Université *"
-                    name="universite"  // ✅ Correspond à formData.universite
+                    name="universite"
                     value={formData.universite}
                     onChange={handleFormChange}
                     placeholder="Ex: Université Hassan II"
@@ -467,7 +597,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Filière *"
-                    name="filiere"     // ✅ Correspond à formData.filiere
+                    name="filiere"
                     value={formData.filiere}
                     onChange={handleFormChange}
                     placeholder="Ex: Informatique"
@@ -476,7 +606,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Niveau d'études *"
-                    name="niveau"      // ✅ Correspond à formData.niveau
+                    name="niveau"
                     value={formData.niveau}
                     onChange={handleFormChange}
                     placeholder="Ex: Master 2"
@@ -485,7 +615,7 @@ const DepotCandidature = () => {
                 <StyledTextField
                     fullWidth
                     label="Année universitaire"
-                    name="annee"       // ✅ Correspond à formData.annee
+                    name="annee"
                     value={formData.annee}
                     onChange={handleFormChange}
                     placeholder="Ex: 2025-2026"
@@ -571,123 +701,28 @@ const DepotCandidature = () => {
     );
 
     // ============================================
-    // RENDER - ÉTAPE 3
+    // RENDER - ÉTAPE 3 - OPTIMISÉ
     // ============================================
 
     const renderDocumentRow = (label, type, required = true) => {
-        const isLongName = label.length > 20;
+        const fileName = documents[type] ? documents[type].name : null;
 
         return (
-            <Box sx={{
-                display: 'flex',
-                alignItems: 'center',
-                height: '36px',
-                backgroundColor: '#ffffff',
-                borderRadius: '6px',
-                border: '1px solid #e5e7eb',
-                marginBottom: '5px',
-                overflow: 'hidden',
-                flexShrink: 0,
-            }}>
-                <Box sx={{
-                    minWidth: '240px',
-                    maxWidth: '240px',
-                    padding: '0 14px',
-                    flexShrink: 0,
-                }}>
-                    {isLongName ? (
-                        <Tooltip title={label} arrow placement="top">
-                            <Typography sx={{
-                                fontWeight: 400,
-                                fontSize: '12px',
-                                color: '#1a2332',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                cursor: 'help',
-                            }}>
-                                {required && <span style={{ color: '#ef4444' }}>*</span>} {label}
-                            </Typography>
-                        </Tooltip>
-                    ) : (
-                        <Typography sx={{
-                            fontWeight: 400,
-                            fontSize: '12px',
-                            color: '#1a2332',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                        }}>
-                            {required && <span style={{ color: '#ef4444' }}>*</span>} {label}
-                        </Typography>
-                    )}
-                </Box>
+            <UploadRow>
+                {/* Colonne 1 - Label (BLANC) */}
+                <UploadLabel>
+                    {required && <span style={{ color: '#d93025' }}>*</span>} {label}
+                </UploadLabel>
 
-                <Box
-                    sx={{
-                        width: '155px',
-                        minWidth: '155px',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '0 6px',
-                        flexShrink: 0,
-                        boxSizing: 'border-box',
-                        marginLeft: 'auto',
-                    }}
-                >
-                    <Button
+                {/* Colonne 2 - Bouton "Choisir un fichier" */}
+                <UploadButtonZone>
+                    <StyledFileButton
                         component="label"
-                        variant="outlined"
-                        size="small"
-                        startIcon={
-                            <i
-                                className="fa-regular fa-folder-open"
-                                style={{
-                                    fontSize: '13px',
-                                    color: '#607d94',
-                                }}
-                            />
-                        }
-                        sx={{
-                            width: '135px',
-                            height: '26px',
-                            minWidth: '135px',
-                            maxWidth: '135px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '0 4px',
-                            margin: 0,
-                            borderRadius: '4px',
-                            border: '1px solid #d1d5db',
-                            backgroundColor: '#f3f4f6',
-                            color: '#1a2332',
-                            fontFamily: 'Inter, sans-serif',
-                            fontSize: '11px',
-                            fontWeight: 400,
-                            lineHeight: 1,
-                            textTransform: 'none',
-                            whiteSpace: 'nowrap',
-                            boxShadow: 'none',
-                            '&:hover': {
-                                backgroundColor: '#e9ecef',
-                                borderColor: '#c5cbd1',
-                                boxShadow: 'none',
-                            },
-                            '& .MuiButton-startIcon': {
-                                margin: 0,
-                                marginRight: '4px',
-                            },
-                            '& .MuiButton-startIcon i': {
-                                flexShrink: 0,
-                            },
-                        }}
+                        disableRipple
                     >
                         Choisir un fichier
-
                         <input
+                            ref={(el) => (fileInputRefs.current[type] = el)}
                             type="file"
                             hidden
                             accept=".pdf,.jpg,.jpeg,.png"
@@ -699,57 +734,30 @@ const DepotCandidature = () => {
                                 e.target.value = '';
                             }}
                         />
-                    </Button>
-                </Box>
+                    </StyledFileButton>
+                </UploadButtonZone>
 
-                <Box sx={{ 
-                    width: '2px', 
-                    height: '24px', 
-                    backgroundColor: '#d1d5db', 
-                    flexShrink: 0,
-                    borderRadius: '1px',
-                }} />
+                {/* Colonne 3 - Nom du fichier avec Tooltip */}
+                {fileName ? (
+                    <Tooltip title={fileName} arrow placement="top">
+                        <UploadFilename>
+                            {fileName}
+                        </UploadFilename>
+                    </Tooltip>
+                ) : (
+                    <UploadFilename>
+                        Aucun fichier choisi
+                    </UploadFilename>
+                )}
 
-                <Box sx={{
-                    flex: 1,
-                    padding: '0 14px',
-                    minWidth: '100px',
-                }}>
-                    <Typography sx={{
-                        fontSize: '12px',
-                        color: documents[type] ? '#1a2332' : '#9ca3af',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        fontStyle: documents[type] ? 'normal' : 'italic',
-                    }}>
-                        {documents[type] ? documents[type].name : 'Aucun fichier choisi'}
-                    </Typography>
-                </Box>
-
-                <Box sx={{ 
-                    width: '2px', 
-                    height: '24px', 
-                    backgroundColor: '#d1d5db', 
-                    flexShrink: 0,
-                    borderRadius: '1px',
-                }} />
-
-                <Box sx={{
-                    width: '36px',
-                    minWidth: '36px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                }}>
-                    <i className="fa-solid fa-paperclip" style={{ fontSize: '14px', color: '#6b7280' }}></i>
-                </Box>
-            </Box>
+                {/* Colonne 4 - Icône trombone CLIQUABLE */}
+                <UploadIcon onClick={() => handleIconClick(type)}>
+                    <i className="fa-solid fa-paperclip"></i>
+                </UploadIcon>
+            </UploadRow>
         );
     };
 
-    // ✅ MAPPING CORRECT entre l'étiquette et le type de document
     const renderEtape3 = () => (
         <StepCardWide>
             <SectionTitleCentered>Pièces justificatives</SectionTitleCentered>
@@ -776,15 +784,18 @@ const DepotCandidature = () => {
                 DOCUMENTS À DÉPOSER :
             </Typography>
 
-            {/* ✅ Mapping correct entre l'étiquette et le type de document */}
-            {renderDocumentRow('Photo d\'identité', 'Photo')}
-            {renderDocumentRow('Lettre de motivation', 'LettreMotivation')}
-            {renderDocumentRow('CV', 'CV')}
-            {renderDocumentRow('Attestation de scolarité', 'AttestationScolarite')}  {/* ✅ Correction */}
-            {renderDocumentRow('Lettre de recommandation', 'LettreRecommandation')}
-            {renderDocumentRow('Copie CIN', 'CIN')}
-            {renderDocumentRow('Assurance', 'Assurance')}
-            {renderDocumentRow('Fiche de demande de stage', 'FicheEngagement')}  {/* ✅ Correction */}
+            <UploadContainer>
+                {renderDocumentRow('Photo d\'identité', 'Photo')}
+                {renderDocumentRow('Lettre de motivation', 'LettreMotivation')}
+                {renderDocumentRow('CV', 'CV')}
+                {renderDocumentRow('Attestation de scolarité', 'AttestationScolarite')}
+                {renderDocumentRow('Lettre de recommandation', 'LettreRecommandation')}
+                {renderDocumentRow('Copie CIN', 'CIN')}
+                {renderDocumentRow('Assurance', 'Assurance')}
+                {renderDocumentRow('Fiche de demande de stage', 'FicheEngagement')}
+                
+                <UploadSeparator />
+            </UploadContainer>
 
             <Box sx={{ 
                 mt: 2, 

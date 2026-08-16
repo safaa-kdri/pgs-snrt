@@ -1,5 +1,6 @@
 // src/controllers/offerController.js
-// ✅ CORRECTION : Peupler createurId, validateurId et departementId
+// ✅ CORRECTION : Peupler createurId, validateurId, departementId ET periodeId
+// ✅ CORRECTION : Tri prioritaire - Offres publiées > disponibles > récentes
 
 const Offer = require('../models/Offer');
 const Application = require('../models/Application');
@@ -82,27 +83,33 @@ const listOffers = asyncHandler(async (req, res) => {
 
   const [offers, total] = await Promise.all([
     Offer.find(filter)
-      // ✅ AJOUTER LES POPULATES POUR AVOIR LES NOMS
+      // ✅ POPULATES COMPLETS
       .populate('createurId', 'nom prenom email')
       .populate('validateurId', 'nom prenom email')
       .populate('departementId', 'nom')
+      .populate('periodeId', 'nom dateDebut dateFin')
       .populate('candidaturesCount')
-      .sort({ 
-        dateLimiteCandidature: 1,
-        datePublication: -1,
-        createdAt: -1
-      })
+      // ✅ TRI PAR DÉFAUT : Les plus récentes en premier
+      .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
       .lean(),
     Offer.countDocuments(filter),
   ]);
 
-  // ✅ TRI MANUEL : Offres disponibles en premier, expirées en dernier
+  // ✅ TRI MANUEL AVEC PRIORITÉS
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
   const sortedOffers = offers.sort((a, b) => {
+    // 1. PRIORITÉ : Offres publiées avant les autres
+    const aIsPublished = a.statut === 'Publiee';
+    const bIsPublished = b.statut === 'Publiee';
+    
+    if (aIsPublished && !bIsPublished) return -1;
+    if (!aIsPublished && bIsPublished) return 1;
+    
+    // 2. PRIORITÉ : Offres disponibles avant les expirées
     const dateA = a.dateLimiteCandidature ? new Date(a.dateLimiteCandidature) : null;
     const dateB = b.dateLimiteCandidature ? new Date(b.dateLimiteCandidature) : null;
     
@@ -115,23 +122,26 @@ const listOffers = asyncHandler(async (req, res) => {
     if (aExpired && !bExpired) return 1;
     if (!aExpired && bExpired) return -1;
     
+    // 3. PRIORITÉ : Offres avec date limite proche (urgence)
     if (!aExpired && !bExpired) {
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateA - dateB;
+      if (dateA && dateB) {
+        if (dateA < dateB) return -1; // La plus proche en premier
+        if (dateA > dateB) return 1;
+      }
     }
     
-    if (aExpired && bExpired) {
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateB - dateA;
-    }
+    // 4. PRIORITÉ : Offres les plus récentes (créées avec "Postuler")
+    const dateCreatedA = new Date(a.createdAt);
+    const dateCreatedB = new Date(b.createdAt);
+    
+    if (dateCreatedA > dateCreatedB) return -1;
+    if (dateCreatedA < dateCreatedB) return 1;
     
     return 0;
   });
 
   console.log(`📥 [listOffers] ${sortedOffers.length} offres trouvées sur ${total}`);
-  console.log(`📥 [listOffers] Tri : disponibles en premier, expirées en dernier`);
+  console.log(`📥 [listOffers] Tri : Publiées > Disponibles > Récentes`);
 
   return res.status(200).json({
     success: true,
@@ -147,6 +157,7 @@ const getOfferById = asyncHandler(async (req, res) => {
     .populate('createurId', 'nom prenom email')      // Créateur de l'offre
     .populate('validateurId', 'nom prenom email')    // Validateur (RH)
     .populate('departementId', 'nom')                // Département
+    .populate('periodeId', 'nom dateDebut dateFin')  // ✅ PÉRIODE
     .populate('candidaturesCount')                   // Nombre de candidatures
     .lean();
     
@@ -395,9 +406,9 @@ const getMyOffers = asyncHandler(async (req, res) => {
   const [offers, total] = await Promise.all([
     Offer.find(filter)
       .populate('departementId', 'nom')
-      // ✅ AJOUTER LES POPULATES POUR AVOIR LES NOMS
       .populate('createurId', 'nom prenom email')
       .populate('validateurId', 'nom prenom email')
+      .populate('periodeId', 'nom dateDebut dateFin')
       .populate('candidaturesCount')
       .sort({ createdAt: -1 })
       .skip(skip)

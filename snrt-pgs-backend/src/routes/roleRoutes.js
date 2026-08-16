@@ -14,9 +14,12 @@ router.get(
     authorize(ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT),
     async (req, res) => {
         try {
-            const roles = await Role.find({ isDeleted: false })
+            // ✅ Récupérer tous les rôles actifs
+            const roles = await Role.find({ actif: true })
                 .select('_id nom description')
                 .sort({ nom: 1 });
+
+            console.log('📥 [GET /roles] Rôles trouvés:', roles.length);
 
             return res.status(200).json({
                 success: true,

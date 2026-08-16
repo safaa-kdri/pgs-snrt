@@ -100,12 +100,17 @@ const OffersList = () => {
     // Vérifier si l'utilisateur est connecté
     const isAuthenticated = authIsAuthenticated || !!localStorage.getItem('user') || !!localStorage.getItem('token');
 
-    // Charger les offres au montage ET quand les filtres changent
+    // ============================================
+    // ✅ CHARGEMENT DES OFFRES - TOUJOURS EXÉCUTÉ
+    // QUE L'UTILISATEUR SOIT CONNECTÉ OU NON
+    // ============================================
     useEffect(() => {
         const params = { ...filters, page, limit: 10 };
+        console.log('📤 [OffersList] Chargement des offres - isAuthenticated:', isAuthenticated);
         dispatch(fetchOffers(params));
         dispatch(fetchDepartments());
-    }, [dispatch, filters, page]);
+        console.log('📤 [OffersList] fetchOffers dispatché');
+    }, [dispatch, filters, page]); // ✅ PLUS DE CONDITION isAuthenticated
 
     // Gérer la soumission du formulaire
     const handleSearch = (e) => {
@@ -147,10 +152,10 @@ const OffersList = () => {
             <TitleLine />
 
             {/* === STATUS : NON CONNECTÉ === */}
-            {!isAuthenticated ? (
+            {!isAuthenticated && (
                 <Alert 
                     severity="info" 
-                    sx={{ mt: 2, borderRadius: '10px' }}
+                    sx={{ mt: 2, mb: 2, borderRadius: '10px' }}
                     action={
                         <Button 
                             color="inherit" 
@@ -162,156 +167,157 @@ const OffersList = () => {
                         </Button>
                     }
                 >
-                    Connectez-vous pour consulter les offres de stage.
+                    Connectez-vous pour postuler aux offres de stage.
                 </Alert>
+            )}
+
+            {/* === FILTRES === */}
+            <Box sx={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: 2, 
+                mt: 2, 
+                mb: 3,
+                p: 2,
+                backgroundColor: '#f7f7f7',
+                borderRadius: '12px'
+            }}>
+                <TextField
+                    size="small"
+                    placeholder="🔍 Profil"
+                    variant="outlined"
+                    value={localFilters.search}
+                    onChange={(e) => setLocalFilters({ ...localFilters, search: e.target.value })}
+                    sx={{ flex: 1, minWidth: '150px' }}
+                />
+
+                <TextField
+                    size="small"
+                    select
+                    value={localFilters.typeStage}
+                    onChange={(e) => setLocalFilters({ ...localFilters, typeStage: e.target.value })}
+                    variant="outlined"
+                    SelectProps={{ displayEmpty: true }}
+                    sx={{ flex: 1, minWidth: '150px' }}
+                >
+                    <MenuItem value="">Type de stage</MenuItem>
+                    {normalizedTypes.map((type) => (
+                        <MenuItem key={type} value={type}>{type}</MenuItem>
+                    ))}
+                </TextField>
+
+                <TextField
+                    size="small"
+                    select
+                    value={localFilters.departementId}
+                    onChange={(e) => setLocalFilters({ ...localFilters, departementId: e.target.value })}
+                    variant="outlined"
+                    SelectProps={{ displayEmpty: true }}
+                    sx={{ flex: 1, minWidth: '150px' }}
+                >
+                    <MenuItem value="">Département</MenuItem>
+                    {normalizedDepartments.map((dept) => (
+                        <MenuItem key={dept._id || dept.id} value={dept._id || dept.id}>
+                            {dept.nom}
+                        </MenuItem>
+                    ))}
+                </TextField>
+
+                <Button
+                    variant="contained"
+                    onClick={handleSearch}
+                    sx={{
+                        backgroundColor: '#148aa0',
+                        borderRadius: '27px',
+                        textTransform: 'none',
+                        px: 3,
+                        '&:hover': { backgroundColor: '#0b7890' }
+                    }}
+                >
+                    Rechercher
+                </Button>
+
+                <Button
+                    variant="outlined"
+                    onClick={handleReset}
+                    sx={{
+                        borderRadius: '27px',
+                        textTransform: 'none',
+                        borderColor: '#d1d5db',
+                        color: '#6b7280',
+                        px: 3,
+                    }}
+                >
+                    Réinitialiser
+                </Button>
+            </Box>
+
+            {/* === FILTRES ACTIFS === */}
+            {activeFilters.length > 0 && (
+                <FilterContainer>
+                    {activeFilters.map((filter) => (
+                        <FilterChip
+                            key={filter.key}
+                            label={filter.label}
+                            onDelete={() => handleRemoveFilter(filter.key)}
+                        />
+                    ))}
+                    <FilterChip
+                        label="Réinitialiser tout"
+                        onClick={handleReset}
+                        sx={{ 
+                            backgroundColor: '#fee2e2', 
+                            color: '#b91c1c',
+                            cursor: 'pointer',
+                            '&:hover': { backgroundColor: '#fecaca' }
+                        }}
+                    />
+                </FilterContainer>
+            )}
+
+            {/* === LISTE DES OFFRES === */}
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                    <CircularProgress sx={{ color: '#148aa0' }} />
+                </Box>
+            ) : error ? (
+                <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+            ) : offers.length === 0 ? (
+                <NoResultsBox>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        🕵️ Aucune offre trouvée
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                        {!isAuthenticated 
+                            ? 'Connectez-vous pour voir toutes les offres disponibles.'
+                            : 'Essayez de modifier vos critères de recherche.'
+                        }
+                    </Typography>
+                </NoResultsBox>
             ) : (
                 <>
-                    {/* === FILTRES === */}
-                    <Box sx={{ 
-                        display: 'flex', 
-                        flexWrap: 'wrap', 
-                        gap: 2, 
-                        mt: 2, 
-                        mb: 3,
-                        p: 2,
-                        backgroundColor: '#f7f7f7',
-                        borderRadius: '12px'
-                    }}>
-                        <TextField
-                            size="small"
-                            placeholder="🔍 Profil"
-                            variant="outlined"
-                            value={localFilters.search}
-                            onChange={(e) => setLocalFilters({ ...localFilters, search: e.target.value })}
-                            sx={{ flex: 1, minWidth: '150px' }}
-                        />
+                    <ResultsCount>
+                        {total} offre(s) trouvée(s)
+                    </ResultsCount>
 
-                        <TextField
-                            size="small"
-                            select
-                            value={localFilters.typeStage}
-                            onChange={(e) => setLocalFilters({ ...localFilters, typeStage: e.target.value })}
-                            variant="outlined"
-                            SelectProps={{ displayEmpty: true }}
-                            sx={{ flex: 1, minWidth: '150px' }}
-                        >
-                            <MenuItem value="">Type de stage</MenuItem>
-                            {normalizedTypes.map((type) => (
-                                <MenuItem key={type} value={type}>{type}</MenuItem>
-                            ))}
-                        </TextField>
+                    {offers.map((offer) => (
+                        <OfferCard key={offer._id} offer={offer} />
+                    ))}
 
-                        <TextField
-                            size="small"
-                            select
-                            value={localFilters.departementId}
-                            onChange={(e) => setLocalFilters({ ...localFilters, departementId: e.target.value })}
-                            variant="outlined"
-                            SelectProps={{ displayEmpty: true }}
-                            sx={{ flex: 1, minWidth: '150px' }}
-                        >
-                            <MenuItem value="">Département</MenuItem>
-                            {normalizedDepartments.map((dept) => (
-                                <MenuItem key={dept._id || dept.id} value={dept._id || dept.id}>
-                                    {dept.nom}
-                                </MenuItem>
-                            ))}
-                        </TextField>
-
-                        <Button
-                            variant="contained"
-                            onClick={handleSearch}
-                            sx={{
-                                backgroundColor: '#148aa0',
-                                borderRadius: '27px',
-                                textTransform: 'none',
-                                px: 3,
-                                '&:hover': { backgroundColor: '#0b7890' }
-                            }}
-                        >
-                            Rechercher
-                        </Button>
-
-                        <Button
-                            variant="outlined"
-                            onClick={handleReset}
-                            sx={{
-                                borderRadius: '27px',
-                                textTransform: 'none',
-                                borderColor: '#d1d5db',
-                                color: '#6b7280',
-                                px: 3,
-                            }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Box>
-
-                    {/* === FILTRES ACTIFS === */}
-                    {activeFilters.length > 0 && (
-                        <FilterContainer>
-                            {activeFilters.map((filter) => (
-                                <FilterChip
-                                    key={filter.key}
-                                    label={filter.label}
-                                    onDelete={() => handleRemoveFilter(filter.key)}
-                                />
-                            ))}
-                            <FilterChip
-                                label="Réinitialiser tout"
-                                onClick={handleReset}
-                                sx={{ 
-                                    backgroundColor: '#fee2e2', 
-                                    color: '#b91c1c',
-                                    cursor: 'pointer',
-                                    '&:hover': { backgroundColor: '#fecaca' }
+                    {pages > 1 && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                            <Pagination
+                                count={pages}
+                                page={page}
+                                onChange={handlePageChange}
+                                sx={{
+                                    '& .MuiPaginationItem-root.Mui-selected': {
+                                        backgroundColor: '#148aa0',
+                                        color: '#fff',
+                                    }
                                 }}
                             />
-                        </FilterContainer>
-                    )}
-
-                    {/* === LISTE DES OFFRES === */}
-                    {loading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                            <CircularProgress sx={{ color: '#148aa0' }} />
                         </Box>
-                    ) : error ? (
-                        <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
-                    ) : offers.length === 0 ? (
-                        <NoResultsBox>
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                🕵️ Aucune offre trouvée
-                            </Typography>
-                            <Typography variant="body2" sx={{ mt: 1 }}>
-                                Essayez de modifier vos critères de recherche.
-                            </Typography>
-                        </NoResultsBox>
-                    ) : (
-                        <>
-                            <ResultsCount>
-                                {total} offre(s) trouvée(s)
-                            </ResultsCount>
-
-                            {offers.map((offer) => (
-                                <OfferCard key={offer._id} offer={offer} />
-                            ))}
-
-                            {pages > 1 && (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                                    <Pagination
-                                        count={pages}
-                                        page={page}
-                                        onChange={handlePageChange}
-                                        sx={{
-                                            '& .MuiPaginationItem-root.Mui-selected': {
-                                                backgroundColor: '#148aa0',
-                                                color: '#fff',
-                                            }
-                                        }}
-                                    />
-                                </Box>
-                            )}
-                        </>
                     )}
                 </>
             )}

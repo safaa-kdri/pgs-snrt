@@ -5,7 +5,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
 
 const api = axios.create({
     baseURL: API_URL,
-    withCredentials: true, // ✅ Envoie les cookies HttpOnly automatiquement
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -38,7 +38,6 @@ api.interceptors.response.use(
 
         // ✅ POUR LES AUTRES ROUTES 401 : rediriger vers login
         if (status === 401) {
-            // Nettoyer le localStorage (seulement le user, pas de token)
             localStorage.removeItem('user');
             localStorage.removeItem('2faEmail');
             localStorage.removeItem('2faUserId');

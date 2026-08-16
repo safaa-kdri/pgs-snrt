@@ -82,8 +82,6 @@ const InfoCard = styled(Paper)({
   marginBottom: "24px",
 });
 
-// ❌ BANNIÈRE SUPPRIMÉE
-
 const StatusChip = styled(Chip)(({ status }) => {
   const colors = {
     EnAttente: { bg: "#fef3c7", text: "#d97706" },
@@ -243,6 +241,39 @@ const OfferDetailPage = () => {
     return labels[type] || type;
   };
 
+  // ✅ Fonction pour obtenir le nom du département (gère objet ou string)
+  const getDepartementNom = () => {
+    if (!offer) return "-";
+    const dept = offer.departementId;
+    if (typeof dept === 'object' && dept !== null) {
+      return dept.nom || "-";
+    }
+    return dept || "-";
+  };
+
+  // ✅ Fonction pour obtenir le nom de la période (gère objet ou string)
+  const getPeriodeNom = () => {
+    if (!offer) return "-";
+    const periode = offer.periodeId;
+    if (typeof periode === 'object' && periode !== null) {
+      return periode.nom || "-";
+    }
+    return periode || "-";
+  };
+
+  // ✅ Fonction pour obtenir les dates de la période
+  const getPeriodeDates = () => {
+    if (!offer) return null;
+    const periode = offer.periodeId;
+    if (typeof periode === 'object' && periode !== null) {
+      return {
+        debut: periode.dateDebut,
+        fin: periode.dateFin,
+      };
+    }
+    return null;
+  };
+
   if (loading) {
     return (
       <Box
@@ -277,6 +308,7 @@ const OfferDetailPage = () => {
 
   const isEnAttente = offer.statut === "EnAttente";
   const statusLabel = getStatusLabel(offer.statut);
+  const periodeDates = getPeriodeDates();
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -356,11 +388,12 @@ const OfferDetailPage = () => {
                   Departement
                 </Typography>
                 <Typography variant="body2">
-                  {offer.departementId?.nom || "-"}
+                  {getDepartementNom()}
                 </Typography>
               </Box>
             </InfoRow>
           </Grid>
+          {/* ✅ PÉRIODE - CORRIGÉ POUR AFFICHER LE NOM */}
           <Grid item xs={12} sm={6} md={3}>
             <InfoRow>
               <CalendarToday />
@@ -369,8 +402,13 @@ const OfferDetailPage = () => {
                   Periode
                 </Typography>
                 <Typography variant="body2">
-                  {offer.periodeId?.nom || "-"}
+                  {getPeriodeNom()}
                 </Typography>
+                {periodeDates && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: "10px" }}>
+                    {periodeDates.debut && formatDate(periodeDates.debut)} → {periodeDates.fin && formatDate(periodeDates.fin)}
+                  </Typography>
+                )}
               </Box>
             </InfoRow>
           </Grid>
@@ -415,8 +453,6 @@ const OfferDetailPage = () => {
           </Grid>
         </Grid>
       </InfoCard>
-
-      {/* ❌ BANNIÈRE SUPPRIMÉE - Le statut est déjà affiché dans le chip en haut */}
 
       {/* ===== DESCRIPTION ===== */}
       <Grid container spacing={3}>

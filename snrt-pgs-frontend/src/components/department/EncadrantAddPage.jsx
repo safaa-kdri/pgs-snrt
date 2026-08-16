@@ -1,5 +1,5 @@
 // src/components/department/EncadrantAddPage.jsx
-// ✅ VERSION CORRIGÉE
+// ✅ VERSION CORRIGÉE - Envoie 'role' (nom) au lieu de 'roleId'
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -15,13 +15,26 @@ import {
     CircularProgress,
     IconButton,
     Switch,
-    FormControlLabel, 
+    FormControlLabel,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    FormHelperText,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
     ArrowBack,
-    Save,
     PersonAdd,
+    Person,
+    Email,
+    Phone,
+    Badge,
+    Lock,
+    VpnKey,
+    CheckCircle,
+    Cancel,
+    Work,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
@@ -53,9 +66,6 @@ const StyledButton = styled(Button)({
     padding: '10px 32px',
 });
 
-// ✅ ID connu du rôle Encadrant
-const ENCADRANT_ROLE_ID = '6a6921c0fa6332cca9a6d7fc';
-
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -64,10 +74,11 @@ const EncadrantAddPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [encadrantRoleId, setEncadrantRoleId] = useState(ENCADRANT_ROLE_ID);
+    const [roles, setRoles] = useState([]);
 
     const [formData, setFormData] = useState({
         nom: '',
@@ -77,34 +88,36 @@ const EncadrantAddPage = () => {
         cin: '',
         motDePasse: '',
         confirmMotDePasse: '',
+        role: '',
+        departementId: '',
         actif: true,
     });
 
-    // ✅ Vérifier que le rôle existe, mais utiliser l'ID direct
+    // ✅ CHARGER LES RÔLES
     useEffect(() => {
-        const verifyRole = async () => {
-            try {
-                const response = await api.get('/roles');
-                const roles = response.data?.data || response.data || [];
-                const encadrantRole = roles.find(r => r.nom === 'Encadrant');
-                
-                if (encadrantRole) {
-                    setEncadrantRoleId(encadrantRole._id || encadrantRole.id);
-                    console.log('✅ Rôle Encadrant trouvé:', encadrantRoleId);
-                } else {
-                    // ✅ Utiliser l'ID connu si le rôle n'est pas trouvé
-                    setEncadrantRoleId(ENCADRANT_ROLE_ID);
-                    console.log('⚠️ Utilisation de l\'ID connu:', ENCADRANT_ROLE_ID);
-                }
-            } catch (error) {
-                console.error('❌ Erreur chargement rôle:', error);
-                // ✅ En cas d'erreur, utiliser l'ID connu
-                setEncadrantRoleId(ENCADRANT_ROLE_ID);
-            }
-        };
-        
-        verifyRole();
+        fetchRoles();
     }, []);
+
+    const fetchRoles = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/roles');
+            const data = response.data?.data || response.data || [];
+            setRoles(data);
+            
+            const encadrantRole = data.find(r => r.nom === 'Encadrant');
+            if (encadrantRole) {
+                setFormData(prev => ({
+                    ...prev,
+                    role: encadrantRole._id || encadrantRole.id
+                }));
+            }
+        } catch (error) {
+            console.error('❌ Erreur chargement rôles:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
@@ -117,6 +130,7 @@ const EncadrantAddPage = () => {
         if (!formData.prenom) { setError('Le prénom est obligatoire'); return false; }
         if (!formData.email) { setError('L\'email est obligatoire'); return false; }
         if (!formData.cin) { setError('Le CIN est obligatoire'); return false; }
+        if (!formData.role) { setError('Le rôle est obligatoire'); return false; }
         
         if (!formData.motDePasse || formData.motDePasse.length < 20) {
             setError('Le mot de passe doit contenir au moins 20 caractères');
@@ -146,16 +160,13 @@ const EncadrantAddPage = () => {
         setSuccess('');
         
         if (!validateForm()) return;
-        
-        // ✅ Vérifier que le rôle existe
-        if (!encadrantRoleId) {
-            setError('Rôle "Encadrant" non trouvé. Veuillez contacter l\'administrateur.');
-            return;
-        }
 
         setSaving(true);
 
         try {
+            const selectedRole = roles.find(r => (r._id || r.id) === formData.role);
+            
+            // ✅ CORRECTION : Envoyer 'role' (nom) au lieu de 'roleId'
             const payload = {
                 nom: formData.nom,
                 prenom: formData.prenom,
@@ -163,19 +174,19 @@ const EncadrantAddPage = () => {
                 telephone: formData.telephone || '',
                 cin: formData.cin,
                 motDePasse: formData.motDePasse,
-                roleId: encadrantRoleId,
-                // ✅ Le département est automatiquement assigné
+                role: selectedRole?.nom || 'Encadrant',  // ✅ Le NOM du rôle
                 departementId: user?.departementId || null,
                 actif: formData.actif,
             };
 
-            console.log('📤 [EncadrantAdd] Payload:', payload);
+            console.log('📤 [EncadrantAdd] Payload:', JSON.stringify(payload, null, 2));
 
             await api.post('/users/internal', payload);
             setSuccess('Encadrant ajouté avec succès !');
             setTimeout(() => navigate('/department/encadrants'), 1500);
         } catch (error) {
             console.error('❌ Erreur ajout:', error);
+            console.error('❌ Response:', error.response?.data);
             setError(error.response?.data?.message || 'Erreur lors de l\'ajout');
         } finally {
             setSaving(false);
@@ -185,6 +196,8 @@ const EncadrantAddPage = () => {
     const handleBack = () => {
         navigate('/department/encadrants');
     };
+
+    const selectedRole = roles.find(r => (r._id || r.id) === formData.role);
 
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -227,6 +240,9 @@ const EncadrantAddPage = () => {
                             onChange={(e) => handleChange('nom', e.target.value)}
                             fullWidth
                             required
+                            InputProps={{
+                                startAdornment: <Person sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6}>
@@ -236,6 +252,9 @@ const EncadrantAddPage = () => {
                             onChange={(e) => handleChange('prenom', e.target.value)}
                             fullWidth
                             required
+                            InputProps={{
+                                startAdornment: <Person sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
                         />
                     </Grid>
                     <Grid item xs={12}>
@@ -246,6 +265,9 @@ const EncadrantAddPage = () => {
                             onChange={(e) => handleChange('email', e.target.value)}
                             fullWidth
                             required
+                            InputProps={{
+                                startAdornment: <Email sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6}>
@@ -254,6 +276,9 @@ const EncadrantAddPage = () => {
                             value={formData.telephone}
                             onChange={(e) => handleChange('telephone', e.target.value)}
                             fullWidth
+                            InputProps={{
+                                startAdornment: <Phone sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6}>
@@ -263,7 +288,50 @@ const EncadrantAddPage = () => {
                             onChange={(e) => handleChange('cin', e.target.value)}
                             fullWidth
                             required
+                            InputProps={{
+                                startAdornment: <Badge sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
                         />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth required>
+                            <InputLabel id="role-label">Rôle *</InputLabel>
+                            <Select
+                                labelId="role-label"
+                                value={formData.role}
+                                onChange={(e) => handleChange('role', e.target.value)}
+                                label="Rôle *"
+                                sx={{ borderRadius: '10px', backgroundColor: '#fff' }}
+                                startAdornment={<Work sx={{ ml: 1, mr: 1, color: '#9aa4ac' }} />}
+                            >
+                                <MenuItem value="" disabled>Choisir un rôle</MenuItem>
+                                {roles.map((role) => (
+                                    <MenuItem key={role._id || role.id} value={role._id || role.id}>
+                                        {role.nom}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                            {selectedRole && (
+                                <FormHelperText>
+                                    Rôle sélectionné : <strong>{selectedRole.nom}</strong>
+                                    {selectedRole.nom === 'Encadrant' && ' ✅'}
+                                </FormHelperText>
+                            )}
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <StyledTextField
+                            label="Département"
+                            value={user?.departementId?.nom || user?.departement || 'Département actuel'}
+                            fullWidth
+                            disabled
+                            InputProps={{
+                                startAdornment: <Work sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                            L'encadrant sera automatiquement rattaché à votre département
+                        </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                         <StyledTextField
@@ -272,8 +340,11 @@ const EncadrantAddPage = () => {
                             value={formData.motDePasse}
                             onChange={(e) => handleChange('motDePasse', e.target.value)}
                             fullWidth
-                            helperText="Minimum 20 caractères avec majuscule, minuscule, chiffre et caractère spécial"
                             required
+                            helperText="Minimum 20 caractères avec majuscule, minuscule, chiffre et caractère spécial"
+                            InputProps={{
+                                startAdornment: <Lock sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
                         />
                     </Grid>
                     <Grid item xs={12} sm={6}>
@@ -284,6 +355,9 @@ const EncadrantAddPage = () => {
                             onChange={(e) => handleChange('confirmMotDePasse', e.target.value)}
                             fullWidth
                             required
+                            InputProps={{
+                                startAdornment: <VpnKey sx={{ mr: 1, color: '#9aa4ac' }} />,
+                            }}
                         />
                     </Grid>
                     <Grid item xs={12}>
@@ -292,9 +366,28 @@ const EncadrantAddPage = () => {
                                 <Switch
                                     checked={formData.actif}
                                     onChange={(e) => handleChange('actif', e.target.checked)}
+                                    sx={{
+                                        '& .MuiSwitch-switchBase.Mui-checked': {
+                                            color: '#22c55e',
+                                        },
+                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                            backgroundColor: '#22c55e',
+                                        },
+                                    }}
                                 />
                             }
-                            label={formData.actif ? 'Compte actif' : 'Compte inactif'}
+                            label={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    {formData.actif ? (
+                                        <CheckCircle sx={{ color: '#22c55e', fontSize: 18 }} />
+                                    ) : (
+                                        <Cancel sx={{ color: '#ef4444', fontSize: 18 }} />
+                                    )}
+                                    <Typography variant="body2">
+                                        {formData.actif ? 'Compte actif' : 'Compte inactif'}
+                                    </Typography>
+                                </Box>
+                            }
                         />
                     </Grid>
                 </Grid>

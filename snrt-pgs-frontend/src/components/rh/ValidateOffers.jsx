@@ -1,5 +1,5 @@
 // src/components/rh/ValidateOffers.jsx
-// ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES - SANS BOUTON RÉINITIALISER
+// ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES - CORRECTION DÉPARTEMENT
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -179,6 +179,25 @@ const ValidateOffers = () => {
     }
   };
 
+  // ✅ Fonction pour obtenir le nom du département
+  const getDepartementNom = (offer) => {
+    if (!offer) return "Non assigné";
+    
+    const dept = offer.departementId;
+    
+    // Si c'est un objet peuplé
+    if (typeof dept === 'object' && dept !== null) {
+      return dept.nom || "Non assigné";
+    }
+    
+    // Si c'est un string (ID)
+    if (typeof dept === 'string') {
+      return departementMap[dept] || "Non assigné";
+    }
+    
+    return "Non assigné";
+  };
+
   const fetchOffers = async () => {
     setLoading(true);
     setError("");
@@ -194,12 +213,7 @@ const ValidateOffers = () => {
         data = response.data.data;
       }
 
-      data = data.map((offer) => ({
-        ...offer,
-        statut: offer.statut || "EnAttente",
-        departementNom: departementMap[offer.departementId] || "Non assigné",
-      }));
-
+      // ✅ Ne pas modifier les données, on utilise getDepartementNom pour l'affichage
       setAllOffers(data);
 
       const total = data.length;
@@ -236,7 +250,7 @@ const ValidateOffers = () => {
       filtered = filtered.filter(
         (o) =>
           o.titre?.toLowerCase().includes(term) ||
-          (o.departementNom || "").toLowerCase().includes(term) ||
+          getDepartementNom(o).toLowerCase().includes(term) ||
           o.description?.toLowerCase().includes(term)
       );
     }
@@ -359,9 +373,7 @@ const ValidateOffers = () => {
         </Alert>
       )}
 
-      {/* ========================================== */}
-      {/* ✅ FILTRES - AU-DESSUS DES CARTES */}
-      {/* ========================================== */}
+      {/* ===== FILTRES ===== */}
       <FiltersContainer>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={7}>
@@ -528,9 +540,10 @@ const ValidateOffers = () => {
                       </Typography>
                     </Box>
                   </TableCell>
+                  {/* ✅ DÉPARTEMENT - CORRIGÉ */}
                   <TableCell>
                     <Chip
-                      label={offer.departementNom || "Non assigne"}
+                      label={getDepartementNom(offer)}
                       size="small"
                       sx={{ backgroundColor: "#e0e7ff", color: "#4338ca" }}
                     />

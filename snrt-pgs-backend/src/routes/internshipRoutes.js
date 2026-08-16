@@ -1,14 +1,10 @@
 // src/routes/internshipRoutes.js
-// ✅ CORRECTION : Ajout de DEPARTEMENT dans authorize + route /application/:applicationId
-// ✅ CORRECTION : Ajout de ROLES.ETUDIANT pour le téléchargement de l'engagement
-// ✅ AJOUT : Route PATCH /:id/status pour mettre à jour le statut d'un stage
-// ✅ AJOUT : Route POST /:id/send-demande-stage pour envoyer la demande à l'étudiant
-// ✅ AJOUT : Route GET /:id/download-demande-stage pour télécharger la demande existante
-// ✅ SUPPRESSION : Routes pour la gestion complète des conventions (signature)
+// ✅ CORRECTION : Routes convention avec ajout signature sur PDF
 
 const express = require('express');
 const router = express.Router();
 const internshipController = require('../controllers/internshipController');
+const conventionController = require('../controllers/conventionController');
 const { authenticate, authorize } = require('../middlewares/auth');
 const { ROLES } = require('../config/constants');
 const { logRequest, logAction } = require('../middlewares/logger');
@@ -28,6 +24,16 @@ const storage = multer.diskStorage({
     }
 });
 
+const conventionStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/conventions/');
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'convention_' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
 const fileFilter = (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
         cb(null, true);
@@ -39,7 +45,13 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+const uploadConvention = multer({
+    storage: conventionStorage,
+    fileFilter: fileFilter,
+    limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 // ============================================
@@ -49,17 +61,76 @@ router.use(authenticate());
 router.use(logRequest);
 
 // ============================================
-// ✅ ROUTES POUR LE DÉPARTEMENT
+// ✅ ROUTES SPÉCIFIQUES - CONVENTION (PLACÉES AVANT /:id)
 // ============================================
 
-// Récupérer les stages du département
-router.get(
-    '/department',
-    authorize(ROLES.DEPARTEMENT),
-    internshipController.getDepartmentInternships
+// Routes Convention - Étudiant
+router.post(
+    '/convention/deposer',
+    authorize(ROLES.ETUDIANT),
+    uploadConvention.single('convention'),
+    logAction('CONVENTION_DEPOSER'),
+    conventionController.deposerConvention
 );
 
-// ✅ ROUTE : Récupérer un stage par application
+router.get(
+    '/convention/status',
+    authorize(ROLES.ETUDIANT),
+    logAction('CONVENTION_STATUS'),
+    conventionController.getConventionStatus
+);
+
+router.get(
+    '/convention/download',
+    authorize(ROLES.ETUDIANT),
+    logAction('CONVENTION_DOWNLOAD'),
+    conventionController.downloadConvention
+);
+
+// Routes Convention - RH
+router.get(
+    '/conventions/deposees',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('CONVENTION_LIST'),
+    conventionController.getConventionsDeposees
+);
+
+// ✅ Signer la convention (stockage signature en base64)
+router.put(
+    '/convention/:id/signer',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('CONVENTION_SIGNER'),
+    conventionController.signerConvention
+);
+
+// ✅ Ajouter la signature sur le PDF original
+router.get(
+    '/convention/:id/sign-pdf',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('CONVENTION_SIGN_PDF'),
+    conventionController.ajouterSignatureSurPDF
+);
+
+// Envoyer la convention signée à l'étudiant
+router.put(
+    '/convention/:id/envoyer-etudiant',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('CONVENTION_ENVOYER_ETUDIANT'),
+    conventionController.envoyerConventionEtudiant
+);
+
+// Télécharger une convention spécifique (RH)
+router.get(
+    '/convention/:id/download',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('CONVENTION_DOWNLOAD_RH'),
+    conventionController.downloadConventionRH
+);
+
+// ============================================
+// ✅ ROUTES SPÉCIFIQUES - APPLICATION
+// ============================================
+
 router.get(
     '/application/:applicationId',
     authorize(ROLES.ETUDIANT, ROLES.DEPARTEMENT, ROLES.RH, ROLES.ADMIN),
@@ -67,41 +138,23 @@ router.get(
     internshipController.getInternshipByApplication
 );
 
-// Affecter un encadrant (Département)
-router.put(
-    '/:id/assign-supervisor',
-    authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
-    logAction('INTERNSHIP_ASSIGN_SUPERVISOR'),
-    internshipController.assignSupervisor
-);
-
-// Définir le sujet du stage (Département)
-router.put(
-    '/:id/define-subject',
-    authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
-    logAction('INTERNSHIP_DEFINE_SUBJECT'),
-    internshipController.defineSubject
-);
-
-// Consulter le rapport de stage (Département, Encadrant, RH, Admin)
-router.get(
-    '/:id/report',
-    authorize(ROLES.DEPARTEMENT, ROLES.ENCADRANT, ROLES.RH, ROLES.ADMIN),
-    internshipController.getInternshipReport
+router.post(
+    '/applications/:applicationId/validate',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_VALIDATE_APPLICATION'),
+    internshipController.validateApplicationDocuments
 );
 
 // ============================================
-// Routes pour Encadrant (ses propres stages)
+// ✅ ROUTES SPÉCIFIQUES - ENCADRANT
 // ============================================
+
 router.get(
     '/my-internships',
     authorize(ROLES.ENCADRANT),
     internshipController.getInternshipsBySupervisor
 );
 
-// ============================================
-// Routes pour Étudiant (ses propres stages)
-// ============================================
 router.get(
     '/student-internships',
     authorize(ROLES.ETUDIANT),
@@ -109,8 +162,58 @@ router.get(
 );
 
 // ============================================
-// Routes pour Encadrant - Actions sur ses stages
+// ✅ ROUTES DÉPARTEMENT
 // ============================================
+
+router.get(
+    '/department',
+    authorize(ROLES.DEPARTEMENT),
+    internshipController.getDepartmentInternships
+);
+
+// ============================================
+// ✅ ROUTES GÉNÉRIQUES AVEC /:id (PLACÉES EN DERNIER)
+// ============================================
+
+router.get(
+    '/',
+    authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT),
+    internshipController.getAllInternships
+);
+
+router.get(
+    '/:id',
+    authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT, ROLES.ETUDIANT),
+    internshipController.getInternshipById
+);
+
+router.post(
+    '/',
+    authorize(ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT),
+    logAction('INTERNSHIP_CREATE'),
+    internshipController.createInternship
+);
+
+router.put(
+    '/:id/assign-supervisor',
+    authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
+    logAction('INTERNSHIP_ASSIGN_SUPERVISOR'),
+    internshipController.assignSupervisor
+);
+
+router.put(
+    '/:id/define-subject',
+    authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
+    logAction('INTERNSHIP_DEFINE_SUBJECT'),
+    internshipController.defineSubject
+);
+
+router.get(
+    '/:id/report',
+    authorize(ROLES.DEPARTEMENT, ROLES.ENCADRANT, ROLES.RH, ROLES.ADMIN),
+    internshipController.getInternshipReport
+);
+
 router.post(
     '/:id/remarks',
     authorize(ROLES.ENCADRANT),
@@ -139,31 +242,6 @@ router.put(
     internshipController.validateDeliverable
 );
 
-// ============================================
-// Routes pour Admin + RH + Encadrant
-// ============================================
-router.get(
-    '/',
-    authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT),
-    internshipController.getAllInternships
-);
-
-router.get(
-    '/:id',
-    authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT, ROLES.ETUDIANT),
-    internshipController.getInternshipById
-);
-
-// ============================================
-// ✅ Routes pour Admin + RH + DEPARTEMENT
-// ============================================
-router.post(
-    '/',
-    authorize(ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT),
-    logAction('INTERNSHIP_CREATE'),
-    internshipController.createInternship
-);
-
 router.post(
     '/:id/deliverable',
     authorize(ROLES.ETUDIANT),
@@ -171,19 +249,6 @@ router.post(
     internshipController.addDeliverable
 );
 
-// ============================================
-// ✅ ROUTES RH - GESTION DES CANDIDATURES ET STAGES
-// ============================================
-
-// Valider les documents de candidature
-router.post(
-    '/applications/:applicationId/validate',
-    authorize(ROLES.RH, ROLES.ADMIN),
-    logAction('INTERNSHIP_VALIDATE_APPLICATION'),
-    internshipController.validateApplicationDocuments
-);
-
-// Envoyer la demande au Directeur
 router.post(
     '/:id/send-to-directeur',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -191,7 +256,6 @@ router.post(
     internshipController.sendToDirecteur
 );
 
-// Envoyer la fiche signée à l'étudiant
 router.post(
     '/:id/send-fiche-signee',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -199,7 +263,6 @@ router.post(
     internshipController.sendFicheSigneeToStudent
 );
 
-// Générer l'attestation
 router.post(
     '/:id/generate-attestation',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -207,7 +270,6 @@ router.post(
     internshipController.generateAttestation
 );
 
-// ✅ AJOUT : Mettre à jour le statut d'un stage (RH, Admin)
 router.patch(
     '/:id/status',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -215,11 +277,6 @@ router.patch(
     internshipController.updateInternshipStatus
 );
 
-// ============================================
-// ✅ ROUTES RH - GÉNÉRATION ET ENVOI DE DOCUMENTS
-// ============================================
-
-// Générer l'engagement de confidentialité (téléchargement)
 router.get(
     '/:id/generate-engagement',
     authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.ADMIN),
@@ -227,7 +284,6 @@ router.get(
     internshipController.generateEngagementConfidentialite
 );
 
-// Envoyer l'engagement à l'étudiant par email
 router.post(
     '/:id/send-engagement',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -235,7 +291,6 @@ router.post(
     internshipController.sendEngagementToStudent
 );
 
-// Générer la demande de stage pour le Directeur (téléchargement)
 router.get(
     '/:id/generate-demande-stage',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -243,7 +298,6 @@ router.get(
     internshipController.generateDemandeStage
 );
 
-// ✅ AJOUTER : Envoyer la demande de stage à l'étudiant (RH)
 router.post(
     '/:id/send-demande-stage',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -251,7 +305,6 @@ router.post(
     internshipController.sendDemandeStageToStudent
 );
 
-// ✅ NOUVEAU : Télécharger la demande de stage existante (pour l'étudiant)
 router.get(
     '/:id/download-demande-stage',
     authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.ADMIN),
@@ -259,11 +312,6 @@ router.get(
     internshipController.downloadDemandeStage
 );
 
-// ============================================
-// ✅ ROUTES ÉTUDIANT - DÉPOT DES DOCUMENTS
-// ============================================
-
-// Déposer l'engagement de confidentialité signé
 router.post(
     '/:id/upload-engagement',
     authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.ADMIN),
