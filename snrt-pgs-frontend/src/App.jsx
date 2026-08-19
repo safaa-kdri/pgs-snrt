@@ -1,6 +1,10 @@
 // src/App.jsx
-// ✅ CORRECTION : Import correct de OfferEditPage
-// ✅ AJOUT : Route pour DepotCandidature (Workflow 3 étapes)
+// CORRECTION : Import correct de OfferEditPage
+// AJOUT : Route pour DepotCandidature (Workflow 3 etapes)
+// AJOUT : Route pour CandidatureManagement (RH)
+// AJOUT : Routes pour "Mes stages" et "Suivi de stage" (Étudiant)
+// AJOUT : Routes pour "Suivi des stages" (Encadrant)
+// AJOUT : Route pour /rh/candidatures
 
 import React, { useEffect, useState, useRef } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
@@ -47,13 +51,17 @@ import PeriodsList from "./components/admin/PeriodsList";
 import Settings from "./components/admin/Settings";
 import AdminOffres from "./components/admin/AdminOffres";
 
-// ===== SUPERVISOR PAGES =====
+// ===== SUPERVISOR PAGES (existantes) =====
 import InternsList from "./components/supervisor/InternsList";
 import InternDetailSupervisor from "./components/supervisor/InternDetail";
 import Evaluation from "./components/supervisor/Evaluation";
 import CloseInternship from "./components/supervisor/CloseInternship";
 
-// ===== STUDENT PAGES =====
+// ===== SUPERVISOR PAGES (NOUVELLES - Suivi des stages) =====
+import SupervisorInternshipsList from "./components/supervisor/SupervisorInternshipsList";
+import SupervisorInternshipDetail from "./components/supervisor/SupervisorInternshipDetail";
+
+// ===== STUDENT PAGES (existantes) =====
 import Profile from "./components/student/Profile";
 import Applications from "./components/student/Applications";
 import Favorites from "./components/student/Favorites";
@@ -63,8 +71,11 @@ import DepotEngagement from "./components/student/DepotEngagement";
 import DepotRapport from "./components/student/DepotRapport";
 import Attestation from "./components/student/Attestation";
 import ApplicationDetailStudent from "./components/student/ApplicationDetail";
-// ✅ AJOUT
 import DepotCandidature from "./components/student/DepotCandidature";
+
+// ===== STUDENT PAGES (NOUVELLES - Mes stages) =====
+import StudentStagesList from "./components/student/StudentStagesList";
+import StudentInternshipDetail from "./components/student/StudentInternshipDetail";
 
 // ===== DEPARTMENT PAGES =====
 import CreateOffer from "./components/department/CreateOffer";
@@ -88,6 +99,7 @@ import Interviews from "./components/rh/Interviews";
 import InterviewAddPage from "./components/rh/InterviewAddPage";
 import GenerateConvention from "./components/rh/GenerateConvention";
 import OfferDetailPage from "./components/rh/OfferDetailPage";
+import CandidatureManagement from './components/rh/CandidatureManagement';
 
 // ============================================
 // PROTECTION DES ROUTES
@@ -201,7 +213,7 @@ function App() {
   const { isAuthenticated, status } = useSelector((state) => state.auth);
   const [authTrigger, setAuthTrigger] = useState(0);
 
-  // ✅ Nettoyage automatique si 2faEmail et token coexistent
+  // Nettoyage automatique si 2faEmail et token coexistent
   useEffect(() => {
     const twoFactorEmail = localStorage.getItem("2faEmail");
     const twoFactorUserId = localStorage.getItem("2faUserId");
@@ -363,7 +375,7 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* STUDENT ROUTES */}
+        {/* STUDENT ROUTES (existantes) */}
         {/* ========================================== */}
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route
@@ -456,7 +468,7 @@ function App() {
             </Layout>
           }
         />
-        {/* ✅ NOUVEAU - WORKFLOW DE CANDIDATURE EN 3 ÉTAPES */}
+        {/* WORKFLOW DE CANDIDATURE EN 3 ETAPES */}
         <Route
           path="/depot-candidature"
           element={
@@ -473,6 +485,30 @@ function App() {
             <Layout>
               <PrivateRoute>
                 <DepotCandidature />
+              </PrivateRoute>
+            </Layout>
+          }
+        />
+
+        {/* ========================================== */}
+        {/* STUDENT ROUTES (NOUVELLES - Mes stages) */}
+        {/* ========================================== */}
+        <Route
+          path="/dashboard/stages"
+          element={
+            <Layout>
+              <PrivateRoute>
+                <StudentStagesList />
+              </PrivateRoute>
+            </Layout>
+          }
+        />
+        <Route
+          path="/dashboard/stage/:id"
+          element={
+            <Layout>
+              <PrivateRoute>
+                <StudentInternshipDetail />
               </PrivateRoute>
             </Layout>
           }
@@ -596,7 +632,7 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* SUPERVISOR ROUTES - AVEC SupervisorLayout */}
+        {/* SUPERVISOR ROUTES (existantes) */}
         {/* ========================================== */}
         <Route
           path="/supervisor"
@@ -650,6 +686,30 @@ function App() {
         />
 
         {/* ========================================== */}
+        {/* SUPERVISOR ROUTES (NOUVELLES - Suivi des stages) */}
+        {/* ========================================== */}
+        <Route
+          path="/supervisor/stages"
+          element={
+            <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+              <SupervisorLayout>
+                <SupervisorInternshipsList />
+              </SupervisorLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/supervisor/stage/:id"
+          element={
+            <PrivateRoute allowedRoles={["Encadrant", "Supervisor"]}>
+              <SupervisorLayout>
+                <SupervisorInternshipDetail />
+              </SupervisorLayout>
+            </PrivateRoute>
+          }
+        />
+
+        {/* ========================================== */}
         {/* RH ROUTES - AVEC RhLayout */}
         {/* ========================================== */}
         <Route
@@ -678,6 +738,17 @@ function App() {
             <PrivateRoute allowedRoles={["RH", "Rh"]}>
               <RhLayout>
                 <ApplicationDetail />
+              </RhLayout>
+            </PrivateRoute>
+          }
+        />
+        {/* ✅ NOUVELLE ROUTE - GESTION DES CANDIDATURES RH */}
+        <Route
+          path="/rh/candidatures"
+          element={
+            <PrivateRoute allowedRoles={["RH", "Rh"]}>
+              <RhLayout>
+                <CandidatureManagement />
               </RhLayout>
             </PrivateRoute>
           }

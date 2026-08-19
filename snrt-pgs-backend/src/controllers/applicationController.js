@@ -15,6 +15,9 @@
 // CORRECTION : Récupération de etudiantId dans sendEngagementAutomatically
 // CORRECTION : Ajout de logs pour les champs dans createApplication
 // CORRECTION : Vérification si le stage existe déjà dans sendEngagementAutomatically pour éviter les doublons
+// AJOUT : closeOfferApplications - Clôturer les candidatures d'une offre
+// MODIFICATION : closeOfferApplications - Retourner l'offre et les acceptés pour permettre la saisie de la description
+// CORRECTION : closeOfferApplications - Stocker un chemin relatif pour le PDF
 
 const Application = require('../models/Application');
 const Document = require('../models/Document');
@@ -28,6 +31,7 @@ const { assertDepartmentOwnsOffer, departmentOfferIds } = require('../utils/depa
 const pdfService = require('../services/pdfService');
 const emailService = require('../services/emailService');
 const logger = require('../utils/logger');
+const path = require('path');
 
 
 async function fetchApplicationParties(application) {
@@ -1100,6 +1104,157 @@ exports.getDepartmentApplications = async (req, res) => {
 };
 
 // ============================================
+// RH - CLOTURER LES CANDIDATURES D'UNE OFFRE
+// ============================================
+exports.closeOfferApplications = async (req, res) => {
+    try {
+        const { offerId } = req.params;
+        const userRole = req.user?.role;
+
+        // Verifier que l'utilisateur est RH ou Admin
+        if (!['RH', 'Administrateur'].includes(userRole)) {
+            return res.status(403).json({
+                success: false,
+                message: "Seul le RH peut cloturer les candidatures."
+            });
+        }
+
+        // 1. Verifier que l'offre existe
+        const offer = await Offer.findById(offerId);
+        if (!offer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Offre non trouvee'
+            });
+        }
+
+        // 2. Recuperer toutes les candidatures de l'offre
+        const applications = await Application.find({ offreId: offerId })
+            .populate('etudiantId', 'nom prenom email');
+
+        if (applications.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aucune candidature pour cette offre'
+            });
+        }
+
+        // 3. Compter les acceptees
+        const acceptees = applications.filter(a => a.statut === 'Acceptee');
+        const enAnalyse = applications.filter(a => a.statut === 'EnAnalyse' || a.statut === 'Soumise');
+
+        // 4. Refuser automatiquement les candidatures en analyse/en attente
+        let refuseCount = 0;
+        for (const app of enAnalyse) {
+            const ancienStatut = app.statut;
+            app.statut = 'Refusee';
+            app.commentaire = 'Refus automatique - Selection cloturee';
+            if (!app.historique) app.historique = [];
+            app.historique.push({
+                ancienStatut: ancienStatut,
+                nouveauStatut: 'Refusee',
+                commentaire: 'Refus automatique - Selection cloturee',
+                auteurId: req.user?._id,
+                date: new Date()
+            });
+            await app.save();
+            refuseCount++;
+        }
+
+        // 5. Generer le PDF des resultats
+        const resultatData = {
+            offre: offer,
+            acceptes: acceptees,
+            dateCloture: new Date(),
+            nbPostes: offer.nbPostes,
+            typeStage: offer.typeStage,
+            departementNom: offer.departementId?.nom || 'Departement',
+        };
+
+        const pdfPath = await pdfService.generateResultatsStage(resultatData);
+        console.log(`PDF des resultats genere: ${pdfPath}`);
+
+        // ✅ CORRECTION : Stocker le chemin relatif (pas le chemin absolu)
+        const relativePath = path.relative(path.join(__dirname, '../../uploads'), pdfPath);
+        // Remplacer les backslashes par des slashes pour Windows
+        const normalizedPath = relativePath.replace(/\\/g, '/');
+        const publicPath = `/uploads/${normalizedPath}`;
+        
+        console.log(`Chemin relatif stocke: ${publicPath}`);
+
+        // 6. Mettre a jour l'offre avec le statut "ResultatsPublies"
+        offer.statut = 'ResultatsPublies';
+        offer.dateCloture = new Date();
+        offer.resultatsPdfPath = publicPath;  // Stocker le chemin relatif
+        offer.resultatsPublies = true;
+        offer.nbAcceptes = acceptees.length;
+        offer.nbRefuses = applications.length - acceptees.length;
+        await offer.save();
+
+        // 7. Notifications aux etudiants
+        for (const app of acceptees) {
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Stage - Resultats publies',
+                message: `Felicitations ! Vous avez ete retenu(e) pour le stage "${offer.titre}".`,
+                lien: `/resultats/${offer._id}`,
+                userId: app.etudiantId._id,
+                userModel: 'UtilisateurExterne',
+            });
+        }
+
+        for (const app of enAnalyse) {
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Stage - Resultats publies',
+                message: `Les resultats pour le stage "${offer.titre}" sont disponibles. Nous vous remercions de votre interet.`,
+                lien: `/resultats/${offer._id}`,
+                userId: app.etudiantId._id,
+                userModel: 'UtilisateurExterne',
+            });
+        }
+
+        logger.info(`Offre ${offerId} cloturee - ${acceptees.length} acceptes, ${refuseCount} refuses`);
+
+        // RETOURNER L'OFFRE POUR PERMETTRE LA SAISIE DE LA DESCRIPTION
+        return res.status(200).json({
+            success: true,
+            message: `Candidatures cloturees avec succes. ${acceptees.length} candidats acceptes, ${refuseCount} refuses.`,
+            data: {
+                offerId: offer._id,
+                acceptees: acceptees.length,
+                refusees: refuseCount,
+                statut: offer.statut,
+                // Retourner l'offre avec les acceptes pour la suite
+                offer: {
+                    _id: offer._id,
+                    titre: offer.titre,
+                    typeStage: offer.typeStage,
+                    nbPostes: offer.nbPostes,
+                    departementNom: offer.departementId?.nom || 'Departement'
+                },
+                acceptes: acceptees.map(a => ({
+                    id: a._id,
+                    etudiant: {
+                        nom: a.etudiantId?.nom || '',
+                        prenom: a.etudiantId?.prenom || '',
+                        email: a.etudiantId?.email || '',
+                    }
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur closeOfferApplications:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la cloture des candidatures',
+            error: error.message
+        });
+    }
+};
+
+// ============================================
 // CONSERVE : Recuperer l'etat du workflow pour les candidatures existantes
 // ============================================
 
@@ -1154,6 +1309,111 @@ exports.getWorkflowState = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Erreur lors de la recuperation de l\'etat du workflow',
+            error: error.message
+        });
+    }
+};
+
+exports.cleanOverAccepted = async (req, res) => {
+    try {
+        const { offerId } = req.params;
+        const userRole = req.user?.role;
+
+        if (!['RH', 'Administrateur'].includes(userRole)) {
+            return res.status(403).json({
+                success: false,
+                message: "Seul le RH peut effectuer cette action."
+            });
+        }
+
+        // 1. Vérifier que l'offre existe
+        const offer = await Offer.findById(offerId);
+        if (!offer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Offre non trouvée'
+            });
+        }
+
+        const nbPostes = offer.nbPostes || 0;
+        if (nbPostes === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cette offre n\'a pas de postes définis'
+            });
+        }
+
+        // 2. Récupérer toutes les candidatures acceptées, triées par date
+        const acceptees = await Application.find({
+            offreId: offerId,
+            statut: 'Acceptee'
+        }).sort({ updatedAt: 1 }); // Les plus anciennes d'abord
+
+        if (acceptees.length <= nbPostes) {
+            return res.status(400).json({
+                success: false,
+                message: `Le nombre de candidats acceptés (${acceptees.length}) ne dépasse pas le nombre de postes (${nbPostes})`
+            });
+        }
+
+        // 3. Garder les X premiers (où X = nbPostes)
+        const toKeep = acceptees.slice(0, nbPostes);
+        const toRefuse = acceptees.slice(nbPostes);
+
+        // 4. Refuser les candidatures en trop
+        let refuseCount = 0;
+        for (const app of toRefuse) {
+            const ancienStatut = app.statut;
+            app.statut = 'Refusee';
+            app.commentaire = `Refus automatique - Nettoyage des anciennes données (${acceptees.length} acceptés pour ${nbPostes} postes)`;
+            
+            if (!app.historique) app.historique = [];
+            app.historique.push({
+                ancienStatut: ancienStatut,
+                nouveauStatut: 'Refusee',
+                commentaire: app.commentaire,
+                auteurId: req.user?._id,
+                date: new Date()
+            });
+            await app.save();
+            refuseCount++;
+        }
+
+        // 5. Mettre à jour l'offre (seulement les compteurs, PAS le statut)
+        offer.nbAcceptes = toKeep.length;
+        offer.nbRefuses = (offer.nbRefuses || 0) + refuseCount;
+        // ❌ PAS de changement de statut - l'offre reste en cours
+        await offer.save();
+
+        // 6. Notifications
+        for (const app of toRefuse) {
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Stage - Mise à jour des résultats',
+                message: `Les résultats pour le stage "${offer.titre}" ont été mis à jour.`,
+                lien: `/resultats/${offer._id}`,
+                userId: app.etudiantId,
+                userModel: 'UtilisateurExterne',
+            });
+        }
+
+        logger.info(`Offre ${offerId} nettoyée : ${toKeep.length} acceptés conservés, ${refuseCount} refusés`);
+
+        return res.status(200).json({
+            success: true,
+            message: `Nettoyage effectué : ${toKeep.length} candidats acceptés conservés, ${refuseCount} candidats refusés.`,
+            data: {
+                acceptesRestants: toKeep.length,
+                refuseesCount: refuseCount,
+                nbPostes: nbPostes
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur cleanOverAccepted:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors du nettoyage des anciennes données',
             error: error.message
         });
     }

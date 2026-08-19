@@ -1,6 +1,7 @@
 // src/config/constants.js
-// ✅ AJOUTER LA CONSTANTE DOCUMENT_TYPES
-// ✅ AJOUTER EN_COURS_CREATION
+// AJOUTER LA CONSTANTE DOCUMENT_TYPES
+// AJOUTER EN_COURS_CREATION
+// AJOUTER RESULTATS_PUBLIES
 
 require('dotenv').config();
 
@@ -24,6 +25,7 @@ const OFFER_STATUS = Object.freeze({
   PUBLIEE: 'Publiee',
   REFUSEE: 'Refusee',
   ARCHIVEE: 'Archivee',
+  RESULTATS_PUBLIES: 'ResultatsPublies', // NOUVEAU
 });
 
 const OFFER_TYPES = ['PFE', 'PFA', 'Initiation', 'Ete', 'Master', 'Licence', 'Technicien'];
@@ -42,7 +44,7 @@ const CONCOURS_DOCUMENT_TYPES = [
 ];
 
 
-// ✅ AJOUTER EN_COURS_CREATION
+// AJOUTER EN_COURS_CREATION
 const APPLICATION_STATUS = Object.freeze({
   EN_COURS_CREATION: 'EnCoursCreation',
   BROUILLON: 'Brouillon',
@@ -53,7 +55,7 @@ const APPLICATION_STATUS = Object.freeze({
   REFUSEE: 'Refusee',
 });
 
-// ✅ AJOUT : MOTIFS DE REFUS
+// AJOUT : MOTIFS DE REFUS
 const REFUSAL_REASONS = Object.freeze([
   'Profil non adapté',
   'Plus de places disponibles',
@@ -67,19 +69,19 @@ const PASSWORD_MIN_LENGTH = Object.freeze({
   interne: 20,
 });
 
-// ✅ AJOUT : TYPES DE DOCUMENTS
+// AJOUT : TYPES DE DOCUMENTS
 const DOCUMENT_TYPES = Object.freeze([
     'CV',
     'LettreMotivation',
     'LettreRecommandation',
-    'AttestationScolarite',  // ✅ Présent
+    'AttestationScolarite',
     'Attestation',
     'ReleveNotes',
     'Convention',
     'Photo',
     'CIN',
     'Assurance',
-    'FicheEngagement',  // ✅ Présent
+    'FicheEngagement',
     'Autre'
 ]);
 

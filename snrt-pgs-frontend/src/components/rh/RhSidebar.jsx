@@ -109,8 +109,6 @@ const LogoutButton = styled(Button)({
     '&:hover': { backgroundColor: '#c82333' },
 });
 
-// ❌ UserInfo SUPPRIMÉ
-
 const RhSidebar = ({ open, onClose, user }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -141,6 +139,8 @@ const RhSidebar = ({ open, onClose, user }) => {
 
     const menuItems = [
         { text: 'Tableau de bord', icon: <Dashboard />, path: '/rh', key: 'dashboard' },
+        // ✅ NOUVEAU : Gestion des candidatures
+        { text: 'Gestion des candidatures', icon: <People />, path: '/rh/candidatures', key: 'candidatures' },
         { text: 'Candidatures', icon: <Assignment />, path: '/rh/applications', key: 'applications' },
         { text: 'Offres à valider', icon: <Work />, path: '/rh/validate-offers', key: 'validate-offers' },
         { text: 'Entretiens', icon: <Event />, path: '/rh/interviews', key: 'interviews' },
@@ -158,7 +158,6 @@ const RhSidebar = ({ open, onClose, user }) => {
             variant={isMobile ? 'temporary' : 'persistent'}
         >
             <DrawerList>
-                {/* ❌ SUPPRIMÉ : <UserInfo> ... </UserInfo> */}
                 {menuItems.map((item) => {
                     if (item.divider) {
                         return <Divider key="divider" sx={{ my: 1, mx: 2, backgroundColor: '#d0d4d8' }} />;

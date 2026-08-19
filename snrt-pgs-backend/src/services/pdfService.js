@@ -1,8 +1,13 @@
 // src/services/pdfService.js
 // Installation: npm install pdfkit
-// ✅ CORRECTION : Utiliser le fichier PDF existant dans uploads/engagements/
-// ✅ AJOUT : Génération de la demande de stage avec logo SNRT - Style professionnel
-// ✅ MODIFICATION : generateDemandeStage - Derniers ajustements pour correspondre exactement à l'original SNRT
+// CORRECTION : Utiliser le fichier PDF existant dans uploads/engagements/
+// AJOUT : Génération de la demande de stage avec logo SNRT - Style professionnel
+// MODIFICATION : generateDemandeStage - Derniers ajustements pour correspondre exactement à l'original SNRT
+// AJOUT : generateResultatsStage - Générer le PDF des résultats
+// MODIFICATION : generateResultatsStage - Ajouter la description dans le PDF
+// CORRECTION : generateResultatsStage - Retourner un chemin relatif
+// MODIFICATION : generateResultatsStage - Version alignée sur le PDF de recrutement SNRT
+// CORRECTION FINALE : generateResultatsStage - Texte noir, cachet bien positionné, une seule page
 
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
@@ -401,15 +406,14 @@ exports.deletePDF = async (filePath) => {
 };
 
 // ============================================
-// ✅ GÉNÉRER LA DEMANDE DE STAGE POUR LE DIRECTEUR
-// ✅ Version finale ajustée pour correspondre exactement à l'original SNRT
+// GENERER LA DEMANDE DE STAGE POUR LE DIRECTEUR
+// Version finale ajustée pour correspondre exactement à l'original SNRT
 // ============================================
 exports.generateDemandeStage = async (internshipData) => {
     return new Promise((resolve, reject) => {
         try {
             const { _id, etudiantId, dateDebut, dateFin, etudiantNom } = internshipData;
             
-            // Créer le dossier si inexistant
             const dir = path.join(__dirname, '../../uploads/demandes');
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
@@ -418,7 +422,6 @@ exports.generateDemandeStage = async (internshipData) => {
             const fileName = `demande_stage_${_id || Date.now()}.pdf`;
             const filePath = path.join(dir, fileName);
             
-            // Créer le document PDF avec les marges personnalisées
             const doc = new PDFDocument({
                 size: 'A4',
                 margins: MARGINS,
@@ -432,18 +435,12 @@ exports.generateDemandeStage = async (internshipData) => {
             const writeStream = fs.createWriteStream(filePath);
             doc.pipe(writeStream);
 
-            // ============================================
-            // POLICES - Times New Roman
-            // ============================================
             const FONT = 'Times-Roman';
             const FONT_BOLD = 'Times-Bold';
             const FONT_ITALIC = 'Times-Italic';
             const FONT_SIZE = 14;
             const FONT_SIZE_FOOTER = 7.5;
 
-            // ============================================
-            // 1. LOGO
-            // ============================================
             const logoPath = path.join(__dirname, '../../uploads/images/SNRT-logo-scanned.jpg');
             let logoExists = fs.existsSync(logoPath);
             
@@ -482,26 +479,17 @@ exports.generateDemandeStage = async (internshipData) => {
                 doc.moveDown(0.5);
             }
 
-            // ============================================
-            // 2. LETTRE "A"
-            // ============================================
             doc.font(FONT_BOLD)
                .fontSize(18)
                .text('A', { align: 'center' })
                .moveDown(0.8);
 
-            // ============================================
-            // 3. DESTINATAIRE
-            // ============================================
             doc.font(FONT_BOLD)
                .fontSize(13.5)
                .text('Monsieur le Directeur Adjoint Chargé des Infrastructures et des Systèmes', { align: 'center', lineGap: 1 })
                .text("d'Information", { align: 'center', lineGap: 1 })
                .moveDown(2.5);
 
-            // ============================================
-            // 4. OBJET
-            // ============================================
             doc.x = MARGINS.left;
 
             doc.font(FONT_BOLD)
@@ -512,9 +500,6 @@ exports.generateDemandeStage = async (internshipData) => {
                .text(`Demande de stage concernant : ${etudiantNom || 'Nom Prénom'}`)
                .moveDown(1.8);
 
-            // ============================================
-            // 5. PARAGRAPHE - Espacement augmenté (lineGap: 14)
-            // ============================================
             doc.x = MARGINS.left;
 
             const formatDateToFrench = (date) => {
@@ -532,29 +517,20 @@ exports.generateDemandeStage = async (internshipData) => {
 
             const studentName = etudiantNom || 'Nom Prénom';
 
-            // ✅ lineGap augmenté à 14 pour plus d'espace entre les lignes
             doc.font(FONT)
                .fontSize(13.8)
                .text(
                    `Faisant suite à votre accord de stage concernant ${studentName} pour la période du ${dateDebutFormatted} au ${dateFinFormatted} au sein de votre direction ; j'ai l'honneur de vous demander de bien vouloir renseigner la fiche de stage ci-jointe, afin de confirmer la période du stage et de la retourner à la Direction des Ressources Humaines.`,
                    {
                        align: 'justify',
-                       lineGap: 14 // ✅ Augmenté de 10 à 14 pour plus d'espace
+                       lineGap: 14
                    }
                );
 
-            // ============================================
-            // BLOC BAS DE PAGE - Cachet descendu pour alignement avec la date
-            // ============================================
             const pageBottom = doc.page.height;
-
-            // Pied de page
             const footerY = pageBottom - MARGINS.bottom - 45;
-
-            // NB
             const nbY = footerY - 70;
 
-            // ✅ CACHET - Descendu davantage pour alignement avec la date
             const cachetWidth = 172;
             const cachetHeight = 115;
             const cachetGapToNB = 45;
@@ -566,17 +542,12 @@ exports.generateDemandeStage = async (internshipData) => {
                 : path.join(__dirname, '../../uploads/images/Signature-et-cachet-1.png');
             
             const cachetX = MARGINS.left + 37;
-            // ✅ Descendu davantage pour alignement avec la date (augmenté la valeur de descente)
-            const cachetY = nbY - cachetGapToNB - cachetHeight - 30; // Descendu (était -45)
+            const cachetY = nbY - cachetGapToNB - cachetHeight - 30;
 
-            // DATE - alignée avec le cachet
             const dateWidth = 200;
             const dateX = doc.page.width - MARGINS.right - 200 + 15;
-            const dateY = cachetY + (cachetHeight / 2) + 28; // Ajusté pour alignement
+            const dateY = cachetY + (cachetHeight / 2) + 28;
 
-            // ============================================
-            // CACHET + SIGNATURE DRH
-            // ============================================
             if (fs.existsSync(finalCachetPath)) {
                 try {
                     doc.image(finalCachetPath, cachetX, cachetY, {
@@ -591,9 +562,6 @@ exports.generateDemandeStage = async (internshipData) => {
                 logger.warn(`Cachet non trouvé: ${finalCachetPath}`);
             }
 
-            // ============================================
-            // DATE - Alignée à droite
-            // ============================================
             doc.font(FONT)
                .fontSize(13)
                .text(`Fait à Rabat le : ${dateFormatted}`, dateX, dateY, {
@@ -601,9 +569,6 @@ exports.generateDemandeStage = async (internshipData) => {
                    align: 'right'
                });
 
-            // ============================================
-            // NB
-            // ============================================
             doc.x = MARGINS.left;
             doc.y = nbY;
 
@@ -618,9 +583,6 @@ exports.generateDemandeStage = async (internshipData) => {
                    { lineGap: 1 }
                );
 
-            // ============================================
-            // LIGNE HORIZONTALE
-            // ============================================
             const footerLineInset = 40;
             doc.moveTo(footerLineInset, footerY)
                .lineTo(doc.page.width - footerLineInset, footerY)
@@ -628,9 +590,6 @@ exports.generateDemandeStage = async (internshipData) => {
                .lineWidth(0.5)
                .stroke();
 
-            // ============================================
-            // PIED DE PAGE
-            // ============================================
             const footerTextMargin = MARGINS.left;
             const footerTextWidth = doc.page.width - (footerTextMargin * 2);
 
@@ -676,7 +635,6 @@ exports.generateDemandeStage = async (internshipData) => {
                    }
                );
 
-            // Finaliser le PDF
             doc.end();
 
             writeStream.on('finish', () => {
@@ -697,7 +655,7 @@ exports.generateDemandeStage = async (internshipData) => {
 };
 
 // ============================================
-// GÉNÉRER LE PDF D'ENGAGEMENT DE CONFIDENTIALITÉ
+// GENERER LE PDF D'ENGAGEMENT DE CONFIDENTIALITÉ
 // ============================================
 exports.generateEngagementConfidentialite = async (internshipData) => {
     try {
@@ -828,6 +786,382 @@ const generateEngagementFallback = async (internshipData) => {
 };
 
 // ============================================
+// GENERER LE PDF DES RESULTATS DE STAGE
+// VERSION ALIGNEE SUR LE PDF DE RECRUTEMENT SNRT (design identique, mise en page aeree)
+// - Une seule liste "Candidats retenus" (pas de liste d'attente)
+// - Tableau simple 3 colonnes (Classement / Nom Candidat / CIN), centre sur la page
+// - Logo agrandi
+// - Cachet sous le NB, aligne a droite
+// - Garanti sur une seule page (pas de saut de page automatique)
+// ============================================
+exports.generateResultatsStage = async (data) => {
+    return new Promise((resolve, reject) => {
+        try {
+            const { offre, acceptes, dateCloture, nbPostes, typeStage, departementNom, description } = data;
+
+            // Creer le dossier si inexistant
+            const dir = path.join(__dirname, '../../uploads/resultats');
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+
+            // Nom du fichier sans accents
+            const safeTitle = (offre.titre || 'OFFRE')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9]/g, '_')
+                .toUpperCase();
+            const fileName = `RESULTATS_STAGE_${safeTitle}.pdf`;
+            const filePath = path.join(dir, fileName);
+
+            // Marges genereuses, proches du PDF de recrutement original
+            const PAGE_MARGINS = { top: 65, bottom: 45, left: 75, right: 75 };
+            const doc = new PDFDocument({
+                size: 'A4',
+                margins: PAGE_MARGINS,
+                bufferPages: true,
+                info: {
+                    Title: `Resultats - ${offre.titre || 'Stage'}`,
+                    Author: 'SNRT - PGS',
+                    Subject: 'Resultats de selection de stage'
+                }
+            });
+
+            const writeStream = fs.createWriteStream(filePath);
+            doc.pipe(writeStream);
+
+            const FONT = 'Times-Roman';
+            const FONT_BOLD = 'Times-Bold';
+            const FONT_ITALIC = 'Times-Italic';
+
+            // ============================================
+            // 1. LOGO SNRT - centre
+            // ============================================
+            const logoPath = path.join(__dirname, '../../uploads/images/SNRT-logo-scanned.jpg');
+            let logoExists = fs.existsSync(logoPath);
+            if (!logoExists) {
+                const fallbackLogoPath = path.join(__dirname, '../../uploads/images/snrt-logo.jpg');
+                logoExists = fs.existsSync(fallbackLogoPath);
+            }
+
+            const centerX = doc.page.width / 2;
+
+            if (logoExists) {
+                try {
+                    const logoMaxWidth = 230;
+                    const logoMaxHeight = 130;
+                    const logoX = centerX - (logoMaxWidth / 2);
+                    const logoY = PAGE_MARGINS.top - 20;
+
+                    const finalLogoPath = fs.existsSync(path.join(__dirname, '../../uploads/images/SNRT-logo-scanned.jpg'))
+                        ? path.join(__dirname, '../../uploads/images/SNRT-logo-scanned.jpg')
+                        : path.join(__dirname, '../../uploads/images/snrt-logo.jpg');
+
+                    doc.image(finalLogoPath, logoX, logoY, {
+                        fit: [logoMaxWidth, logoMaxHeight],
+                        align: 'center',
+                        valign: 'top'
+                    });
+
+                    doc.y = logoY + logoMaxHeight + 14;
+                    doc.x = PAGE_MARGINS.left;
+                } catch (err) {
+                    console.warn(`Erreur chargement logo: ${err.message}`);
+                    doc.moveDown(1);
+                }
+            } else {
+                doc.moveDown(1);
+            }
+
+            // ============================================
+            // 2. TITRE PRINCIPAL - AVIS DES RESULTATS DEFINITIFS
+            // ============================================
+            doc.font(FONT_BOLD)
+               .fontSize(18)
+               .fillColor('#000000')
+               .text('AVIS DES RESULTATS DEFINITIFS', { align: 'center' });
+
+            doc.moveDown(0.4);
+
+            // Ligne de soulignement sous le titre
+            const titleY = doc.y;
+            doc.moveTo(centerX - 115, titleY + 2)
+               .lineTo(centerX + 115, titleY + 2)
+               .strokeColor('#000000')
+               .lineWidth(1)
+               .stroke();
+
+            doc.moveDown(1);
+
+            // ============================================
+            // 3. SOUS-TITRE
+            // ============================================
+            doc.font(FONT_BOLD)
+               .fontSize(12)
+               .fillColor('#000000')
+               .text('Liste des candidats retenus dans le cadre de l\'operation de selection des stagiaires', { align: 'center' });
+
+            doc.moveDown(0.7);
+
+            // ============================================
+            // 4. IDENTIFICATION DE L'OFFRE
+            // ============================================
+            doc.font(FONT_BOLD)
+               .fontSize(11)
+               .fillColor('#000000')
+               .text(`Stage : ${offre.titre || 'Offre sans titre'} / Nombre de postes : ${nbPostes || 0}`, { align: 'center' });
+
+            doc.moveDown(0.3);
+
+            // ✅ SUPPRESSION DE LA LIGNE "Departement : Departement"
+            // La ligne ci-dessous est supprimée :
+            // if (departementNom) {
+            //     doc.font(FONT)
+            //        .fontSize(10)
+            //        .fillColor('#000000')
+            //        .text(`Departement : ${departementNom}`, { align: 'center' });
+            // }
+
+            doc.moveDown(1.4);
+
+            // ============================================
+            // 5. TABLEAU DES CANDIDATS - 3 colonnes simples, centre sur la page
+            //    (Classement / Nom Candidat / CIN)
+            // ============================================
+            const tableTop = doc.y;
+            const pageUsableLeft = PAGE_MARGINS.left;
+            const pageUsableRight = doc.page.width - PAGE_MARGINS.right;
+            const pageUsableWidth = pageUsableRight - pageUsableLeft;
+
+            // Colonnes : Classement / Nom Candidat / CIN
+            const classColWidth = 90;
+            const cinColWidth = 120;
+            // Le tableau est plus etroit que la page complete et centre horizontalement
+            const tableWidth = Math.min(pageUsableWidth, 430);
+            const nomColWidth = tableWidth - classColWidth - cinColWidth;
+
+            const tableLeft = centerX - (tableWidth / 2);
+            const tableRight = tableLeft + tableWidth;
+
+            const classColX = tableLeft;
+            const nomColX = classColX + classColWidth;
+            const cinColX = nomColX + nomColWidth;
+
+            const candidates = acceptes || [];
+
+            // Espace reserve en bas de page pour NB + cachet + footer (mise en page aeree)
+            const reservedBottomSpace = 205; // NB (~45) + cachet (~110) + footer (~50)
+            const maxTableBottom = doc.page.height - PAGE_MARGINS.bottom - reservedBottomSpace;
+            const availableHeight = maxTableBottom - tableTop;
+
+            // Hauteur de ligne "confortable" comme dans l'original (35pt), reduite seulement si necessaire
+            const PREFERRED_ROW_HEIGHT = 35;
+            const MIN_ROW_HEIGHT = 18;
+
+            const rowsNeeded = Math.max(1, candidates.length);
+            let rowHeight = PREFERRED_ROW_HEIGHT;
+            let maxRows = rowsNeeded;
+
+            // Si la hauteur preferee ne tient pas pour toutes les lignes, on reduit la hauteur de ligne
+            if ((rowsNeeded + 1) * PREFERRED_ROW_HEIGHT > availableHeight) {
+                rowHeight = Math.floor(availableHeight / (rowsNeeded + 1));
+                if (rowHeight < MIN_ROW_HEIGHT) {
+                    // Toujours trop de lignes meme au minimum : on limite le nombre de lignes affichees
+                    rowHeight = MIN_ROW_HEIGHT;
+                    maxRows = Math.max(1, Math.floor(availableHeight / MIN_ROW_HEIGHT) - 1);
+                }
+            }
+
+            const displayCandidates = candidates.slice(0, maxRows);
+
+            // ----- En-tete du tableau -----
+            const headerY = tableTop;
+
+            doc.rect(classColX, headerY, classColWidth + nomColWidth + cinColWidth, rowHeight)
+               .fillColor('#dedede')
+               .fill();
+
+            doc.rect(classColX, headerY, classColWidth, rowHeight)
+               .strokeColor('#000000').lineWidth(0.8).stroke();
+            doc.rect(nomColX, headerY, nomColWidth, rowHeight)
+               .strokeColor('#000000').lineWidth(0.8).stroke();
+            doc.rect(cinColX, headerY, cinColWidth, rowHeight)
+               .strokeColor('#000000').lineWidth(0.8).stroke();
+
+            const headerFontSize = rowHeight < 26 ? 9.5 : 11;
+            doc.font(FONT_BOLD)
+               .fontSize(headerFontSize)
+               .fillColor('#000000')
+               .text('Classement', classColX, headerY + (rowHeight - headerFontSize) / 2 - 2, { width: classColWidth, align: 'center' });
+            doc.text('Nom Candidat', nomColX, headerY + (rowHeight - headerFontSize) / 2 - 2, { width: nomColWidth, align: 'center' });
+            doc.text('CIN', cinColX, headerY + (rowHeight - headerFontSize) / 2 - 2, { width: cinColWidth, align: 'center' });
+
+            // ----- Corps du tableau -----
+            let currentY = headerY + rowHeight;
+            const bodyTop = currentY;
+            const dataFontSize = rowHeight < 26 ? 9.5 : 10.5;
+
+            if (displayCandidates.length === 0) {
+                doc.rect(classColX, currentY, classColWidth + nomColWidth + cinColWidth, rowHeight)
+                   .fillColor('#ffffff').fill()
+                   .strokeColor('#000000').lineWidth(0.8).stroke();
+
+                doc.font(FONT)
+                   .fontSize(dataFontSize)
+                   .fillColor('#000000')
+                   .text('Aucun candidat retenu', classColX, currentY + (rowHeight - dataFontSize) / 2 - 2, { width: classColWidth + nomColWidth + cinColWidth, align: 'center' });
+                currentY += rowHeight;
+            } else {
+                displayCandidates.forEach((app, index) => {
+                    const studentName = app.etudiantId
+                        ? `${app.etudiantId.prenom || ''} ${app.etudiantId.nom || ''}`.trim().toUpperCase()
+                        : 'Candidat sans nom';
+                    const cin = app.etudiantId?.cin || 'Non renseigne';
+
+                    doc.rect(classColX, currentY, classColWidth + nomColWidth + cinColWidth, rowHeight)
+                       .fillColor('#ffffff').fill();
+
+                    doc.rect(classColX, currentY, classColWidth, rowHeight)
+                       .strokeColor('#000000').lineWidth(0.8).stroke();
+                    doc.rect(nomColX, currentY, nomColWidth, rowHeight)
+                       .strokeColor('#000000').lineWidth(0.8).stroke();
+                    doc.rect(cinColX, currentY, cinColWidth, rowHeight)
+                       .strokeColor('#000000').lineWidth(0.8).stroke();
+
+                    doc.font(FONT)
+                       .fontSize(dataFontSize)
+                       .fillColor('#000000')
+                       .text(`${index + 1}`, classColX, currentY + (rowHeight - dataFontSize) / 2 - 2, { width: classColWidth, align: 'center' });
+                    doc.text(studentName, nomColX + 10, currentY + (rowHeight - dataFontSize) / 2 - 2, { width: nomColWidth - 20, align: 'left' });
+                    doc.text(cin, cinColX, currentY + (rowHeight - dataFontSize) / 2 - 2, { width: cinColWidth, align: 'center' });
+
+                    currentY += rowHeight;
+                });
+
+                if (candidates.length > displayCandidates.length) {
+                    doc.font(FONT_ITALIC)
+                       .fontSize(8.5)
+                       .fillColor('#666666')
+                       .text(`... et ${candidates.length - displayCandidates.length} autre(s) candidat(s)`, classColX, currentY + 3, { width: classColWidth + nomColWidth + cinColWidth, align: 'center' });
+                    currentY += 14;
+                }
+            }
+
+            const tableBottom = currentY;
+
+            doc.y = tableBottom;
+            doc.x = PAGE_MARGINS.left;
+            doc.moveDown(2);
+
+            // ============================================
+            // 6. NB - Remarque
+            // ============================================
+            const nbY = doc.y;
+            doc.font(FONT_BOLD)
+               .fontSize(10.5)
+               .fillColor('#000000')
+               .text('NB :', PAGE_MARGINS.left, nbY, { continued: true, width: pageUsableWidth, lineBreak: true });
+
+            doc.font(FONT)
+               .fontSize(10.5)
+               .fillColor('#000000')
+               .text(' Les candidats retenus doivent se presenter aupres du service concerne afin d\'accomplir les formalites administratives necessaires a leur stage.', {
+                   align: 'left',
+                   lineGap: 2,
+                   width: pageUsableWidth
+               });
+
+            const nbBottomY = doc.y;
+
+            // ============================================
+            // 7. CACHET - sous le NB, aligne a droite
+            // ============================================
+            const cachetCandidates = [
+                path.join(__dirname, '../../uploads/images/Signature-et-cachet-1.png'),
+                path.join(__dirname, '../../uploads/images/cachet-snrt-original.png'),
+                path.join(__dirname, '../../uploads/images/cachet-snrt.png'),
+            ];
+            const cachetPath = cachetCandidates.find((p) => fs.existsSync(p));
+
+            const cachetWidth = 130;
+            const cachetHeight = 90;
+            const cachetX = pageUsableRight - cachetWidth;
+            const cachetY = nbBottomY + 20;
+
+            if (cachetPath) {
+                try {
+                    doc.image(cachetPath, cachetX, cachetY, {
+                        width: cachetWidth,
+                        height: cachetHeight,
+                    });
+                    logger.info(`Cachet ajoute au PDF des resultats (${path.basename(cachetPath)})`);
+                } catch (err) {
+                    logger.warn(`Erreur chargement cachet: ${err.message}`);
+                }
+            } else {
+                logger.warn(`Cachet non trouve parmi: ${cachetCandidates.join(', ')}`);
+            }
+
+            // ============================================
+            // 8. PIED DE PAGE - position absolue fixe, sans declencher de saut de page
+            // ============================================
+            doc.page.margins.bottom = 0;
+
+            const footerY = doc.page.height - 38;
+            const footerLineInset = 40;
+
+            doc.moveTo(footerLineInset, footerY - 6)
+               .lineTo(doc.page.width - footerLineInset, footerY - 6)
+               .strokeColor('#888888')
+               .lineWidth(0.5)
+               .stroke();
+
+            doc.font(FONT)
+               .fontSize(7)
+               .fillColor('#000000')
+               .text(
+                   'SNRT SA, Capital social : 1 275 000 000,00 Dirhams - Siege social : 1, Rue El Brihi - Rabat 10.000 - Maroc',
+                   PAGE_MARGINS.left, footerY, { width: doc.page.width - (PAGE_MARGINS.left + PAGE_MARGINS.right), align: 'center', lineBreak: false }
+               );
+            doc.text(
+                   'Tel. : +212 (0)5 37 66 91 90 / +212 (0)5 37 68 52 00 - Fax : +212 (0)5 37 72 20 47',
+                   PAGE_MARGINS.left, footerY + 9, { width: doc.page.width - (PAGE_MARGINS.left + PAGE_MARGINS.right), align: 'center', lineBreak: false }
+               );
+            doc.text(
+                   'R.C. : 60485 - T.P. : 25197490 - I.F. : 3304097 - I.C.E. : 000211903000067',
+                   PAGE_MARGINS.left, footerY + 18, { width: doc.page.width - (PAGE_MARGINS.left + PAGE_MARGINS.right), align: 'center', lineBreak: false }
+               );
+            doc.text(
+                   'Site Web : www.snrt.ma',
+                   PAGE_MARGINS.left, footerY + 27, { width: doc.page.width - (PAGE_MARGINS.left + PAGE_MARGINS.right), align: 'center', lineBreak: false }
+               );
+
+            doc.page.margins.bottom = PAGE_MARGINS.bottom;
+
+            // Finaliser le PDF
+            doc.end();
+
+            writeStream.on('finish', () => {
+                console.log(`PDF des resultats genere (1 page): ${filePath}`);
+                const relativePath = path.relative(path.join(__dirname, '../../uploads'), filePath);
+                const normalizedPath = relativePath.replace(/\\/g, '/');
+                resolve(`/uploads/${normalizedPath}`);
+            });
+
+            writeStream.on('error', (err) => {
+                console.error('Erreur ecriture PDF:', err);
+                reject(err);
+            });
+
+        } catch (error) {
+            console.error('Erreur generateResultatsStage:', error);
+            reject(error);
+        }
+    });
+};
+
+
+// ============================================
 // EXPORTS
 // ============================================
 module.exports = {
@@ -837,4 +1171,5 @@ module.exports = {
     deletePDF: exports.deletePDF,
     generateDemandeStage: exports.generateDemandeStage,
     generateEngagementConfidentialite: exports.generateEngagementConfidentialite,
+    generateResultatsStage: exports.generateResultatsStage,
 };

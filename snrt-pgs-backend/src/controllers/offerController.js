@@ -1,6 +1,11 @@
 // src/controllers/offerController.js
-// ✅ CORRECTION : Peupler createurId, validateurId, departementId ET periodeId
-// ✅ CORRECTION : Tri prioritaire - Offres publiées > disponibles > récentes
+// CORRECTION : Peupler createurId, validateurId, departementId ET periodeId
+// CORRECTION : Tri prioritaire - Offres publiees > disponibles > recentes
+// MODIFICATION : Filtrer les offres avec resultats pour les etudiants
+// AJOUT : updateOfferResults - Mettre a jour la description des resultats
+// CORRECTION : Stocker un chemin relatif pour le PDF
+// CORRECTION : Nettoyer le chemin du PDF dans getOfferResults
+// AJOUT : regenerateResultsPdf - Regenerer le PDF des resultats
 
 const Offer = require('../models/Offer');
 const Application = require('../models/Application');
@@ -8,6 +13,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const storageService = require('../services/storageService');
+const pdfService = require('../services/pdfService');
+const path = require('path');
 const { ROLES, OFFER_STATUS, CONCOURS_DOCUMENT_TYPES, STAFF_TREATMENT_ROLES, HR_ADMIN_ROLES } = require('../config/constants');
 
 
@@ -20,7 +27,7 @@ const createOffer = asyncHandler(async (req, res) => {
 
   if (!departementId) {
     throw ApiError.badRequest(
-      'Votre compte n\'est rattaché à aucun département. ' +
+      'Votre compte n\'est rattache à aucun département. ' +
       'Veuillez contacter l\'administrateur pour assigner un département.'
     );
   }
@@ -50,12 +57,20 @@ const listOffers = asyncHandler(async (req, res) => {
   const { statut, typeStage, departementId, periodeId, search, date, page = 1, limit = 20 } = req.query;
   const filter = {};
 
-  console.log('📥 [listOffers] Paramètres reçus:', { statut, typeStage, departementId, periodeId, search, date, page, limit });
+  console.log('[listOffers] Parametres recus:', { statut, typeStage, departementId, periodeId, search, date, page, limit });
 
+  // Si l'utilisateur est un etudiant ou non connecte, exclure les offres avec resultats
   if (!req.user || req.user.role === ROLES.ETUDIANT) {
     filter.statut = OFFER_STATUS.PUBLIEE;
+    // Ne pas afficher les offres avec resultats publies dans l'onglet Offres
+    filter.resultatsPublies = { $ne: true };
   } else if (statut) {
-    filter.statut = statut;
+    // Pour le RH, si statut specifique, inclure ResultatsPublies
+    if (statut === 'ResultatsPublies') {
+      filter.resultatsPublies = true;
+    } else {
+      filter.statut = statut;
+    }
   }
 
   if (typeStage) filter.typeStage = typeStage;
@@ -64,7 +79,7 @@ const listOffers = asyncHandler(async (req, res) => {
   
   if (search) {
     filter.$text = { $search: search };
-    console.log('📥 [listOffers] Recherche textuelle:', search);
+    console.log('[listOffers] Recherche textuelle:', search);
   }
 
   if (date) {
@@ -73,23 +88,21 @@ const listOffers = asyncHandler(async (req, res) => {
       { dateLimiteCandidature: { $lte: searchDate } },
       { dateDebut: { $lte: searchDate }, dateFin: { $gte: searchDate } }
     ];
-    console.log('📥 [listOffers] Recherche par date:', date);
+    console.log('[listOffers] Recherche par date:', date);
   }
 
-  console.log('📥 [listOffers] Filter final:', JSON.stringify(filter, null, 2));
+  console.log('[listOffers] Filter final:', JSON.stringify(filter, null, 2));
 
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
   const [offers, total] = await Promise.all([
     Offer.find(filter)
-      // ✅ POPULATES COMPLETS
       .populate('createurId', 'nom prenom email')
       .populate('validateurId', 'nom prenom email')
       .populate('departementId', 'nom')
       .populate('periodeId', 'nom dateDebut dateFin')
       .populate('candidaturesCount')
-      // ✅ TRI PAR DÉFAUT : Les plus récentes en premier
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
@@ -97,19 +110,19 @@ const listOffers = asyncHandler(async (req, res) => {
     Offer.countDocuments(filter),
   ]);
 
-  // ✅ TRI MANUEL AVEC PRIORITÉS
+  // TRI MANUEL AVEC PRIORITES
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
   const sortedOffers = offers.sort((a, b) => {
-    // 1. PRIORITÉ : Offres publiées avant les autres
+    // 1. PRIORITE : Offres publiees avant les autres
     const aIsPublished = a.statut === 'Publiee';
     const bIsPublished = b.statut === 'Publiee';
     
     if (aIsPublished && !bIsPublished) return -1;
     if (!aIsPublished && bIsPublished) return 1;
     
-    // 2. PRIORITÉ : Offres disponibles avant les expirées
+    // 2. PRIORITE : Offres disponibles avant les expirees
     const dateA = a.dateLimiteCandidature ? new Date(a.dateLimiteCandidature) : null;
     const dateB = b.dateLimiteCandidature ? new Date(b.dateLimiteCandidature) : null;
     
@@ -122,15 +135,15 @@ const listOffers = asyncHandler(async (req, res) => {
     if (aExpired && !bExpired) return 1;
     if (!aExpired && bExpired) return -1;
     
-    // 3. PRIORITÉ : Offres avec date limite proche (urgence)
+    // 3. PRIORITE : Offres avec date limite proche (urgence)
     if (!aExpired && !bExpired) {
       if (dateA && dateB) {
-        if (dateA < dateB) return -1; // La plus proche en premier
+        if (dateA < dateB) return -1;
         if (dateA > dateB) return 1;
       }
     }
     
-    // 4. PRIORITÉ : Offres les plus récentes (créées avec "Postuler")
+    // 4. PRIORITE : Offres les plus recentes
     const dateCreatedA = new Date(a.createdAt);
     const dateCreatedB = new Date(b.createdAt);
     
@@ -140,8 +153,8 @@ const listOffers = asyncHandler(async (req, res) => {
     return 0;
   });
 
-  console.log(`📥 [listOffers] ${sortedOffers.length} offres trouvées sur ${total}`);
-  console.log(`📥 [listOffers] Tri : Publiées > Disponibles > Récentes`);
+  console.log(`[listOffers] ${sortedOffers.length} offres trouvees sur ${total}`);
+  console.log('[listOffers] Tri : Publiees > Disponibles > Recentes');
 
   return res.status(200).json({
     success: true,
@@ -153,19 +166,20 @@ const listOffers = asyncHandler(async (req, res) => {
 
 const getOfferById = asyncHandler(async (req, res) => {
   const offer = await Offer.findById(req.params.id)
-    // ✅ Peupler les références pour avoir les noms complets
-    .populate('createurId', 'nom prenom email')      // Créateur de l'offre
-    .populate('validateurId', 'nom prenom email')    // Validateur (RH)
-    .populate('departementId', 'nom')                // Département
-    .populate('periodeId', 'nom dateDebut dateFin')  // ✅ PÉRIODE
-    .populate('candidaturesCount')                   // Nombre de candidatures
+    .populate('createurId', 'nom prenom email')
+    .populate('validateurId', 'nom prenom email')
+    .populate('departementId', 'nom')
+    .populate('periodeId', 'nom dateDebut dateFin')
+    .populate('candidaturesCount')
     .lean();
     
   if (!offer) throw ApiError.notFound('Offre introuvable.');
 
-  // ✅ Vérifier que l'étudiant ne voit que les offres publiées
-  if ((!req.user || req.user.role === ROLES.ETUDIANT) && offer.statut !== OFFER_STATUS.PUBLIEE) {
-    throw ApiError.notFound('Offre introuvable.');
+  // Verifier que l'etudiant ne voit que les offres publiees sans resultats
+  if ((!req.user || req.user.role === ROLES.ETUDIANT)) {
+    if (offer.statut !== OFFER_STATUS.PUBLIEE || offer.resultatsPublies === true) {
+      throw ApiError.notFound('Offre introuvable.');
+    }
   }
 
   return res.status(200).json({ success: true, offer });
@@ -431,6 +445,194 @@ const getMyOffers = asyncHandler(async (req, res) => {
   });
 });
 
+// ============================================
+// RECUPERER LES RESULTATS D'UNE OFFRE
+// ============================================
+const getOfferResults = asyncHandler(async (req, res) => {
+  const offer = await Offer.findById(req.params.id)
+    .populate('departementId', 'nom')
+    .lean();
+
+  if (!offer) throw ApiError.notFound('Offre introuvable.');
+
+  if (!offer.resultatsPublies) {
+    throw ApiError.notFound('Les resultats ne sont pas encore disponibles.');
+  }
+
+  const acceptees = await Application.find({
+    offreId: offer._id,
+    statut: 'Acceptee'
+  }).populate('etudiantId', 'nom prenom email');
+
+  const refusees = await Application.find({
+    offreId: offer._id,
+    statut: 'Refusee'
+  }).populate('etudiantId', 'nom prenom email');
+
+  // ✅ CORRECTION : Nettoyer le chemin du PDF
+  let pdfPath = offer.resultatsPdfPath || null;
+  if (pdfPath) {
+    // Nettoyer le chemin Windows si présent
+    pdfPath = pdfPath.replace(/^[A-Z]:\\/i, '');
+    pdfPath = pdfPath.replace(/^[A-Z]:\//i, '');
+    pdfPath = pdfPath.replace(/\\/g, '/');
+    
+    if (!pdfPath.startsWith('/uploads/')) {
+      if (pdfPath.includes('uploads/resultats')) {
+        const index = pdfPath.indexOf('uploads/resultats');
+        pdfPath = '/' + pdfPath.substring(index);
+      } else if (pdfPath.includes('resultats')) {
+        const index = pdfPath.indexOf('resultats');
+        pdfPath = '/uploads/' + pdfPath.substring(index);
+      } else {
+        pdfPath = `/uploads/${pdfPath}`;
+      }
+    }
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      offer: {
+        _id: offer._id,
+        titre: offer.titre,
+        typeStage: offer.typeStage,
+        nbPostes: offer.nbPostes,
+        departementNom: offer.departementId?.nom || 'Departement',
+        resultatsPublies: offer.resultatsPublies,
+        dateCloture: offer.dateCloture,
+        nbAcceptes: offer.nbAcceptes || acceptees.length,
+        nbRefuses: offer.nbRefuses || refusees.length,
+        resultatsPdfPath: pdfPath,  // Chemin nettoyé
+        resultatsDescription: offer.resultatsDescription || '',
+      },
+      acceptees: acceptees.map(a => ({
+        id: a._id,
+        etudiant: {
+          nom: a.etudiantId?.nom || '',
+          prenom: a.etudiantId?.prenom || '',
+          email: a.etudiantId?.email || '',
+        }
+      })),
+      refusees: refusees.map(a => ({
+        id: a._id,
+        etudiant: {
+          nom: a.etudiantId?.nom || '',
+          prenom: a.etudiantId?.prenom || '',
+          email: a.etudiantId?.email || '',
+        }
+      })),
+    }
+  });
+});
+
+// ============================================
+// METTRE A JOUR LA DESCRIPTION DES RESULTATS
+// ============================================
+const updateOfferResults = asyncHandler(async (req, res) => {
+    if (!['RH', 'Administrateur'].includes(req.user.role)) {
+        throw ApiError.forbidden('Seul le RH peut modifier la description des resultats.');
+    }
+
+    const offer = await Offer.findById(req.params.id);
+    if (!offer) throw ApiError.notFound('Offre introuvable.');
+
+    const { description } = req.body;
+
+    if (!description || description.trim().length === 0) {
+        throw ApiError.badRequest('La description est obligatoire.');
+    }
+
+    offer.resultatsDescription = description.trim();
+    await offer.save();
+
+    // Si le PDF n'a pas encore ete genere, le generer
+    if (!offer.resultatsPdfPath) {
+        // Recuperer les candidats acceptes
+        const acceptees = await Application.find({
+            offreId: offer._id,
+            statut: 'Acceptee'
+        }).populate('etudiantId', 'nom prenom email');
+
+        const resultatData = {
+            offre: offer,
+            acceptes: acceptees,
+            dateCloture: offer.dateCloture || new Date(),
+            nbPostes: offer.nbPostes,
+            typeStage: offer.typeStage,
+            departementNom: offer.departementId?.nom || 'Departement',
+            description: description.trim()
+        };
+
+        const pdfPath = await pdfService.generateResultatsStage(resultatData);
+        
+        // Stocker le chemin relatif (pas le chemin absolu)
+        const relativePath = path.relative(path.join(__dirname, '../../uploads'), pdfPath);
+        // ✅ Normaliser les backslashes pour Windows
+        const normalizedPath = relativePath.replace(/\\/g, '/');
+        offer.resultatsPdfPath = `/uploads/${normalizedPath}`;
+        await offer.save();
+        
+        console.log('[updateOfferResults] PDF genere:', offer.resultatsPdfPath);
+    }
+
+    logger.audit('OFFER_RESULTS_UPDATED', { 
+        offerId: offer._id.toString(), 
+        userId: req.user.id 
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: 'Description des resultats mise a jour avec succes.',
+        data: {
+            description: offer.resultatsDescription,
+            pdfPath: offer.resultatsPdfPath
+        }
+    });
+});
+
+// ============================================
+// REGENERER LE PDF DES RESULTATS
+// ============================================
+const regenerateResultsPdf = asyncHandler(async (req, res) => {
+    const offer = await Offer.findById(req.params.id);
+    if (!offer) throw ApiError.notFound('Offre introuvable.');
+
+    if (!offer.resultatsPublies) {
+        throw ApiError.badRequest('Les resultats ne sont pas encore publies.');
+    }
+
+    const acceptees = await Application.find({
+        offreId: offer._id,
+        statut: 'Acceptee'
+    }).populate('etudiantId', 'nom prenom email cin');
+
+    const resultatData = {
+        offre: offer,
+        acceptes: acceptees,
+        dateCloture: offer.dateCloture || new Date(),
+        nbPostes: offer.nbPostes,
+        typeStage: offer.typeStage,
+        departementNom: offer.departementId?.nom || 'Departement',
+        description: offer.resultatsDescription || ''
+    };
+
+    const pdfPath = await pdfService.generateResultatsStage(resultatData);
+    
+    // ✅ Normaliser les backslashes pour Windows
+    const relativePath = path.relative(path.join(__dirname, '../../uploads'), pdfPath);
+    const normalizedPath = relativePath.replace(/\\/g, '/');
+    offer.resultatsPdfPath = `/uploads/${normalizedPath}`;
+    await offer.save();
+
+    return res.status(200).json({
+        success: true,
+        message: 'PDF regenere avec succes',
+        data: { pdfPath: offer.resultatsPdfPath }
+    });
+});
+
+
 module.exports = {
   createOffer,
   listOffers,
@@ -443,4 +645,7 @@ module.exports = {
   uploadConcoursDocument,
   deleteConcoursDocument,
   getMyOffers,
+  getOfferResults,
+  updateOfferResults,
+  regenerateResultsPdf,
 };
