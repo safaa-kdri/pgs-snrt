@@ -7,11 +7,11 @@ const { createOfferSchema, updateOfferSchema, validateOfferSchema } = require('.
 
 const router = express.Router();
 
-// ✅ Routes publiques (ou avec authentification optionnelle)
+// Routes publiques (ou avec authentification optionnelle)
 router.get('/', optionalAuthenticate(), offerController.listOffers);
 router.get('/:id', optionalAuthenticate(), offerController.getOfferById);
 
-// ✅ Routes protégées
+// Routes protegees
 router.post('/', authenticate(), validate(createOfferSchema), offerController.createOffer);
 router.put('/:id', authenticate(), validate(updateOfferSchema), offerController.updateOffer);
 router.put('/:id/submit', authenticate(), offerController.submitOffer);
@@ -19,8 +19,34 @@ router.put('/:id/validate', authenticate(), validate(validateOfferSchema), offer
 router.put('/:id/archive', authenticate(), offerController.archiveOffer);
 router.delete('/:id', authenticate(), offerController.deleteOffer);
 
-// ✅ NOUVELLE ROUTE : Récupérer les offres du département
+// NOUVELLE ROUTE : Recuperer les offres du departement
 router.get('/my-offers', authenticate(), offerController.getMyOffers);
+
+// ============================================
+// RESULTATS D'UNE OFFRE
+// ============================================
+// Recuperer les resultats d'une offre
+router.get(
+  '/:id/results',
+  optionalAuthenticate(),
+  offerController.getOfferResults
+);
+
+// Mettre a jour la description des resultats
+router.put(
+  '/:id/results/description',
+  authenticate(),
+  offerController.updateOfferResults
+);
+
+// ============================================
+// REGENERER LE PDF DES RESULTATS
+// ============================================
+router.post(
+  '/:id/regenerate-results',
+  authenticate(),
+  offerController.regenerateResultsPdf
+);
 
 // Routes pour les documents de concours
 router.post(

@@ -27,7 +27,7 @@ const studentRoutes = require('./src/routes/studentRoutes');
 const internshipRoutes = require('./src/routes/internshipRoutes');
 const resultsRoutes = require('./src/routes/resultsRoutes');
 const periodRoutes = require('./src/routes/periodRoutes');
-// ✅ AJOUT : Routes pour les rôles
+// AJOUT : Routes pour les rôles
 const roleRoutes = require('./src/routes/roleRoutes');
 
 assertRequiredEnv();
@@ -43,19 +43,25 @@ if (CONFIG.nodeEnv !== 'production') {
   app.use(cors({ origin: CONFIG.clientUrl, credentials: true }));
 }
 
-// ✅ AUGMENTER LA LIMITE POUR PERMETTRE L'UPLOAD DES IMAGES DE SIGNATURE
+// AUGMENTER LA LIMITE POUR PERMETTRE L'UPLOAD DES IMAGES DE SIGNATURE
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 app.use(mongoSanitize());
 
+// ============================================
+// ✅ EXPOSITION DES DOSSIERS STATIQUES
+// ============================================
 app.use('/uploads/documents', express.static(path.join(__dirname, 'uploads/documents')));
 app.use('/uploads/rapports', express.static(path.join(__dirname, 'uploads/rapports')));
 app.use('/uploads/engagements', express.static(path.join(__dirname, 'uploads/engagements')));
 app.use('/uploads/livrables', express.static(path.join(__dirname, 'uploads/livrables')));
 app.use('/uploads/conventions', express.static(path.join(__dirname, 'uploads/conventions')));
+// ✅ Dossier uploads racine - permet l'accès à tous les sous-dossiers
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ✅ Dossier resultats - spécifique pour les PDF de résultats
+app.use('/uploads/resultats', express.static(path.join(__dirname, 'uploads/resultats')));
 
 if (CONFIG.nodeEnv !== 'production') {
   app.use(morgan('dev', { stream: { write: (msg) => logger.debug(msg.trim()) } }));
@@ -77,7 +83,7 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/periods', periodRoutes);
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/internships', internshipRoutes);
-// ✅ AJOUT : Route pour les rôles
+// AJOUT : Route pour les rôles
 app.use('/api/v1/roles', roleRoutes);
 
 app.use((req, res) => {

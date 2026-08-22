@@ -1,5 +1,6 @@
 // src/components/rh/ApplicationsList.jsx
 // ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES - SANS BOUTON RÉINITIALISER
+// ✅ MODIFICATION : "En attente" inclut tous les statuts SAUF Acceptee et Refusee
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -99,7 +100,6 @@ const StatCard = styled(Card)(({ active, color }) => ({
     },
 }));
 
-// ✅ Filtres Container
 const FiltersContainer = styled(Paper)({
     padding: '16px 20px',
     marginBottom: '24px',
@@ -196,9 +196,10 @@ const ApplicationsList = () => {
             setTotal(pagination.total || data.length || 0);
             setTotalPages(pagination.pages || Math.ceil((pagination.total || data.length) / limit) || 1);
 
+            // ✅ Mise à jour des stats - enAttente = tout sauf Acceptee et Refusee
             setStats({
                 total: pagination.total || data.length || 0,
-                enAttente: data.filter(a => a.statut === 'Soumise' || a.statut === 'EnAnalyse').length,
+                enAttente: data.filter(a => a.statut !== 'Acceptee' && a.statut !== 'Refusee').length,
                 acceptees: data.filter(a => a.statut === 'Acceptee').length,
                 refusees: data.filter(a => a.statut === 'Refusee').length,
                 entretien: data.filter(a => a.statut === 'Entretien').length,
@@ -225,11 +226,17 @@ const ApplicationsList = () => {
         }
     };
 
+    // ✅ MODIFICATION : filtre "enAttente" = tous les statuts SAUF Acceptee et Refusee
     const filterApplications = () => {
         let filtered = [...allApplications];
 
         if (statusFilter !== 'all') {
-            filtered = filtered.filter((a) => a.statut === statusFilter);
+            if (statusFilter === 'enAttente') {
+                // ✅ "En attente" = tous les statuts SAUF Acceptee et Refusee
+                filtered = filtered.filter(a => a.statut !== 'Acceptee' && a.statut !== 'Refusee');
+            } else {
+                filtered = filtered.filter((a) => a.statut === statusFilter);
+            }
         }
 
         if (searchTerm) {
@@ -316,9 +323,11 @@ const ApplicationsList = () => {
         navigate(`/rh/application/${id}`);
     };
 
+    // ✅ NOUVELLE LISTE DES STATUTS AVEC "enAttente"
     const statusOptions = [
         { value: 'all', label: 'Tous les statuts' },
-        { value: 'Soumise', label: 'En attente' },
+        { value: 'enAttente', label: 'En attente' },
+        { value: 'Soumise', label: 'Soumise' },
         { value: 'EnAnalyse', label: 'En analyse' },
         { value: 'Entretien', label: 'Entretien' },
         { value: 'Acceptee', label: 'Acceptee' },
@@ -358,7 +367,7 @@ const ApplicationsList = () => {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         {filteredApplications.length} candidature(s) trouvee(s)
-                        {statusFilter !== 'all' && ` • Filtre par : ${getStatusLabel(statusFilter)}`}
+                        {statusFilter !== 'all' && ` • Filtre par : ${statusFilter === 'enAttente' ? 'En attente' : getStatusLabel(statusFilter)}`}
                     </Typography>
                 </Box>
             </PageHeader>
@@ -431,9 +440,9 @@ const ApplicationsList = () => {
                 </Grid>
                 <Grid item xs={6} sm={3}>
                     <StatCard 
-                        active={isCardActive('Soumise')}
+                        active={isCardActive('enAttente')}
                         color="#d97706"
-                        onClick={() => handleStatusFilterChange('Soumise')}
+                        onClick={() => handleStatusFilterChange('enAttente')}
                     >
                         <CardContent sx={{ py: 1.5, px: 2 }}>
                             <Typography variant="caption" color="#d97706">En attente</Typography>
@@ -490,7 +499,7 @@ const ApplicationsList = () => {
                                 <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
                                         {statusFilter !== 'all' 
-                                            ? `Aucune candidature avec le statut "${getStatusLabel(statusFilter)}"`
+                                            ? `Aucune candidature avec le statut "${statusFilter === 'enAttente' ? 'En attente' : getStatusLabel(statusFilter)}"`
                                             : searchTerm
                                                 ? 'Aucune candidature ne correspond à votre recherche'
                                                 : 'Aucune candidature trouvee'}

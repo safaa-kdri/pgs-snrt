@@ -62,18 +62,47 @@ const offerSchema = new mongoose.Schema(
     documentsConcours: { type: [concoursDocumentSchema], default: [] },
 
     motifRefus: { type: String, default: null },
+
+    // ============================================
+    // NOUVEAUX CHAMPS POUR LES RESULTATS
+    // ============================================
+    resultatsPublies: {
+      type: Boolean,
+      default: false
+    },
+    resultatsPdfPath: {
+      type: String,
+      default: null
+    },
+    resultatsDescription: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    dateCloture: {
+      type: Date,
+      default: null
+    },
+    nbAcceptes: {
+      type: Number,
+      default: 0
+    },
+    nbRefuses: {
+      type: Number,
+      default: 0
+    },
   },
   { 
     timestamps: true, 
     collection: 'offers',
-    // ✅ Activer les virtuals pour qu'ils soient inclus dans les conversions JSON/objet
+    // Activer les virtuals pour qu'ils soient inclus dans les conversions JSON/objet
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
 );
 
 // ============================================
-// ✅ AJOUT : Champ virtuel pour le nombre de candidatures
+// Champ virtuel pour le nombre de candidatures
 // ============================================
 offerSchema.virtual('candidaturesCount', {
   ref: 'Application',
@@ -81,7 +110,7 @@ offerSchema.virtual('candidaturesCount', {
   foreignField: 'offreId',
   count: true,
   options: {
-    match: { isDeleted: { $ne: true } } // Exclure les candidatures supprimées
+    match: { isDeleted: { $ne: true } } // Exclure les candidatures supprimees
   }
 });
 
@@ -114,8 +143,8 @@ offerSchema.pre('validate', function preValidate(next) {
 // ============================================
 function blockDeleteIfPublished(next) {
   const statut = this.statut || this.getUpdate?.()?.statut;
-  if (statut === OFFER_STATUS.PUBLIEE) {
-    return next(new Error('Une offre publiee ne peut pas etre supprimee (RG-014). Utilisez l\'archivage.'));
+  if (statut === OFFER_STATUS.PUBLIEE || statut === OFFER_STATUS.RESULTATS_PUBLIES) {
+    return next(new Error('Une offre publiee ou avec resultats publies ne peut pas etre supprimee. Utilisez l\'archivage.'));
   }
   return next();
 }

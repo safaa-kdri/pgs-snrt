@@ -1,6 +1,7 @@
 // src/routes/applicationRoutes.js
-// ✅ CORRECTION : Suppression des routes pour les fonctions de workflow supprimées
-// ✅ CONSERVÉ : getWorkflowState pour la consultation des candidatures existantes
+// CORRECTION : Suppression des routes pour les fonctions de workflow supprimées
+// CONSERVÉ : getWorkflowState pour la consultation des candidatures existantes
+// AJOUT : Route pour clôturer les candidatures d'une offre
 
 const express = require('express');
 const router = express.Router();
@@ -22,14 +23,14 @@ router.use(authenticate());
 // ROUTES EXISTANTES
 // ============================================
 
-// ✅ ROUTE POUR LE DÉPARTEMENT - Ses candidatures
+// ROUTE POUR LE DEPARTEMENT - Ses candidatures
 router.get(
   '/department',
   authorize(ROLES.DEPARTEMENT),
   applicationController.getDepartmentApplications
 );
 
-// ✅ Création directe d'une candidature (avec statut "Soumise")
+// Creation directe d'une candidature (avec statut "Soumise")
 router.post(
   '/',
   validate(createApplicationSchema),
@@ -44,7 +45,7 @@ router.delete('/:id', applicationController.deleteApplication);
 // Soumettre une candidature (depuis brouillon)
 router.patch('/:id/submit', applicationController.submitApplication);
 
-// Changer le statut d'une candidature (RH / Département / Admin)
+// Changer le statut d'une candidature (RH / Departement / Admin)
 router.patch(
   '/:id/status',
   validate(changeApplicationStatusSchema),
@@ -59,16 +60,29 @@ router.patch(
 );
 
 // ============================================
-// ✅ CONSERVÉE - Récupérer l'état du workflow
+// CONSERVEE - Recuperer l'etat du workflow
 // ============================================
 
-// Récupérer l'état du workflow pour une candidature existante
+// Recuperer l'etat du workflow pour une candidature existante
 router.get(
   '/:id/workflow/state',
   authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.DEPARTEMENT, ROLES.ADMIN),
   applicationController.getWorkflowState
 );
 
-
+// ============================================
+// RH - CLOTURER LES CANDIDATURES D'UNE OFFRE
+// ============================================
+router.post(
+  '/offer/:offerId/close',
+  authorize(ROLES.RH, ROLES.ADMIN),
+  applicationController.closeOfferApplications
+);
 
 module.exports = router;
+
+router.post(
+    '/offer/:offerId/clean-over-accepted',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    applicationController.cleanOverAccepted
+);
