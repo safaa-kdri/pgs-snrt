@@ -1,6 +1,6 @@
 // src/components/common/SidebarAuth.jsx
-// ⚠️ MODIFICATIONS UNIQUEMENT SUR LES ESPACEMENTS ET HAUTEURS
-// AUCUN CHANGEMENT DE CONTENU
+// ✅ AJOUT : Lien "Suivi de stage" avec gestion des stages multiples
+// ✅ CONDITION : Visible uniquement si l'étudiant a au moins un stage accepté
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -16,11 +16,7 @@ import {
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { logout, login } from "../../store/slices/authSlice";
-import {
-  DescriptionOutlined,
-  VpnKeyOutlined,
-  LogoutOutlined,
-} from "@mui/icons-material";
+import api from "../../services/api"; // ✅ AJOUTÉ pour appels API
 
 // ============================================
 // STYLES
@@ -30,9 +26,9 @@ import {
 const SideCard = styled(Card)({
   backgroundColor: "#f7f7f7",
   borderRadius: "19px",
-  padding: "28px 16px 16px", // ✅ Padding réduit (était 50px 16px 16px)
+  padding: "28px 16px 16px",
   textAlign: "center",
-  minHeight: "auto", // ✅ Supprimé minHeight: 350px
+  minHeight: "auto",
   maxWidth: "285px",
   width: "100%",
   margin: "0 auto",
@@ -50,17 +46,6 @@ const SideCard = styled(Card)({
   },
 });
 
-// ✅ CARTE 2 : REMONTÉE VERS LE HAUT
-const SnrtContainer = styled(Box)({
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-  width: "100%",
-  borderTop: "1px solid #e5e7eb",
-  paddingTop: "14px", // ✅ Réduit (était 16px)
-  marginTop: "6px", // ✅ RÉDUIT (était 16px) - Rapproche les cartes
-});
-
 const AttemptsText = styled(Typography)({
   margin: "10px 0 18px",
   color: "#687480",
@@ -72,7 +57,7 @@ const AttemptsText = styled(Typography)({
 });
 
 // ============================================
-// ⬇️ STYLES DES CHAMPS DE SAISIE
+// STYLES DES CHAMPS DE SAISIE
 // ============================================
 
 const StyledTextField = styled(TextField)({
@@ -118,7 +103,7 @@ const StyledTextField = styled(TextField)({
 });
 
 // ============================================
-// ⬇️ STYLES DU CAPTCHA
+// STYLES DU CAPTCHA
 // ============================================
 
 const CaptchaBox = styled(Box)({
@@ -219,7 +204,7 @@ const TermsText = styled(Typography)({
 });
 
 // ============================================
-// ✅ STYLES POUR LA VERSION CONNECTÉE
+// STYLES POUR LA VERSION CONNECTÉE
 // ============================================
 
 // ✅ "Bienvenue," en noir (ligne 1)
@@ -238,7 +223,7 @@ const WelcomeName = styled(Typography)({
   fontSize: "16px",
   fontWeight: 700,
   color: "#1a2332",
-  marginBottom: "16px", // ✅ Réduit (était 20px)
+  marginBottom: "16px",
   lineHeight: 1.2,
 });
 
@@ -251,8 +236,26 @@ const StyledLink = styled(Button)({
   textDecoration: "underline",
   textUnderlineOffset: "2px",
   textTransform: "none",
-  padding: "2px 0", // ✅ Réduit (était 4px 0)
+  padding: "2px 0",
   minWidth: "auto",
+  "&:hover": {
+    color: "#0044CC",
+    backgroundColor: "transparent",
+  },
+});
+
+// ✅ LIEN "Suivi de stage" - NOUVEAU - bleu, souligné, centré
+const StyledLinkStage = styled(Button)({
+  fontFamily: "Inter, sans-serif",
+  fontSize: "16px",
+  fontWeight: 400,
+  color: "#0066FF",
+  textDecoration: "underline",
+  textUnderlineOffset: "2px",
+  textTransform: "none",
+  padding: "2px 0",
+  minWidth: "auto",
+  marginBottom: "8px", // Espacement
   "&:hover": {
     color: "#0044CC",
     backgroundColor: "transparent",
@@ -268,9 +271,9 @@ const StyledLink2 = styled(Button)({
   textDecoration: "underline",
   textUnderlineOffset: "2px",
   textTransform: "none",
-  padding: "2px 0", // ✅ Réduit (était 4px 0)
+  padding: "2px 0",
   minWidth: "auto",
-  marginBottom: "20px", // ✅ Réduit (était 28px)
+  marginBottom: "20px",
   "&:hover": {
     color: "#0044CC",
     backgroundColor: "transparent",
@@ -281,7 +284,7 @@ const StyledLink2 = styled(Button)({
 const LogoutBtn = styled(Button)({
   width: "100%",
   maxWidth: "220px",
-  height: "42px", // ✅ Réduit (était 45px)
+  height: "42px",
   borderRadius: "25px",
   backgroundColor: "#1689A3",
   color: "#ffffff",
@@ -298,45 +301,15 @@ const LogoutBtn = styled(Button)({
   },
 });
 
-// ✅ SECTION SNRT - CONTENU CONSERVÉ, SEUL L'ESPACEMENT CHANGE
-const SnrtContainerStyled = styled(Box)({
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-  width: "100%",
-  borderTop: "1px solid #e5e7eb",
-  paddingTop: "14px",
-  marginTop: "6px", // ✅ RÉDUIT - Rapproche les cartes
-});
-
-const SnrtLink = styled(Button)({
-  textTransform: "none",
-  fontFamily: "Inter, sans-serif",
-  fontSize: "13px",
-  fontWeight: 500,
-  color: "#1a2332",
-  justifyContent: "flex-start",
-  gap: "10px",
-  padding: "6px 4px",
-  "&:hover": {
-    color: "#148aa0",
-    backgroundColor: "transparent",
-  },
-  "& .MuiButton-startIcon": {
-    color: "#148aa0",
-  },
-});
-
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
 const SidebarAuth = () => {
-  console.log("SidebarAuth mounted — file updated:", new Date().toISOString());
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  
+
   const { user, isAuthenticated } = useSelector((state) => state.auth);
 
   const [cin, setCin] = useState("");
@@ -347,9 +320,35 @@ const SidebarAuth = () => {
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // ✅ NOUVEAU : État pour vérifier si l'étudiant a au moins un stage accepté
+  const [hasAtLeastOneActiveInternship, setHasAtLeastOneActiveInternship] = useState(false);
+  const [checkingInternship, setCheckingInternship] = useState(false);
+
   useEffect(() => {
     regenerateCaptcha();
   }, [location.pathname]);
+
+  // ✅ NOUVEAU : Vérifier les stages de l'étudiant quand il est connecté
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      checkInternships();
+    } else {
+      setHasAtLeastOneActiveInternship(false);
+    }
+  }, [isAuthenticated, user]);
+
+  const checkInternships = async () => {
+    setCheckingInternship(true);
+    try {
+      const response = await api.get('/internships/student/has-active');
+      setHasAtLeastOneActiveInternship(response.data?.hasActive || false);
+    } catch (error) {
+      console.warn('⚠️ Aucun stage trouvé pour l\'étudiant');
+      setHasAtLeastOneActiveInternship(false);
+    } finally {
+      setCheckingInternship(false);
+    }
+  };
 
   const regenerateCaptcha = () => {
     const chars =
@@ -416,7 +415,7 @@ const SidebarAuth = () => {
   const isBlocked = attempts >= 3;
 
   // ========================================== //
-  // ✅ VERSION CONNECTÉE - HAUTEUR RÉDUITE
+  // ✅ VERSION CONNECTÉE
   // ========================================== //
   if (isAuthenticated && user) {
     const fullName = `${user.prenom || ''} ${user.nom || ''}`.trim() || "Utilisateur";
@@ -430,12 +429,19 @@ const SidebarAuth = () => {
           {/* ✅ Nom dynamique (ligne 2) */}
           <WelcomeName>{fullName} !</WelcomeName>
 
-          {/* ✅ Lien 1 : Suivi des offres */}
+          {/* ✅ Lien 1 : Suivi des offres (toujours visible) */}
           <StyledLink onClick={() => navigate("/dashboard/applications")}>
             Suivi des offres
           </StyledLink>
 
-          {/* ✅ Lien 2 : Changer mon mot de passe */}
+          {/* ✅ Lien 2 : Suivi de stage (visible seulement si au moins un stage accepté) */}
+          {hasAtLeastOneActiveInternship && (
+            <StyledLinkStage onClick={() => navigate("/dashboard/stages")}>
+              Suivi de stage
+            </StyledLinkStage>
+          )}
+
+          {/* ✅ Lien 3 : Changer mon mot de passe */}
           <StyledLink2 onClick={() => navigate("/profile")}>
             Changer mon mot de passe
           </StyledLink2>
@@ -451,22 +457,17 @@ const SidebarAuth = () => {
   }
 
   // ========================================== //
-  // ❌ VERSION NON CONNECTÉE (Formulaire - inchangé)
+  // ❌ VERSION NON CONNECTÉE (Formulaire)
   // ========================================== //
   return (
     <SideCard>
-      <Box sx={{ position: "absolute", top: 6, right: 8 }}>
-        <Typography variant="caption" sx={{ fontSize: 10, color: "#999" }}>
-          DEV: SidebarAuth
-        </Typography>
-      </Box>
       <h2>Authentification</h2>
 
       <AttemptsText>
         <div>Vous avez <strong>3 tentatives</strong> pour</div>
         <div>entrer un mot de passe</div>
         <div>correct. Après la 3ème</div>
-        <div>tentative incorrecte, votre </div> 
+        <div>tentative incorrecte, votre</div>
         <div>compte sera <strong>bloqué pendant</strong></div>
         <div><strong>60 minutes.</strong></div>
       </AttemptsText>

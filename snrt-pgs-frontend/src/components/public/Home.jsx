@@ -1,4 +1,6 @@
 // src/components/public/Home.jsx
+// ✅ CORRECTION : Rechargement des offres après déconnexion
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -84,6 +86,7 @@ const Home = () => {
     // ========================================== //
 
     const { offers, loading, error, total, page, pages, filters } = useSelector((state) => state.offers);
+    const { isAuthenticated } = useSelector((state) => state.auth);
     const {
         results,
         loading: resultsLoading,
@@ -123,6 +126,7 @@ const Home = () => {
 
     // ========================================== //
     // 4️⃣ CHARGEMENT DES OFFRES - TOUJOURS ACTIF
+    // ✅ AJOUT : isAuthenticated comme dépendance pour recharger après login/logout
     // ========================================== //
 
     useEffect(() => {
@@ -139,9 +143,10 @@ const Home = () => {
         if (date) params.date = date;
 
         console.log('📤 [Home] Chargement des offres avec params:', params);
+        console.log('📤 [Home] isAuthenticated:', isAuthenticated);
         dispatch(fetchOffers(params));
         
-    }, [dispatch, filters, page, searchParams]);
+    }, [dispatch, filters, page, searchParams, isAuthenticated]); // ✅ AJOUT : isAuthenticated
 
     // ========================================== //
     // 5️⃣ CHARGEMENT DES DÉPARTEMENTS
@@ -152,7 +157,7 @@ const Home = () => {
     }, [dispatch]);
 
     // ========================================== //
-    // 6️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF) - ✅ Accessible sans authentification
+    // 6️⃣ CHARGEMENT DES RÉSULTATS (ONGLET ACTIF)
     // ========================================== //
 
     useEffect(() => {
@@ -346,7 +351,7 @@ const Home = () => {
             </Box>
 
             {/* ========================================== */}
-            {/* CONTENU */}
+            {/* CONTENU - OFFRES */}
             {/* ========================================== */}
 
             {activeTab === 'offres' ? (
@@ -355,20 +360,22 @@ const Home = () => {
                         <CircularProgress sx={{ color: '#148aa0' }} />
                     </Box>
                 ) : error ? (
-                    <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+                    <Alert severity="error" sx={{ mt: 2, borderRadius: '10px' }}>
+                        {error}
+                    </Alert>
                 ) : offers.length === 0 ? (
                     <Box sx={{ padding: '20px', textAlign: 'center', background: '#fbf9f9', borderRadius: '19px' }}>
                         <i className="fa-solid fa-circle-info" style={{ fontSize: '24px', color: '#168eb4' }}></i>
                         <h3 style={{ margin: '10px 0 5px', fontFamily: 'Inter, sans-serif', fontWeight: 700 }}>
                             {searchParams.get('search') || searchParams.get('typeStage') || searchParams.get('date') ? 
                                 'Aucune offre ne correspond à vos critères de recherche.' :
-                                'Aucune offre disponible'
+                                'Aucune offre disponible pour le moment'
                             }
                         </h3>
                         <p style={{ color: '#555', fontFamily: 'Inter, sans-serif' }}>
                             {searchParams.get('search') || searchParams.get('typeStage') || searchParams.get('date') ? 
                                 'Essayez de modifier vos critères de recherche.' :
-                                'Restez connecté. Les nouvelles offres seront bientôt publiées.'
+                                'De nouvelles offres seront bientôt publiées. Revenez plus tard !'
                             }
                         </p>
                         {(searchParams.get('search') || searchParams.get('typeStage') || searchParams.get('date')) && (
@@ -391,17 +398,21 @@ const Home = () => {
                                 <OfferCard key={offer._id} offer={offer} />
                             ))}
                         </Box>
-                        {renderPagination()}
+                        {pages > 1 && renderPagination()}
                     </>
                 )
             ) : (
-                // ✅ Onglet Résultats - Accessible sans authentification
+                // ========================================== //
+                // ONGLET RÉSULTATS
+                // ========================================== //
                 resultsLoading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                         <CircularProgress sx={{ color: '#148aa0' }} />
                     </Box>
                 ) : resultsError ? (
-                    <Alert severity="error" sx={{ mt: 2 }}>{resultsError}</Alert>
+                    <Alert severity="error" sx={{ mt: 2, borderRadius: '10px' }}>
+                        {resultsError}
+                    </Alert>
                 ) : results.length === 0 ? (
                     <Box sx={{ padding: '20px', textAlign: 'center', background: '#fbf9f9', borderRadius: '19px' }}>
                         <i className="fa-solid fa-circle-info" style={{ fontSize: '24px', color: '#168eb4' }}></i>

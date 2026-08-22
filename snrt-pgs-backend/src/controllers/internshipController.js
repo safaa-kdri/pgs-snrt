@@ -1,13 +1,6 @@
 // src/controllers/internshipController.js
-// CORRECTION : Conversion explicite en ObjectId pour getInternshipByApplication
-// CORRECTION : encadrantId peut etre null dans createInternship
-// CORRECTION : Verification des conflits de periode avec plusieurs statuts
-// CORRECTION : Permettre a l'etudiant de voir son stage avec verification de permission
-// CORRECTION : uploadEngagementConfidentialite - utilisation de 'id' au lieu de 'internshipId' + logs
-// AJOUT : updateInternshipStatus - Mettre a jour le statut d'un stage
-// AJOUT : sendDemandeStageToStudent - Envoyer la demande de stage a l'etudiant
-// AJOUT : downloadDemandeStage - Telecharger la demande de stage existante pour l'etudiant
-// CORRECTION : createInternship - Retourner le stage existant au lieu d'une erreur
+// ✅ LOGIQUE : Une candidature Acceptée = stage actif
+// ✅ Plus besoin de la collection internships pour l'affichage
 
 const mongoose = require('mongoose');
 const path = require('path');
@@ -22,6 +15,137 @@ const Notification = require('../models/Notification');
 const pdfService = require('../services/pdfService');
 const emailService = require('../services/emailService');
 const logger = require('../utils/logger');
+
+// ============================================
+// ✅ VÉRIFIER SI L'ÉTUDIANT A UNE CANDIDATURE ACCEPTÉE
+// ============================================
+exports.hasActiveInternship = async (req, res) => {
+    try {
+        const studentId = req.user._id;
+
+        console.log('🔍 [hasActiveInternship] Étudiant ID:', studentId);
+
+        // ✅ Vérifier si l'étudiant a une candidature Acceptée
+        const acceptedApplication = await Application.findOne({
+            etudiantId: studentId,
+            statut: 'Acceptée'
+        }).populate('offreId', 'titre');
+
+        const hasActive = !!acceptedApplication;
+
+        console.log('🔍 [hasActiveInternship] Candidature Acceptée trouvée:', hasActive);
+        if (acceptedApplication) {
+            console.log('🔍 [hasActiveInternship] Titre:', acceptedApplication.offreId?.titre);
+        }
+
+        return res.status(200).json({
+            success: true,
+            hasActive: hasActive,
+            internship: acceptedApplication ? {
+                id: acceptedApplication._id,
+                titre: acceptedApplication.offreId?.titre || 'Stage',
+                statut: acceptedApplication.statut
+            } : null
+        });
+
+    } catch (error) {
+        console.error('❌ [hasActiveInternship] Erreur:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la vérification',
+            hasActive: false
+        });
+    }
+};
+
+// ============================================
+// ✅ RÉCUPÉRER TOUTES LES CANDIDATURES ACCEPTÉES
+// ============================================
+exports.getStudentInternships = async (req, res) => {
+    try {
+        const studentId = req.user._id;
+
+        console.log('🔍 [getStudentInternships] Étudiant ID:', studentId);
+
+        // ✅ Récupérer TOUTES les candidatures Acceptées
+        const acceptedApplications = await Application.find({
+            etudiantId: studentId,
+            statut: 'Acceptée'
+        })
+            .populate('offreId', 'titre typeStage departementId')
+            .populate('etudiantId', 'nom prenom email universite filiere')
+            .sort({ createdAt: -1 });
+
+        console.log('🔍 [getStudentInternships] Candidatures Acceptées trouvées:', acceptedApplications.length);
+
+        // ✅ Transformer les candidatures en "stages" virtuels
+        const virtualInternships = acceptedApplications.map(app => ({
+            _id: app._id,
+            etudiantId: app.etudiantId,
+            offreId: app.offreId,
+            applicationId: app._id,
+            dateDebut: app.offreId?.dateDebut || new Date(),
+            dateFin: app.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            statut: 'EnCours',
+            sujetTitre: app.offreId?.titre || 'Stage',
+            encadrantId: null,
+            livrables: [],
+            remarquesEncadrant: [],
+            convention: { status: 'EnAttente' },
+            evaluation: null,
+            attestationGeneree: false,
+            createdAt: app.createdAt,
+            updatedAt: app.updatedAt,
+            // ✅ Indiquer que c'est un stage virtuel
+            isVirtual: true
+        }));
+
+        return res.status(200).json({
+            success: true,
+            count: virtualInternships.length,
+            data: virtualInternships
+        });
+
+    } catch (error) {
+        console.error('❌ [getStudentInternships] Erreur:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération des stages'
+        });
+    }
+};
+
+// ============================================
+// ✅ RÉCUPÉRER TOUS LES STAGES DE L'ENCADRANT
+// ============================================
+exports.getSupervisorInternships = async (req, res) => {
+    try {
+        const supervisorId = req.user._id;
+
+        console.log('🔍 [getSupervisorInternships] Encadrant ID:', supervisorId);
+
+        const internships = await Internship.find({ encadrantId: supervisorId })
+            .populate('offreId', 'titre typeStage departementId')
+            .populate('etudiantId', 'nom prenom email universite filiere')
+            .populate('encadrantId', 'nom prenom email')
+            .sort({ createdAt: -1 });
+
+        console.log('🔍 [getSupervisorInternships] Stages trouvés:', internships.length);
+
+        return res.status(200).json({
+            success: true,
+            count: internships.length,
+            data: internships
+        });
+
+    } catch (error) {
+        console.error('❌ [getSupervisorInternships] Erreur:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération des stages'
+        });
+    }
+};
 
 // ============================================
 // GET - Recuperer tous les stages
@@ -49,14 +173,46 @@ exports.getAllInternships = async (req, res) => {
 };
 
 // ============================================
-// GET - Recuperer un stage par ID
+// GET - Recuperer un stage par ID (ou candidature)
 // ============================================
 exports.getInternshipById = async (req, res) => {
     try {
-        const internship = await Internship.findById(req.params.id)
-            .populate('etudiantId', 'nom prenom email telephone cin')
+        const { id } = req.params;
+        let internship = null;
+
+        // 1. Chercher dans internships
+        internship = await Internship.findById(id)
+            .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
             .populate('encadrantId', 'nom prenom email')
-            .populate('offreId', 'titre description');
+            .populate('offreId', 'titre description typeStage');
+
+        // 2. Si pas trouvé, chercher dans applications (candidature Acceptée)
+        if (!internship) {
+            const application = await Application.findById(id)
+                .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
+                .populate('offreId', 'titre description typeStage');
+
+            if (application && application.statut === 'Acceptée') {
+                // Créer un stage virtuel
+                internship = {
+                    _id: application._id,
+                    etudiantId: application.etudiantId,
+                    offreId: application.offreId,
+                    applicationId: application._id,
+                    dateDebut: application.offreId?.dateDebut || new Date(),
+                    dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                    statut: 'EnCours',
+                    sujetTitre: application.offreId?.titre || 'Stage',
+                    encadrantId: null,
+                    livrables: [],
+                    remarquesEncadrant: [],
+                    convention: { status: 'EnAttente' },
+                    evaluation: null,
+                    attestationGeneree: false,
+                    isVirtual: true
+                };
+            }
+        }
         
         if (!internship) {
             return res.status(404).json({
@@ -70,7 +226,7 @@ exports.getInternshipById = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                ...internship.toObject(),
+                ...internship,
                 evaluation: evaluation || null
             }
         });
@@ -84,7 +240,7 @@ exports.getInternshipById = async (req, res) => {
 };
 
 // ============================================
-// GET - Recuperer les stages d'un encadrant
+// GET - Recuperer les stages d'un encadrant (DEPRECATED)
 // ============================================
 exports.getInternshipsBySupervisor = async (req, res) => {
     try {
@@ -111,7 +267,7 @@ exports.getInternshipsBySupervisor = async (req, res) => {
 };
 
 // ============================================
-// GET - Recuperer les stages d'un etudiant
+// GET - Recuperer les stages d'un etudiant (DEPRECATED)
 // ============================================
 exports.getInternshipsByStudent = async (req, res) => {
     try {
@@ -137,7 +293,7 @@ exports.getInternshipsByStudent = async (req, res) => {
 };
 
 // ============================================
-// GET - Recuperer un stage par Application ID (VERSION ROBUSTE AVEC PERMISSIONS)
+// GET - Recuperer un stage par Application ID
 // ============================================
 exports.getInternshipByApplication = async (req, res) => {
     try {
@@ -145,82 +301,60 @@ exports.getInternshipByApplication = async (req, res) => {
         const userId = req.user.id;
         const userRole = req.user.role;
 
-        console.log(`[getInternshipByApplication] applicationId: ${applicationId}, role: ${userRole}, userId: ${userId}`);
+        console.log(`[getInternshipByApplication] applicationId: ${applicationId}`);
 
-        // ESSAYER PLUSIEURS FORMATS
         let internship = null;
-        let objectId = null;
 
-        try {
-            objectId = new mongoose.Types.ObjectId(applicationId);
-        } catch (err) {
-            console.log(`[getInternshipByApplication] L'ID n'est pas un ObjectId valide: ${applicationId}`);
-        }
+        // 1. Chercher dans internships
+        internship = await Internship.findOne({ applicationId: applicationId })
+            .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
+            .populate('encadrantId', 'nom prenom email')
+            .populate('offreId', 'titre description typeStage dateDebut dateFin')
+            .populate('applicationId');
 
-        // 1. Recherche avec ObjectId
-        if (objectId) {
-            console.log(`[getInternshipByApplication] Recherche avec ObjectId: ${objectId}`);
-            internship = await Internship.findOne({ applicationId: objectId })
-                .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
-                .populate('encadrantId', 'nom prenom email')
-                .populate('offreId', 'titre description typeStage dateDebut dateFin')
-                .populate('applicationId');
-        }
-
-        // 2. Si pas trouve, recherche avec la chaine
+        // 2. Si pas trouvé, chercher dans applications
         if (!internship) {
-            console.log(`[getInternshipByApplication] Recherche avec la chaine: ${applicationId}`);
-            internship = await Internship.findOne({ applicationId: applicationId })
+            const application = await Application.findById(applicationId)
                 .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
-                .populate('encadrantId', 'nom prenom email')
-                .populate('offreId', 'titre description typeStage dateDebut dateFin')
-                .populate('applicationId');
-        }
+                .populate('offreId', 'titre description typeStage dateDebut dateFin');
 
-        // 3. Si toujours pas trouve, essayer avec $eq
-        if (!internship && objectId) {
-            console.log(`[getInternshipByApplication] Recherche avec $eq: ${objectId}`);
-            internship = await Internship.findOne({ applicationId: { $eq: objectId } })
-                .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
-                .populate('encadrantId', 'nom prenom email')
-                .populate('offreId', 'titre description typeStage dateDebut dateFin')
-                .populate('applicationId');
+            if (application && application.statut === 'Acceptée') {
+                internship = {
+                    _id: application._id,
+                    etudiantId: application.etudiantId,
+                    offreId: application.offreId,
+                    applicationId: application._id,
+                    dateDebut: application.offreId?.dateDebut || new Date(),
+                    dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                    statut: 'EnCours',
+                    sujetTitre: application.offreId?.titre || 'Stage',
+                    encadrantId: null,
+                    livrables: [],
+                    remarquesEncadrant: [],
+                    convention: { status: 'EnAttente' },
+                    evaluation: null,
+                    attestationGeneree: false,
+                    isVirtual: true
+                };
+            }
         }
 
         if (!internship) {
-            console.log(`[getInternshipByApplication] Aucun stage trouve pour applicationId: ${applicationId}`);
-            
-            // Diagnostic : Verifier combien de stages existent
-            const allInternships = await Internship.find().select('applicationId _id').limit(10);
-            console.log(`[getInternshipByApplication] Stages existants (10 max):`, 
-                allInternships.map(s => ({ 
-                    id: s._id, 
-                    appId: s.applicationId,
-                    appIdType: typeof s.applicationId,
-                    appIdString: s.applicationId?.toString()
-                }))
-            );
-            
             return res.status(404).json({
                 success: false,
                 message: 'Aucun stage trouve pour cette candidature'
             });
         }
 
-        // VERIFICATION DES PERMISSIONS : Si l'utilisateur est un etudiant, verifier qu'il est bien le proprietaire
         if (userRole === 'Etudiant') {
             const etudiantId = internship.etudiantId._id?.toString() || internship.etudiantId?.toString();
             if (etudiantId !== userId) {
-                console.log(`[getInternshipByApplication] Acces refuse: etudiant ${userId} != ${etudiantId}`);
                 return res.status(403).json({
                     success: false,
                     message: 'Vous n\'avez pas acces a ce stage'
                 });
             }
-            console.log(`[getInternshipByApplication] Acces autorise pour l'etudiant ${userId}`);
         }
-
-        console.log(`[getInternshipByApplication] Stage trouve: ${internship._id}`);
 
         return res.status(200).json({
             success: true,
@@ -238,7 +372,6 @@ exports.getInternshipByApplication = async (req, res) => {
 
 // ============================================
 // POST - Creer un stage (RH, Admin ou Departement)
-// CORRECTION : Retourner le stage existant au lieu d'une erreur
 // ============================================
 exports.createInternship = async (req, res) => {
     try {
@@ -247,50 +380,30 @@ exports.createInternship = async (req, res) => {
         console.log('[createInternship] Donnees recues:', {
             etudiantId,
             offreId,
-            applicationId,
-            dateDebut,
-            dateFin,
-            encadrantId
+            applicationId
         });
 
-        // Verifier que l'application existe
         const application = await Application.findById(applicationId);
         if (!application) {
-            console.log('[createInternship] Application non trouvee:', applicationId);
             return res.status(404).json({
                 success: false,
                 message: 'Candidature non trouvee'
             });
         }
 
-        // Verifier que l'offre existe
         const offer = await Offer.findById(offreId);
         if (!offer) {
-            console.log('[createInternship] Offre non trouvee:', offreId);
             return res.status(404).json({
                 success: false,
                 message: 'Offre non trouvee'
             });
         }
 
-        // Verifier que l'etudiant existe
-        const student = await UtilisateurExterne.findById(etudiantId);
-        if (!student) {
-            console.log('[createInternship] Etudiant non trouve:', etudiantId);
-            return res.status(404).json({
-                success: false,
-                message: 'Etudiant non trouve'
-            });
-        }
-
-        // Verifier qu'un stage n'existe pas deja pour cette application
         const existingInternship = await Internship.findOne({
             applicationId: applicationId
         });
         
         if (existingInternship) {
-            console.log('[createInternship] Stage deja existant pour cette application:', existingInternship._id);
-            // Au lieu d'erreur, retourner le stage existant
             return res.status(200).json({
                 success: true,
                 message: 'Stage deja existant',
@@ -298,59 +411,16 @@ exports.createInternship = async (req, res) => {
             });
         }
 
-        // Verifier qu'un stage n'existe pas deja pour cet etudiant avec chevauchement de periode
-        const activeStatuses = [
-            'EnCours', 
-            'EngagementEnvoye', 
-            'EngagementRecu', 
-            'EnAttenteValidationDirecteur', 
-            'ValideParDirecteur'
-        ];
-        
-        const existingStudentInternship = await Internship.findOne({
-            etudiantId: etudiantId,
-            statut: { $in: activeStatuses }
-        });
-        
-        if (existingStudentInternship) {
-            // Verifier si les periodes se chevauchent
-            const newStart = new Date(dateDebut || offer.dateDebut);
-            const newEnd = new Date(dateFin || offer.dateFin);
-            const currentStart = new Date(existingStudentInternship.dateDebut);
-            const currentEnd = new Date(existingStudentInternship.dateFin);
-
-            const hasOverlap = (newStart <= currentEnd && newEnd >= currentStart);
-
-            if (hasOverlap) {
-                console.log('[createInternship] Etudiant deja en stage pendant cette periode');
-                return res.status(400).json({
-                    success: false,
-                    message: `Cet etudiant a deja un stage en cours du ${new Date(currentStart).toLocaleDateString('fr-FR')} au ${new Date(currentEnd).toLocaleDateString('fr-FR')} : "${existingStudentInternship.sujetTitre || 'Stage sans titre'}"`,
-                    data: {
-                        currentInternship: {
-                            id: existingStudentInternship._id,
-                            dateDebut: existingStudentInternship.dateDebut,
-                            dateFin: existingStudentInternship.dateFin,
-                            sujetTitre: existingStudentInternship.sujetTitre
-                        }
-                    }
-                });
-            }
-        }
-
-        // Recuperer le sujet de l'offre
         const sujet = offer.sujets && offer.sujets.length > 0 ? offer.sujets[0] : null;
 
-        // Creer le stage avec encadrantId = null si non fourni
         const internship = await Internship.create({
             dateDebut: dateDebut || offer.dateDebut || new Date(),
             dateFin: dateFin || offer.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             statut: 'EnCours',
             etudiantId,
-            encadrantId: encadrantId || null,  // Peut etre null
+            encadrantId: encadrantId || null,
             offreId,
             applicationId,
-            // Copier le sujet de l'offre
             sujetTitre: sujet?.titre || null,
             sujetDescription: sujet?.description || null,
             sujetObjectifs: sujet?.objectifs || null,
@@ -358,18 +428,14 @@ exports.createInternship = async (req, res) => {
             sujetLivrables: sujet?.livrables || null,
         });
 
-        console.log('[createInternship] Stage cree avec ID:', internship._id);
-        
-        // Mettre a jour le statut de la candidature
         application.statut = 'Acceptee';
         await application.save();
 
-        // Notification a l'etudiant
         try {
             await Notification.create({
                 type: 'InApp',
                 titre: 'Stage cree',
-                message: `Votre stage "${offer.titre}" a ete cree avec succes. Un encadrant vous sera affecte prochainement.`,
+                message: `Votre stage "${offer.titre}" a ete cree avec succes.`,
                 userId: etudiantId,
                 userModel: 'UtilisateurExterne',
                 lien: `/dashboard/internships/${internship._id}`,
@@ -749,7 +815,7 @@ exports.validateApplicationDocuments = async (req, res) => {
             await application.save();
 
             return res.status(200).json({
-                success: true,
+                success: false,
                 message: 'Candidature refuse'
             });
         }
@@ -927,12 +993,7 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
         const { id } = req.params;
         const file = req.file;
 
-        console.log('[uploadEngagementConfidentialite] ID recu:', id);
-        console.log('[uploadEngagementConfidentialite] User:', req.user?._id);
-        console.log('[uploadEngagementConfidentialite] File:', file);
-
         if (!file) {
-            console.log('[uploadEngagementConfidentialite] Aucun fichier fourni');
             return res.status(400).json({
                 success: false,
                 message: 'Aucun fichier fourni'
@@ -940,7 +1001,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
         }
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            console.log('[uploadEngagementConfidentialite] ID invalide:', id);
             return res.status(400).json({
                 success: false,
                 message: 'ID de stage invalide'
@@ -950,19 +1010,13 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
         const internship = await Internship.findById(id);
 
         if (!internship) {
-            console.log('[uploadEngagementConfidentialite] Stage non trouve pour ID:', id);
             return res.status(404).json({
                 success: false,
                 message: 'Stage non trouve'
             });
         }
 
-        console.log('[uploadEngagementConfidentialite] Stage trouve:', internship._id);
-        console.log('[uploadEngagementConfidentialite] Etudiant du stage:', internship.etudiantId);
-        console.log('[uploadEngagementConfidentialite] Utilisateur connecte:', req.user?._id);
-
         if (!req.user) {
-            console.log('[uploadEngagementConfidentialite] Utilisateur non authentifie');
             return res.status(401).json({
                 success: false,
                 message: 'Utilisateur non authentifie'
@@ -970,7 +1024,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
         }
 
         if (internship.etudiantId.toString() !== req.user._id.toString()) {
-            console.log('[uploadEngagementConfidentialite] Acces refuse: etudiant non proprietaire');
             return res.status(403).json({
                 success: false,
                 message: 'Vous n\'etes pas autorise a deposer ce document'
@@ -988,7 +1041,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
         internship.statut = 'EngagementRecu';
         await internship.save();
 
-        console.log('[uploadEngagementConfidentialite] Document enregistre avec succes');
         logger.info(`Document d'engagement depose pour le stage ${internship._id} par ${req.user?.email}`);
 
         res.status(200).json({
@@ -1077,9 +1129,6 @@ exports.generateDemandeStage = async (req, res) => {
 
         const pdfPath = await pdfService.generateDemandeStage(internshipData);
 
-        // S'assurer que le fichier est sauvegarde avec le bon nom
-        // pdfService.generateDemandeStage sauvegarde deja le fichier dans uploads/demandes/
-
         internship.statut = 'DemandeEnvoyee';
         await internship.save();
 
@@ -1104,22 +1153,18 @@ exports.downloadDemandeStage = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verifier que le stage existe
         const internship = await Internship.findById(id)
             .populate('etudiantId');
 
         if (!internship) {
-            console.log('[downloadDemandeStage] Stage non trouve');
             return res.status(404).json({
                 success: false,
                 message: 'Stage non trouve'
             });
         }
 
-        // Verifier que l'etudiant est bien le proprietaire (si c'est un etudiant)
         if (req.user?.role === 'Etudiant') {
             if (internship.etudiantId._id.toString() !== req.user._id.toString()) {
-                console.log('[downloadDemandeStage] Acces refuse - etudiant non proprietaire');
                 return res.status(403).json({
                     success: false,
                     message: 'Vous n\'etes pas autorise a acceder a cette demande'
@@ -1127,30 +1172,20 @@ exports.downloadDemandeStage = async (req, res) => {
             }
         }
 
-        // Verifier que la demande a ete generee (statut DemandeEnvoyee ou superieur)
         const statutsValides = ['DemandeEnvoyee', 'ValideParDirecteur', 'Cloturee', 'Termine'];
         if (!statutsValides.includes(internship.statut)) {
-            console.log('[downloadDemandeStage] Demande non encore generee, statut:', internship.statut);
             return res.status(400).json({
                 success: false,
                 message: 'La demande de stage n\'a pas encore ete generee'
             });
         }
 
-        // Verifier que le fichier existe
         const dir = path.join(__dirname, '../../uploads/demandes');
         const fileName = `demande_stage_${id}.pdf`;
         const filePath = path.join(dir, fileName);
 
-        console.log('[downloadDemandeStage] Recherche du fichier:', filePath);
-
-        // Verifier si le fichier existe
         if (!fs.existsSync(filePath)) {
-            console.log('[downloadDemandeStage] Fichier non trouve:', filePath);
-            
-            // Fallback : Si le fichier n'existe pas, generer une nouvelle demande (seulement pour RH/Admin)
             if (req.user?.role === 'RH' || req.user?.role === 'Administrateur') {
-                console.log('[downloadDemandeStage] Fichier non trouve, regeneration pour RH/Admin...');
                 return exports.generateDemandeStage(req, res);
             }
             
@@ -1160,7 +1195,6 @@ exports.downloadDemandeStage = async (req, res) => {
             });
         }
 
-        // Envoyer le fichier
         res.download(filePath, `Demande_Stage_${internship.etudiantId.prenom || ''}_${internship.etudiantId.nom || ''}.pdf`, (err) => {
             if (err) {
                 console.error('Erreur telechargement demande:', err.message);
@@ -1170,8 +1204,6 @@ exports.downloadDemandeStage = async (req, res) => {
                         message: 'Erreur lors du telechargement'
                     });
                 }
-            } else {
-                console.log('[downloadDemandeStage] Demande telechargee avec succes');
             }
         });
 
@@ -1243,25 +1275,18 @@ exports.sendDemandeStageToStudent = async (req, res) => {
     try {
         const { id } = req.params;
 
-        console.log('[sendDemandeStageToStudent] ID recu:', id);
-
         const internship = await Internship.findById(id)
             .populate('etudiantId')
             .populate('offreId');
 
         if (!internship) {
-            console.log('[sendDemandeStageToStudent] Stage non trouve');
             return res.status(404).json({
                 success: false,
                 message: 'Stage non trouve'
             });
         }
 
-        console.log('[sendDemandeStageToStudent] Stage trouve:', internship._id);
-        console.log('[sendDemandeStageToStudent] Statut actuel:', internship.statut);
-
         if (internship.statut !== 'DemandeEnvoyee' && internship.statut !== 'EnAttenteValidationDirecteur') {
-            console.log('[sendDemandeStageToStudent] Statut invalide:', internship.statut);
             return res.status(400).json({
                 success: false,
                 message: 'La demande de stage n\'a pas encore ete generee'
@@ -1269,14 +1294,11 @@ exports.sendDemandeStageToStudent = async (req, res) => {
         }
 
         if (!internship.etudiantId || !internship.etudiantId.email) {
-            console.log('[sendDemandeStageToStudent] Etudiant sans email');
             return res.status(400).json({
                 success: false,
                 message: 'L\'etudiant associe n\'a pas d\'adresse email'
             });
         }
-
-        console.log('[sendDemandeStageToStudent] Envoi a:', internship.etudiantId.email);
 
         const internshipData = {
             _id: internship._id,
@@ -1287,7 +1309,6 @@ exports.sendDemandeStageToStudent = async (req, res) => {
         };
 
         const pdfPath = await pdfService.generateDemandeStage(internshipData);
-        console.log('[sendDemandeStageToStudent] PDF genere:', pdfPath);
 
         await emailService.sendDemandeStageToStudent({
             to: internship.etudiantId.email,
@@ -1295,7 +1316,6 @@ exports.sendDemandeStageToStudent = async (req, res) => {
             pdfPath: pdfPath,
         });
 
-        console.log(`[sendDemandeStageToStudent] Email envoye a ${internship.etudiantId.email}`);
         logger.info(`Demande de stage envoyee a l'etudiant ${internship.etudiantId.email}`);
 
         return res.status(200).json({
@@ -1580,9 +1600,6 @@ exports.updateInternshipStatus = async (req, res) => {
         const { id } = req.params;
         const { statut } = req.body;
 
-        console.log('[updateInternshipStatus] ID:', id);
-        console.log('[updateInternshipStatus] Nouveau statut:', statut);
-
         if (!statut) {
             return res.status(400).json({
                 success: false,
@@ -1591,7 +1608,6 @@ exports.updateInternshipStatus = async (req, res) => {
         }
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            console.log('[updateInternshipStatus] ID invalide:', id);
             return res.status(400).json({
                 success: false,
                 message: 'ID de stage invalide'
@@ -1600,7 +1616,6 @@ exports.updateInternshipStatus = async (req, res) => {
 
         const internship = await Internship.findById(id);
         if (!internship) {
-            console.log('[updateInternshipStatus] Stage non trouve:', id);
             return res.status(404).json({
                 success: false,
                 message: 'Stage non trouve'
@@ -1611,7 +1626,6 @@ exports.updateInternshipStatus = async (req, res) => {
         internship.statut = statut;
         await internship.save();
 
-        console.log(`[updateInternshipStatus] Statut change de ${ancienStatut} a ${statut}`);
         logger.info(`Statut du stage ${id} change de ${ancienStatut} a ${statut} par ${req.user?.email}`);
 
         res.status(200).json({
@@ -1632,31 +1646,4 @@ exports.updateInternshipStatus = async (req, res) => {
 // ============================================
 // EXPORTS
 // ============================================
-module.exports = {
-    getAllInternships: exports.getAllInternships,
-    getInternshipById: exports.getInternshipById,
-    getInternshipsBySupervisor: exports.getInternshipsBySupervisor,
-    getInternshipsByStudent: exports.getInternshipsByStudent,
-    getInternshipByApplication: exports.getInternshipByApplication,
-    createInternship: exports.createInternship,
-    addRemark: exports.addRemark,
-    evaluateIntern: exports.evaluateIntern,
-    closeInternship: exports.closeInternship,
-    addDeliverable: exports.addDeliverable,
-    validateDeliverable: exports.validateDeliverable,
-    validateApplicationDocuments: exports.validateApplicationDocuments,
-    sendToDirecteur: exports.sendToDirecteur,
-    sendFicheSigneeToStudent: exports.sendFicheSigneeToStudent,
-    generateAttestation: exports.generateAttestation,
-    uploadEngagementConfidentialite: exports.uploadEngagementConfidentialite,
-    generateEngagementConfidentialite: exports.generateEngagementConfidentialite,
-    generateDemandeStage: exports.generateDemandeStage,
-    downloadDemandeStage: exports.downloadDemandeStage,
-    sendEngagementToStudent: exports.sendEngagementToStudent,
-    sendDemandeStageToStudent: exports.sendDemandeStageToStudent,
-    assignSupervisor: exports.assignSupervisor,
-    getDepartmentInternships: exports.getDepartmentInternships,
-    getInternshipReport: exports.getInternshipReport,
-    defineSubject: exports.defineSubject,
-    updateInternshipStatus: exports.updateInternshipStatus,
-};
+module.exports = exports;

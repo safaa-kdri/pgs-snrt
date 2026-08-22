@@ -1,6 +1,6 @@
 // src/components/rh/GenerateConvention.jsx
-// ✅ AJOUT : Signature PNG prédéfinie
-// ✅ AJOUT : Bouton "Signer le PDF" pour ajouter la signature sur le document original
+// ✅ CORRECTION : Endpoints API corrigés (/rh/convention/...)
+// ✅ AJOUT : Récupération de la signature depuis le backend
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -40,14 +40,10 @@ import {
     InsertDriveFile,
     Send,
     Edit,
+    Refresh,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
-
-// ============================================
-// IMPORTER L'IMAGE DE SIGNATURE
-// ============================================
-const SIGNATURE_IMAGE = '/images/signature_rh.png';
 
 // ============================================
 // STYLES
@@ -120,42 +116,40 @@ const GenerateConvention = () => {
     const [signatureLoaded, setSignatureLoaded] = useState(false);
 
     useEffect(() => {
-        loadSignatureImage();
+        fetchSignature();
     }, []);
 
     useEffect(() => {
-        console.log('🔍 [GenerateConvention] Montage du composant');
         fetchConventions();
     }, []);
 
-    const loadSignatureImage = () => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-            console.log('✅ [loadSignatureImage] Signature chargée avec succès');
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/png');
-            setSignatureData(dataUrl);
-            setSignatureLoaded(true);
-            console.log('✅ [loadSignatureImage] Signature convertie en base64');
-        };
-        img.onerror = () => {
-            console.error('❌ [loadSignatureImage] Erreur chargement signature');
+    // ✅ Récupérer la signature depuis le backend
+    const fetchSignature = async () => {
+        console.log('🔍 [fetchSignature] Récupération de la signature');
+        try {
+            const response = await api.get('/rh/signature');
+            if (response.data?.signature) {
+                setSignatureData(response.data.signature);
+                setSignatureLoaded(true);
+                console.log('✅ [fetchSignature] Signature chargée avec succès');
+            } else {
+                console.warn('⚠️ [fetchSignature] Aucune signature trouvée');
+                setSignatureLoaded(false);
+            }
+        } catch (error) {
+            console.error('❌ [fetchSignature] Erreur:', error);
             setSignatureLoaded(false);
-        };
-        img.src = SIGNATURE_IMAGE;
+        }
     };
 
+    // ✅ Récupérer les conventions déposées
     const fetchConventions = async () => {
         console.log('🔍 [fetchConventions] Début');
         setLoading(true);
         setError('');
         try {
-            const response = await api.get('/internships/conventions/deposees');
+            // ✅ ENDPOINT CORRIGÉ
+            const response = await api.get('/rh/conventions');
             console.log('🔍 [fetchConventions] Réponse reçue:', response.data);
             const data = response.data?.data || [];
             console.log('🔍 [fetchConventions] Conventions trouvées:', data.length);
@@ -218,10 +212,12 @@ const GenerateConvention = () => {
         }
     };
 
+    // ✅ Télécharger la convention
     const handleDownloadConvention = async (convention) => {
         console.log('🔍 [handleDownloadConvention] Convention ID:', convention._id);
         try {
-            const response = await api.get(`/internships/convention/${convention._id}/download`, {
+            // ✅ ENDPOINT CORRIGÉ
+            const response = await api.get(`/rh/convention/${convention._id}/download`, {
                 responseType: 'blob',
             });
             
@@ -240,7 +236,7 @@ const GenerateConvention = () => {
         }
     };
 
-    // ✅ Signer la convention (stockage signature en base64)
+    // ✅ Signer la convention
     const handleSignConvention = async () => {
         if (!selectedConvention) return;
         if (!signatureData) {
@@ -251,13 +247,15 @@ const GenerateConvention = () => {
         console.log('🔍 [handleSignConvention] Convention ID:', selectedConvention._id);
         setActionLoading(true);
         try {
-            const response = await api.put(`/internships/convention/${selectedConvention._id}/signer`, {
+            // ✅ ENDPOINT CORRIGÉ
+            const response = await api.put(`/rh/convention/${selectedConvention._id}/signer`, {
                 signature: signatureData
             });
             console.log('✅ [handleSignConvention] Réponse:', response.data);
             setSuccess('✅ Convention signée avec succès');
             setOpenSignDialog(false);
             await fetchConventions();
+            setTimeout(() => setSuccess(''), 3000);
         } catch (error) {
             console.error('❌ Erreur signature:', error);
             setError(error.response?.data?.message || 'Erreur lors de la signature');
@@ -266,11 +264,12 @@ const GenerateConvention = () => {
         }
     };
 
-    // ✅ Ajouter la signature sur le PDF original
+    // ✅ Générer le PDF signé
     const handleSignPDF = async (convention) => {
         try {
             setActionLoading(true);
-            const response = await api.get(`/internships/convention/${convention._id}/sign-pdf`, {
+            // ✅ ENDPOINT CORRIGÉ
+            const response = await api.get(`/rh/convention/${convention._id}/sign-pdf`, {
                 responseType: 'blob',
             });
             
@@ -294,17 +293,19 @@ const GenerateConvention = () => {
         }
     };
 
-    // ✅ Envoyer la convention signée à l'étudiant
+    // ✅ Envoyer la convention à l'étudiant
     const handleSendToStudent = async (convention) => {
         if (!window.confirm('Envoyer la convention signée à l\'étudiant ?')) return;
 
         console.log('🔍 [handleSendToStudent] Convention ID:', convention._id);
         setActionLoading(true);
         try {
-            const response = await api.put(`/internships/convention/${convention._id}/envoyer-etudiant`);
+            // ✅ ENDPOINT CORRIGÉ
+            const response = await api.put(`/rh/convention/${convention._id}/envoyer-etudiant`);
             console.log('✅ [handleSendToStudent] Réponse:', response.data);
             setSuccess('✅ Convention envoyée à l\'étudiant avec succès');
             await fetchConventions();
+            setTimeout(() => setSuccess(''), 3000);
         } catch (error) {
             console.error('❌ Erreur envoi:', error);
             setError(error.response?.data?.message || 'Erreur lors de l\'envoi');
@@ -339,13 +340,22 @@ const GenerateConvention = () => {
             <PageHeader>
                 <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        Gestion des conventions
+                        📄 Gestion des conventions
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         {conventions.length} convention(s) déposée(s) par les étudiants
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<Refresh />}
+                        onClick={fetchConventions}
+                        disabled={loading}
+                        sx={{ borderRadius: '10px', textTransform: 'none' }}
+                    >
+                        Rafraîchir
+                    </Button>
                     <Button
                         startIcon={<ArrowBack />}
                         onClick={() => navigate('/rh')}
@@ -458,7 +468,7 @@ const GenerateConvention = () => {
                                                         {/* Signer - uniquement si DeposeeEtudiant */}
                                                         {isDeposee && (
                                                             <>
-                                                                <Tooltip title="Signer la convention (ajouter signature)">
+                                                                <Tooltip title="Signer la convention">
                                                                     <IconButton
                                                                         size="small"
                                                                         onClick={() => handleOpenSignDialog(conv)}
@@ -467,7 +477,7 @@ const GenerateConvention = () => {
                                                                         <Edit fontSize="small" />
                                                                     </IconButton>
                                                                 </Tooltip>
-                                                                <Tooltip title="Apposer la signature sur le PDF">
+                                                                <Tooltip title="Générer le PDF signé">
                                                                     <IconButton
                                                                         size="small"
                                                                         onClick={() => handleSignPDF(conv)}
@@ -479,7 +489,7 @@ const GenerateConvention = () => {
                                                             </>
                                                         )}
 
-                                                        {/* Envoyer à l'étudiant */}
+                                                        {/* Envoyer à l'étudiant - uniquement si SigneeRH */}
                                                         {isSignee && (
                                                             <Tooltip title="Envoyer à l'étudiant">
                                                                 <IconButton
@@ -502,7 +512,7 @@ const GenerateConvention = () => {
                                                         {/* Non générée */}
                                                         {isNonGeneree && (
                                                             <Tooltip title="Convention non générée">
-                                                                <Box sx={{ color: '#6b7280', fontSize: 12 }}>
+                                                                <Box sx={{ color: '#6b7280', fontSize: 12, display: 'flex', alignItems: 'center' }}>
                                                                     En attente
                                                                 </Box>
                                                             </Tooltip>
@@ -554,13 +564,13 @@ const GenerateConvention = () => {
                         </SignaturePreview>
                     ) : (
                         <Alert severity="warning" sx={{ borderRadius: '8px' }}>
-                            Chargement de la signature en cours...
+                            La signature n'est pas disponible. Veuillez contacter l'administrateur.
                         </Alert>
                     )}
                     
                     <Alert severity="info" sx={{ mt: 2, borderRadius: '8px' }}>
                         <Typography variant="body2">
-                            <strong>Signature prédéfinie :</strong> La signature RH sera automatiquement appliquée sur le PDF original.
+                            <strong>Information :</strong> La signature sera appliquée sur le PDF original.
                         </Typography>
                     </Alert>
                 </DialogContent>

@@ -1,5 +1,7 @@
 // src/routes/internshipRoutes.js
 // ✅ CORRECTION : Routes convention avec ajout signature sur PDF
+// ✅ AJOUT : Routes /student/has-active et /student
+// ✅ AJOUT : Routes /supervisor
 
 const express = require('express');
 const router = express.Router();
@@ -61,6 +63,38 @@ router.use(authenticate());
 router.use(logRequest);
 
 // ============================================
+// ✅ ROUTES ÉTUDIANT - SUIVI DE STAGE
+// ============================================
+
+// Vérifier si l'étudiant a un stage actif (pour le Sidebar)
+router.get(
+    '/student/has-active',
+    authorize(ROLES.ETUDIANT),
+    logAction('STUDENT_HAS_ACTIVE_INTERNSHIP'),
+    internshipController.hasActiveInternship
+);
+
+// Récupérer tous les stages de l'étudiant
+router.get(
+    '/student',
+    authorize(ROLES.ETUDIANT),
+    logAction('STUDENT_GET_INTERNSHIPS'),
+    internshipController.getStudentInternships
+);
+
+// ============================================
+// ✅ ROUTES ENCADRANT - SUIVI DES STAGES
+// ============================================
+
+// Récupérer tous les stages de l'encadrant
+router.get(
+    '/supervisor',
+    authorize(ROLES.ENCADRANT),
+    logAction('SUPERVISOR_GET_INTERNSHIPS'),
+    internshipController.getSupervisorInternships
+);
+
+// ============================================
 // ✅ ROUTES SPÉCIFIQUES - CONVENTION (PLACÉES AVANT /:id)
 // ============================================
 
@@ -95,7 +129,7 @@ router.get(
     conventionController.getConventionsDeposees
 );
 
-// ✅ Signer la convention (stockage signature en base64)
+// Signer la convention (stockage signature en base64)
 router.put(
     '/convention/:id/signer',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -103,7 +137,7 @@ router.put(
     conventionController.signerConvention
 );
 
-// ✅ Ajouter la signature sur le PDF original
+// Ajouter la signature sur le PDF original
 router.get(
     '/convention/:id/sign-pdf',
     authorize(ROLES.RH, ROLES.ADMIN),
@@ -146,7 +180,7 @@ router.post(
 );
 
 // ============================================
-// ✅ ROUTES SPÉCIFIQUES - ENCADRANT
+// ✅ ROUTES SPÉCIFIQUES - ENCADRANT (DEPRECATED - gardé pour compatibilité)
 // ============================================
 
 router.get(

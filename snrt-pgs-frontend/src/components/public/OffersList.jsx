@@ -1,5 +1,8 @@
 // src/components/public/OffersList.jsx
-import React, { useState, useEffect } from 'react';
+// ✅ CORRECTION FINALE : Chargement des offres public - Indépendant de l'authentification
+// ✅ CORRECTION : Rechargement après déconnexion sans F5
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -86,10 +89,12 @@ const OffersList = () => {
     );
     const { isAuthenticated: authIsAuthenticated } = useSelector((state) => state.auth);
 
+    const initialLoadDone = useRef(false);
+    const previousAuthState = useRef(authIsAuthenticated);
+
     const normalizedDepartments = Array.isArray(departments) ? departments : [];
     const normalizedTypes = Array.isArray(types) ? types : [];
 
-    // État local pour les filtres (formulaire)
     const [localFilters, setLocalFilters] = useState({
         statut: 'Publiée',
         typeStage: '',
@@ -97,22 +102,52 @@ const OffersList = () => {
         search: ''
     });
 
-    // Vérifier si l'utilisateur est connecté
     const isAuthenticated = authIsAuthenticated || !!localStorage.getItem('user') || !!localStorage.getItem('token');
 
-    // ============================================
-    // ✅ CHARGEMENT DES OFFRES - TOUJOURS EXÉCUTÉ
-    // QUE L'UTILISATEUR SOIT CONNECTÉ OU NON
-    // ============================================
-    useEffect(() => {
+    // ✅ FONCTION DE CHARGEMENT DES OFFRES
+    const loadOffers = () => {
         const params = { ...filters, page, limit: 10 };
-        console.log('📤 [OffersList] Chargement des offres - isAuthenticated:', isAuthenticated);
+        console.log('📤 [OffersList] Chargement des offres (public)');
         dispatch(fetchOffers(params));
         dispatch(fetchDepartments());
-        console.log('📤 [OffersList] fetchOffers dispatché');
-    }, [dispatch, filters, page]); // ✅ PLUS DE CONDITION isAuthenticated
+    };
 
-    // Gérer la soumission du formulaire
+    // ✅ CHARGEMENT INITIAL - AU MONTAGE (toujours exécuté)
+    useEffect(() => {
+        console.log('📤 [OffersList] Montage - Chargement initial');
+        loadOffers();
+        initialLoadDone.current = true;
+    }, [dispatch]);
+
+    // ✅ RECHARGEMENT QUAND LES FILTRES OU LA PAGE CHANGENT
+    useEffect(() => {
+        if (initialLoadDone.current) {
+            console.log('📤 [OffersList] Rechargement - Filtres/Page changés');
+            loadOffers();
+        }
+    }, [dispatch, filters, page]);
+
+    // ✅ RECHARGEMENT APRÈS CHANGEMENT D'AUTHENTIFICATION (LOGIN/LOGOUT)
+    useEffect(() => {
+        if (previousAuthState.current !== authIsAuthenticated) {
+            console.log('📤 [OffersList] Changement d\'authentification détecté:', {
+                avant: previousAuthState.current,
+                apres: authIsAuthenticated
+            });
+            
+            if (initialLoadDone.current) {
+                console.log('📤 [OffersList] Rechargement après changement d\'auth');
+                loadOffers();
+            }
+            
+            previousAuthState.current = authIsAuthenticated;
+        }
+    }, [authIsAuthenticated]);
+
+    // ============================================
+    // GESTION DES FILTRES
+    // ============================================
+
     const handleSearch = (e) => {
         e.preventDefault();
         Object.keys(localFilters).forEach(key => {
@@ -120,24 +155,24 @@ const OffersList = () => {
         });
     };
 
-    // Gérer le changement de page
     const handlePageChange = (event, value) => {
         dispatch(setPage(value));
     };
 
-    // Gérer la réinitialisation
     const handleReset = () => {
         setLocalFilters({ statut: 'Publiée', typeStage: '', departementId: '', search: '' });
         dispatch(resetFilters());
     };
 
-    // Supprimer un filtre
     const handleRemoveFilter = (key) => {
         dispatch(setFilter({ key, value: '' }));
         setLocalFilters({ ...localFilters, [key]: '' });
     };
 
-    // Afficher les filtres actifs
+    // ============================================
+    // FILTRES ACTIFS
+    // ============================================
+
     const activeFilters = [];
     if (filters.typeStage) activeFilters.push({ key: 'typeStage', label: `Type: ${filters.typeStage}` });
     if (filters.departementId) {
@@ -146,12 +181,15 @@ const OffersList = () => {
     }
     if (filters.search) activeFilters.push({ key: 'search', label: `🔍 ${filters.search}` });
 
+    // ============================================
+    // RENDER
+    // ============================================
+
     return (
         <Box sx={{ width: '100%', px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
             <PageTitle>Recherche des offres de stage</PageTitle>
             <TitleLine />
 
-            {/* === STATUS : NON CONNECTÉ === */}
             {!isAuthenticated && (
                 <Alert 
                     severity="info" 
@@ -171,7 +209,7 @@ const OffersList = () => {
                 </Alert>
             )}
 
-            {/* === FILTRES === */}
+            {/* ===== FILTRES ===== */}
             <Box sx={{ 
                 display: 'flex', 
                 flexWrap: 'wrap', 
@@ -252,7 +290,7 @@ const OffersList = () => {
                 </Button>
             </Box>
 
-            {/* === FILTRES ACTIFS === */}
+            {/* ===== FILTRES ACTIFS ===== */}
             {activeFilters.length > 0 && (
                 <FilterContainer>
                     {activeFilters.map((filter) => (
@@ -275,23 +313,23 @@ const OffersList = () => {
                 </FilterContainer>
             )}
 
-            {/* === LISTE DES OFFRES === */}
+            {/* ===== LISTE DES OFFRES ===== */}
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                     <CircularProgress sx={{ color: '#148aa0' }} />
                 </Box>
             ) : error ? (
-                <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+                <Alert severity="error" sx={{ mt: 2, borderRadius: '10px' }}>
+                    {error}
+                </Alert>
             ) : offers.length === 0 ? (
                 <NoResultsBox>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         🕵️ Aucune offre trouvée
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                        {!isAuthenticated 
-                            ? 'Connectez-vous pour voir toutes les offres disponibles.'
-                            : 'Essayez de modifier vos critères de recherche.'
-                        }
+                        Aucune offre de stage n'est disponible pour le moment.
+                        {!isAuthenticated && ' Connectez-vous pour voir toutes les offres disponibles.'}
                     </Typography>
                 </NoResultsBox>
             ) : (
