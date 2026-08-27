@@ -1,11 +1,15 @@
 // src/controllers/conventionController.js
 // ✅ CONTROLLER POUR LA GESTION DES CONVENTIONS
 // ✅ AJOUT : Ajouter la signature sur le PDF existant avec pdf-lib
+// ✅ AJOUT : Fonctions uploadConvention, signConvention, downloadConvention
 
 const Internship = require('../models/Internship');
 const Application = require('../models/Application');
 const Offer = require('../models/Offer');
+const Role = require('../models/Role');
+const UtilisateurInterne = require('../models/UtilisateurInterne');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
+const Notification = require('../models/Notification');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
@@ -478,3 +482,168 @@ exports.downloadConventionRH = asyncHandler(async (req, res) => {
 exports.genererConventionVierge = asyncHandler(async (req, res) => {
     throw ApiError.notImplemented('Cette fonctionnalité sera bientôt disponible');
 });
+
+// ============================================
+// ✅ CONVENTION - UPLOADER LA CONVENTION SIGNÉE (VIA /:id/convention)
+// ============================================
+exports.uploadConvention = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const file = req.file;
+
+    console.log('🔍 [uploadConvention] ID:', id);
+    console.log('🔍 [uploadConvention] file:', file?.originalname);
+
+    if (!file) {
+        throw ApiError.badRequest('Aucun fichier fourni');
+    }
+
+    if (file.mimetype !== 'application/pdf') {
+        throw ApiError.badRequest('Seuls les fichiers PDF sont acceptés');
+    }
+
+    const internship = await Internship.findById(id);
+    if (!internship) {
+        throw ApiError.notFound('Stage non trouvé');
+    }
+
+    // Vérifier que l'étudiant est bien le propriétaire
+    if (internship.etudiantId.toString() !== req.user.id.toString()) {
+        throw ApiError.forbidden('Vous n\'êtes pas autorisé à déposer une convention pour ce stage');
+    }
+
+    // Vérifier que le statut du stage est valide
+    if (!CONVENTION_ALLOWED_STATUSES.includes(internship.statut)) {
+        throw ApiError.badRequest(`Le stage doit avoir un statut valide (${CONVENTION_ALLOWED_STATUSES.join(', ')})`);
+    }
+
+    // Vérifier qu'il n'y a pas déjà une convention
+    if (internship.convention && internship.convention.statut !== 'NonGeneree') {
+        throw ApiError.badRequest('Une convention existe déjà pour ce stage');
+    }
+
+    const conventionData = {
+        nomOriginal: file.originalname,
+        nomStocke: file.filename,
+        chemin: file.path,
+        url: `/uploads/conventions/${file.filename}`,
+        mimeType: file.mimetype,
+        taille: file.size,
+        dateDepot: new Date(),
+        statut: 'DeposeeEtudiant',
+        signedByRH: false
+    };
+
+    internship.convention = conventionData;
+    await internship.save();
+
+    // Notification au RH
+    const rhUsers = await UtilisateurInterne.find({ roleId: await Role.findOne({ nom: 'RH' }) }).select('_id');
+    for (const rh of rhUsers) {
+        await Notification.create({
+            type: 'InApp',
+            titre: 'Convention déposée',
+            message: `L'étudiant ${req.user.prenom} ${req.user.nom} a déposé sa convention signée.`,
+            userId: rh._id,
+            userModel: 'UtilisateurInterne',
+            lien: `/rh/generate-convention`,
+        });
+    }
+
+    logger.audit('CONVENTION_UPLOAD', {
+        internshipId: internship._id,
+        studentId: req.user.id,
+        fileName: file.originalname
+    });
+
+    return res.status(200).json({
+        success: true,
+        data: internship.convention,
+        message: 'Convention déposée avec succès'
+    });
+});
+
+// ============================================
+// ✅ CONVENTION - SIGNER LA CONVENTION (RH)
+// ============================================
+exports.signConvention = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { signature } = req.body;
+
+    console.log('🔍 [signConvention] ID:', id);
+    console.log('🔍 [signConvention] signature reçue:', !!signature);
+
+    const internship = await Internship.findById(id);
+    if (!internship || !internship.convention) {
+        throw ApiError.notFound('Convention non trouvée');
+    }
+
+    if (internship.convention.statut !== 'DeposeeEtudiant') {
+        throw ApiError.badRequest(`La convention doit être déposée par l'étudiant. Statut actuel: ${internship.convention.statut}`);
+    }
+
+    internship.convention.statut = 'SigneeRH';
+    internship.convention.dateSignature = new Date();
+    internship.convention.signedByRH = true;
+    internship.convention.signatureRH = {
+        date: new Date(),
+        rhId: req.user.id,
+        rhNom: `${req.user.prenom || ''} ${req.user.nom || ''}`.trim(),
+        signatureData: signature || null
+    };
+
+    await internship.save();
+
+    logger.audit('CONVENTION_SIGN', {
+        internshipId: internship._id,
+        rhId: req.user.id
+    });
+
+    return res.status(200).json({
+        success: true,
+        data: internship.convention,
+        message: 'Convention signée avec succès'
+    });
+});
+
+// ============================================
+// ✅ CONVENTION - TÉLÉCHARGER LA CONVENTION (GÉNÉRIQUE)
+// ============================================
+exports.downloadConventionGeneric = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    console.log('🔍 [downloadConventionGeneric] ID:', id);
+
+    const internship = await Internship.findById(id);
+    if (!internship || !internship.convention) {
+        throw ApiError.notFound('Convention non trouvée');
+    }
+
+    // Vérifier les permissions
+    const isStudent = internship.etudiantId.toString() === req.user.id.toString();
+    const isEncadrant = internship.encadrantId && internship.encadrantId.toString() === req.user.id.toString();
+    const isRH = req.user.role === 'RH' || req.user.role === 'Administrateur';
+
+    if (!isStudent && !isEncadrant && !isRH) {
+        throw ApiError.forbidden('Vous n\'êtes pas autorisé à télécharger cette convention');
+    }
+
+    // Si c'est l'étudiant, vérifier que la convention est signée
+    if (isStudent && internship.convention.statut !== 'EnvoyeeEtudiant' && 
+        internship.convention.statut !== 'Cloturee') {
+        throw ApiError.badRequest('La convention n\'est pas encore disponible');
+    }
+
+    const filePath = internship.convention.cheminSignee || internship.convention.chemin;
+    if (!fs.existsSync(filePath)) {
+        throw ApiError.notFound('Le fichier n\'existe plus');
+    }
+
+    console.log('✅ [downloadConventionGeneric] Fichier trouvé:', filePath);
+
+    res.download(filePath, `Convention_${internship.convention.nomOriginal || 'stage'}.pdf`);
+});
+
+// ============================================
+// EXPORTS
+// ============================================
+module.exports = exports;

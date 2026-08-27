@@ -427,6 +427,112 @@ export const markTimelineNotificationsAsRead = async (internshipId) => {
 };
 
 // ============================================
+// 11. RÉCUPÉRER UN STAGE PAR APPLICATION ID
+// ============================================
+
+/**
+ * Récupérer un stage par l'ID de la candidature
+ */
+export const getInternshipByApplication = async (applicationId) => {
+    try {
+        const response = await api.get(`/internships/application/${applicationId}`);
+        return response.data?.data || null;
+    } catch (error) {
+        console.error('❌ Erreur getInternshipByApplication:', error);
+        return null;
+    }
+};
+
+// ============================================
+// 12. ENGAGEMENT DE CONFIDENTIALITÉ
+// ============================================
+
+/**
+ * Télécharger le modèle d'engagement de confidentialité
+ */
+export const downloadEngagementTemplate = async (internshipId) => {
+    try {
+        const response = await api.get(`/internships/${internshipId}/generate-engagement`, {
+            responseType: 'blob',
+        });
+        return response.data;
+    } catch (error) {
+        console.error('❌ Erreur downloadEngagementTemplate:', error);
+        throw error;
+    }
+};
+
+/**
+ * Uploader l'engagement de confidentialité signé (Étudiant)
+ */
+export const uploadEngagement = async (internshipId, file) => {
+    try {
+        const formData = new FormData();
+        formData.append('document', file);
+        const response = await api.post(`/internships/${internshipId}/upload-engagement`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data?.data || null;
+    } catch (error) {
+        console.error('❌ Erreur uploadEngagement:', error);
+        throw error;
+    }
+};
+
+// ============================================
+// 13. DEMANDE DE STAGE
+// ============================================
+
+/**
+ * Télécharger la demande de stage
+ */
+export const downloadDemandeStage = async (internshipId) => {
+    try {
+        const response = await api.get(`/internships/${internshipId}/download-demande-stage`, {
+            responseType: 'blob',
+        });
+        return response.data;
+    } catch (error) {
+        console.error('❌ Erreur downloadDemandeStage:', error);
+        throw error;
+    }
+};
+
+// ============================================
+// 14. AFFECTER UN ENCADRANT
+// ============================================
+
+/**
+ * Affecter un encadrant à un stage (RH/Admin)
+ */
+export const assignSupervisor = async (internshipId, encadrantId) => {
+    try {
+        const response = await api.put(`/internships/${internshipId}/assign-supervisor`, { encadrantId });
+        return response.data?.data || null;
+    } catch (error) {
+        console.error('❌ Erreur assignSupervisor:', error);
+        throw error;
+    }
+};
+
+// ============================================
+// 15. METTRE À JOUR LE STATUT DU STAGE
+// ============================================
+
+/**
+ * Mettre à jour le statut d'un stage (RH/Admin)
+ */
+export const updateInternshipStatus = async (internshipId, statut) => {
+    try {
+        const response = await api.patch(`/internships/${internshipId}/status`, { statut });
+        return response.data?.data || null;
+    } catch (error) {
+        console.error('❌ Erreur updateInternshipStatus:', error);
+        throw error;
+    }
+};
+
+// ============================================
 // EXPORT PAR DÉFAUT
 // ============================================
 

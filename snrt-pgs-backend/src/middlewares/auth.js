@@ -1,5 +1,5 @@
 // src/middlewares/auth.js
-// ✅ CORRECTION : Ajout des logs pour déboguer + support amélioré
+// ✅ CORRECTION : Accepter le token depuis le cookie OU le header Authorization
 
 const rateLimit = require('express-rate-limit');
 const ApiError = require('../utils/ApiError');
@@ -13,7 +13,17 @@ const { ROLES } = require('../config/constants');
 function authenticate() {
   return async (req, res, next) => {
     try {
-      const token = req.cookies?.accessToken;
+      // ✅ 1. Essayer depuis le cookie
+      let token = req.cookies?.accessToken;
+      
+      // ✅ 2. Si pas dans le cookie, essayer depuis le header Authorization
+      if (!token) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+          console.log('🔍 [authenticate] Token trouvé dans le header Authorization');
+        }
+      }
       
       console.log('🔍 [authenticate] Token présent:', !!token);
       
@@ -70,6 +80,54 @@ function authenticate() {
 }
 
 // ============================================
+// AUTHENTIFICATION OPTIONNELLE
+// ============================================
+function optionalAuthenticate() {
+  return async (req, res, next) => {
+    try {
+      // ✅ 1. Essayer depuis le cookie
+      let token = req.cookies?.accessToken;
+      
+      // ✅ 2. Si pas dans le cookie, essayer depuis le header Authorization
+      if (!token) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+        }
+      }
+      
+      if (!token) return next();
+
+      const payload = verifyAccessToken(token);
+      if (!payload) return next();
+
+      const user = await userLookup.findById(payload.sub, payload.userType);
+      if (!user || !user.actif) return next();
+
+      req.user = {
+        id: user._id.toString(),
+        _id: user._id.toString(),
+        userType: payload.userType,
+        role: payload.role,
+        departementId: payload.departementId || null,
+        nom: user.nom,
+        prenom: user.prenom,
+        email: user.email,
+      };
+
+      console.log('✅ [optionalAuthenticate] Utilisateur authentifié optionnellement:', {
+        id: req.user.id,
+        role: req.user.role
+      });
+
+      return next();
+    } catch (err) {
+      return next();
+    }
+  };
+}
+
+// ============================================
 // AUTORISATION - Vérifie les rôles
 // ============================================
 function authorize(...allowedRoles) {
@@ -107,44 +165,6 @@ function authorize(...allowedRoles) {
 
     console.log(`✅ [authorize] Rôle ${userRole} autorisé`);
     return next();
-  };
-}
-
-// ============================================
-// AUTHENTIFICATION OPTIONNELLE
-// ============================================
-function optionalAuthenticate() {
-  return async (req, res, next) => {
-    try {
-      const token = req.cookies?.accessToken;
-      if (!token) return next();
-
-      const payload = verifyAccessToken(token);
-      if (!payload) return next();
-
-      const user = await userLookup.findById(payload.sub, payload.userType);
-      if (!user || !user.actif) return next();
-
-      req.user = {
-        id: user._id.toString(),
-        _id: user._id.toString(),
-        userType: payload.userType,
-        role: payload.role,
-        departementId: payload.departementId || null,
-        nom: user.nom,
-        prenom: user.prenom,
-        email: user.email,
-      };
-
-      console.log('✅ [optionalAuthenticate] Utilisateur authentifié optionnellement:', {
-        id: req.user.id,
-        role: req.user.role
-      });
-
-      return next();
-    } catch (err) {
-      return next();
-    }
   };
 }
 

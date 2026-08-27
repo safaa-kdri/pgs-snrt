@@ -1,6 +1,5 @@
 // src/components/student/StudentStagesList.jsx
-// ✅ LOGIQUE : Un stage s'affiche seulement si candidature = Acceptée ET internship existe
-// ✅ Suppression du statut "En cours" etc. car l'affichage signifie déjà 100%
+// ✅ CARTES GRANDES - Titre très lisible - Design aéré
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,7 +11,6 @@ import {
     Grid,
     Card,
     CardContent,
-    Chip,
     CircularProgress,
     Alert,
     IconButton,
@@ -25,20 +23,18 @@ import {
     PersonOutline,
     SchoolOutlined,
     ArrowForward,
-    CheckCircleOutline,
-    DescriptionOutlined,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { getStudentInternships } from '../../services/api';
+import api from '../../services/api';
 
 // ============================================
-// STYLES SNRT - OPTIMISÉS
+// STYLES - CARTES TRÈS GRANDES
 // ============================================
 
 const PageContainer = styled(Container)({
     paddingTop: '32px',
     paddingBottom: '48px',
-    maxWidth: '1200px !important',
+    maxWidth: '1400px !important',
 });
 
 const PageHeader = styled(Box)({
@@ -53,140 +49,109 @@ const PageHeader = styled(Box)({
 const PageTitle = styled(Typography)({
     fontFamily: '"Inter", sans-serif',
     fontWeight: 700,
-    fontSize: '28px',
+    fontSize: '32px',
     color: '#1a2332',
     letterSpacing: '-0.01em',
 });
 
 const PageSubtitle = styled(Typography)({
     fontFamily: '"Inter", sans-serif',
-    fontSize: '15px',
+    fontSize: '16px',
     color: '#687480',
     marginTop: '4px',
 });
 
-// ✅ CARTE - Sans statut car l'affichage signifie déjà 100%
+// ✅ CARTE TRÈS GRANDE
 const StyledCard = styled(Card)({
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    transition: 'all 0.25s ease',
+    borderRadius: '20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    transition: 'all 0.3s ease',
     border: '1px solid #eef1f3',
-    borderLeft: '5px solid #22c55e', // Vert pour indiquer "validé"
+    borderLeft: '8px solid #22c55e',
     cursor: 'pointer',
     height: '100%',
-    minHeight: '200px',
+    minHeight: '320px',
     display: 'flex',
     flexDirection: 'column',
     '&:hover': {
-        boxShadow: '0 8px 32px rgba(0,0,0,0.07)',
-        transform: 'translateY(-3px)',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.10)',
+        transform: 'translateY(-6px)',
         borderColor: '#d0d5da',
     },
 });
 
+// ✅ CONTENU AVEC BEAUCOUP D'ESPACE
 const StyledCardContent = styled(CardContent)({
-    padding: '24px 28px',
+    padding: '40px 32px 32px',
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
     '&:last-child': {
-        paddingBottom: '24px',
+        paddingBottom: '32px',
     },
 });
 
-const CardHeader = styled(Box)({
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: '16px',
-    marginBottom: '14px',
-    minHeight: '32px',
-});
-
+// ✅ TITRE TRÈS GRAND ET LISIBLE
 const CardTitle = styled(Typography)({
     fontFamily: '"Inter", sans-serif',
-    fontWeight: 600,
-    fontSize: '17px',
+    fontWeight: 700,
+    fontSize: '28px',
     color: '#1a2332',
     lineHeight: 1.3,
-    flex: 1,
-    minWidth: 0,
-    wordBreak: 'break-word',
-});
-
-// ✅ BADGE "Validé" pour indiquer 100%
-const ValidatedChip = styled(Chip)({
-    backgroundColor: '#d1fae5',
-    color: '#065f46',
-    fontWeight: 600,
-    fontSize: '12px',
-    height: '26px',
-    borderRadius: '6px',
-    flexShrink: 0,
-    '& .MuiChip-label': {
-        padding: '0 14px',
-        whiteSpace: 'nowrap',
-    },
-});
-
-const InfoRow = styled(Box)({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '3px 0',
-    '& .MuiSvgIcon-root': {
-        color: '#9aa4ac',
-        fontSize: '18px',
-        flexShrink: 0,
-    },
-});
-
-const InfoText = styled(Typography)({
-    fontFamily: '"Inter", sans-serif',
-    fontSize: '14px',
-    color: '#4a5568',
-    lineHeight: 1.4,
+    marginBottom: '24px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+    width: '100%',
+    letterSpacing: '-0.01em',
 });
 
 const InfoLabel = styled(Typography)({
     fontFamily: '"Inter", sans-serif',
-    fontSize: '11px',
+    fontSize: '13px',
     color: '#9aa4ac',
-    fontWeight: 500,
+    fontWeight: 600,
     textTransform: 'uppercase',
-    letterSpacing: '0.3px',
-    lineHeight: 1.3,
+    letterSpacing: '0.8px',
+    marginBottom: '4px',
+});
+
+const InfoText = styled(Typography)({
+    fontFamily: '"Inter", sans-serif',
+    fontSize: '18px',
+    color: '#1a2332',
+    fontWeight: 500,
+    lineHeight: 1.5,
+});
+
+const DividerLine = styled(Box)({
+    width: '40px',
+    height: '2px',
+    backgroundColor: '#d1d5db',
+    margin: '4px auto',
+});
+
+const InfoBlock = styled(Box)({
+    width: '100%',
+    marginBottom: '18px',
 });
 
 const CardFooter = styled(Box)({
     display: 'flex',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     marginTop: 'auto',
-    paddingTop: '16px',
+    paddingTop: '20px',
     borderTop: '1px solid #f0f2f5',
-});
-
-const TagsContainer = styled(Box)({
-    display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-});
-
-const TagChip = styled(Chip)({
-    fontSize: '11px',
-    height: '22px',
-    borderRadius: '4px',
-    '& .MuiChip-label': {
-        padding: '0 10px',
-    },
+    width: '100%',
 });
 
 const ArrowButton = styled(IconButton)({
     color: '#148aa0',
-    padding: '4px',
-    flexShrink: 0,
+    padding: '8px',
     '&:hover': {
         backgroundColor: 'rgba(20, 138, 160, 0.08)',
     },
@@ -196,7 +161,7 @@ const EmptyState = styled(Box)({
     textAlign: 'center',
     padding: '80px 20px',
     '& .MuiSvgIcon-root': {
-        fontSize: '56px',
+        fontSize: '64px',
         color: '#d1d5db',
         marginBottom: '16px',
     },
@@ -205,25 +170,25 @@ const EmptyState = styled(Box)({
 const EmptyTitle = styled(Typography)({
     fontFamily: '"Inter", sans-serif',
     fontWeight: 600,
-    fontSize: '20px',
+    fontSize: '22px',
     color: '#1a2332',
     marginBottom: '8px',
 });
 
 const EmptyText = styled(Typography)({
     fontFamily: '"Inter", sans-serif',
-    fontSize: '15px',
+    fontSize: '16px',
     color: '#9aa4ac',
 });
 
 const EmptyButton = styled('button')({
-    borderRadius: '8px',
+    borderRadius: '10px',
     textTransform: 'none',
     fontFamily: '"Inter", sans-serif',
     fontWeight: 500,
-    fontSize: '14px',
-    padding: '10px 32px',
-    marginTop: '20px',
+    fontSize: '15px',
+    padding: '12px 40px',
+    marginTop: '24px',
     backgroundColor: '#148aa0',
     color: '#ffffff',
     border: 'none',
@@ -232,6 +197,36 @@ const EmptyButton = styled('button')({
         backgroundColor: '#0b7890',
     },
 });
+
+// ============================================
+// ✅ FONCTION DE PROGRESSION
+// ============================================
+const getProgression = (statut) => {
+    const map = {
+        'Brouillon': 0,
+        'EnCoursCreation': 0,
+        'Soumise': 20,
+        'EnAnalyse': 20,
+        'Entretien': 20,
+        'Acceptee': 100,
+        'Acceptée': 100,
+        'EngagementEnvoye': 40,
+        'EngagementRecu': 60,
+        'EngagementValide': 80,
+        'EngagementRejete': 60,
+        'DemandeEnvoyee': 100,
+        'ValideParDirecteur': 100,
+        'Cloturee': 100,
+        'Clôturée': 100,
+        'Termine': 100,
+        'Terminé': 100,
+        'EnCours': 100,
+        'En cours': 100,
+        'Refusee': 0,
+        'Refusée': 0,
+    };
+    return map[statut] || 0;
+};
 
 // ============================================
 // COMPOSANT PRINCIPAL
@@ -253,10 +248,22 @@ const StudentStagesList = () => {
         setLoading(true);
         setError('');
         try {
-            const data = await getStudentInternships();
-            setStages(data);
+            const response = await api.get('/internships/student');
+            const data = response.data?.data || [];
+            
+            console.log('[StudentStagesList] Stages reçus:', data.length);
+            
+            const stages100 = data.filter(stage => {
+                const statut = stage.statut || stage.candidature?.statut;
+                const progression = getProgression(statut);
+                return progression === 100;
+            });
+            
+            console.log('[StudentStagesList] Stages à 100%:', stages100.length);
+            setStages(stages100);
+            
         } catch (error) {
-            console.error('❌ Erreur chargement stages:', error);
+            console.error('[StudentStagesList] Erreur:', error);
             setError(error.response?.data?.message || 'Erreur lors du chargement des stages');
             setStages([]);
         } finally {
@@ -275,23 +282,23 @@ const StudentStagesList = () => {
 
     if (loading) {
         return (
-            <PageContainer maxWidth="lg">
+            <PageContainer maxWidth="xl">
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-                    <CircularProgress size={40} thickness={4} sx={{ color: '#148aa0' }} />
+                    <CircularProgress size={44} thickness={4} sx={{ color: '#148aa0' }} />
                 </Box>
             </PageContainer>
         );
     }
 
     return (
-        <PageContainer maxWidth="lg">
+        <PageContainer maxWidth="xl">
             <PageHeader>
                 <Box>
                     <PageTitle>Mes stages</PageTitle>
                     <PageSubtitle>
                         {stages.length === 0
-                            ? 'Vous n\'avez pas encore de stage validé'
-                            : `${stages.length} stage${stages.length > 1 ? 's' : ''} validé${stages.length > 1 ? 's' : ''}`
+                            ? 'Vous n\'avez pas encore de stage finalisé'
+                            : `${stages.length} stage${stages.length > 1 ? 's' : ''} finalisé${stages.length > 1 ? 's' : ''}`
                         }
                     </PageSubtitle>
                 </Box>
@@ -318,9 +325,9 @@ const StudentStagesList = () => {
                 >
                     <EmptyState>
                         <WorkOutline />
-                        <EmptyTitle>Aucun stage validé</EmptyTitle>
+                        <EmptyTitle>Aucun stage finalisé</EmptyTitle>
                         <EmptyText>
-                            Les stages que vous aurez validés à 100% apparaîtront ici.
+                            Les stages que vous aurez finalisés apparaîtront ici.
                         </EmptyText>
                         <EmptyButton onClick={() => navigate('/offres')}>
                             Consulter les offres
@@ -329,106 +336,67 @@ const StudentStagesList = () => {
                 </Paper>
             ) : (
                 <Grid container spacing={4}>
-                    {stages.map((stage) => {
-                        const hasLivrables = stage.livrables && stage.livrables.length > 0;
-                        const conventionSigned = stage.convention?.status === 'SigneeRH' || stage.convention?.status === 'EnvoyeeEtudiant';
+                    {stages.map((stage) => (
+                        <Grid item xs={12} sm={12} md={6} lg={4} xl={4} key={stage._id}>
+                            <StyledCard
+                                onClick={() => navigate(`/dashboard/stage/${stage._id}`)}
+                            >
+                                <StyledCardContent>
+                                    {/* ✅ Titre très grand et lisible */}
+                                    <CardTitle variant="h4" title={stage.sujetTitre || stage.offreId?.titre || 'Stage'}>
+                                        {stage.sujetTitre || stage.offreId?.titre || 'Stage'}
+                                    </CardTitle>
 
-                        return (
-                            <Grid item xs={12} sm={12} md={6} lg={6} xl={6} key={stage._id}>
-                                <StyledCard
-                                    onClick={() => navigate(`/dashboard/stage/${stage._id}`)}
-                                >
-                                    <StyledCardContent>
-                                        {/* HEADER : Titre + Badge "Validé" */}
-                                        <CardHeader>
-                                            <CardTitle variant="h6">
-                                                {stage.sujetTitre || stage.offreId?.titre || 'Stage'}
-                                            </CardTitle>
-                                            <ValidatedChip
-                                                icon={<CheckCircleOutline sx={{ fontSize: 16 }} />}
-                                                label="Validé"
-                                                size="small"
-                                            />
-                                        </CardHeader>
+                                    {/* ✅ Période */}
+                                    <InfoBlock>
+                                        <InfoLabel>Période</InfoLabel>
+                                        <InfoText>
+                                            {formatDate(stage.dateDebut)}
+                                        </InfoText>
+                                        <DividerLine />
+                                        <InfoText>
+                                            {formatDate(stage.dateFin)}
+                                        </InfoText>
+                                    </InfoBlock>
 
-                                        {/* INFORMATIONS */}
-                                        <Box sx={{ mb: 2, flex: 1 }}>
-                                            <InfoRow>
-                                                <CalendarToday />
-                                                <Box>
-                                                    <InfoLabel>Période</InfoLabel>
-                                                    <InfoText>
-                                                        {formatDate(stage.dateDebut)} — {formatDate(stage.dateFin)}
-                                                    </InfoText>
-                                                </Box>
-                                            </InfoRow>
+                                    {/* ✅ Encadrant */}
+                                    {stage.encadrantId && (
+                                        <InfoBlock>
+                                            <InfoLabel>Encadrant</InfoLabel>
+                                            <InfoText>
+                                                {stage.encadrantId?.prenom || ''} {stage.encadrantId?.nom || ''}
+                                            </InfoText>
+                                        </InfoBlock>
+                                    )}
 
-                                            {stage.encadrantId && (
-                                                <InfoRow>
-                                                    <PersonOutline />
-                                                    <Box>
-                                                        <InfoLabel>Encadrant</InfoLabel>
-                                                        <InfoText>
-                                                            {stage.encadrantId?.prenom || ''} {stage.encadrantId?.nom || ''}
-                                                        </InfoText>
-                                                    </Box>
-                                                </InfoRow>
-                                            )}
+                                    {/* ✅ Département */}
+                                    {stage.offreId?.departementId?.nom && (
+                                        <InfoBlock>
+                                            <InfoLabel>Département</InfoLabel>
+                                            <InfoText>
+                                                {stage.offreId.departementId.nom}
+                                            </InfoText>
+                                        </InfoBlock>
+                                    )}
 
-                                            {stage.offreId?.departementId?.nom && (
-                                                <InfoRow>
-                                                    <SchoolOutlined />
-                                                    <Box>
-                                                        <InfoLabel>Département</InfoLabel>
-                                                        <InfoText>
-                                                            {stage.offreId.departementId.nom}
-                                                        </InfoText>
-                                                    </Box>
-                                                </InfoRow>
-                                            )}
-                                        </Box>
-
-                                        {/* FOOTER : Tags + Flèche */}
-                                        <CardFooter>
-                                            <TagsContainer>
-                                                {hasLivrables && (
-                                                    <TagChip
-                                                        icon={<DescriptionOutlined sx={{ fontSize: 14 }} />}
-                                                        label={`${stage.livrables.length} livrable${stage.livrables.length > 1 ? 's' : ''}`}
-                                                        sx={{
-                                                            backgroundColor: '#f3e8ff',
-                                                            color: '#6b21a8',
-                                                        }}
-                                                    />
-                                                )}
-                                                {conventionSigned && (
-                                                    <TagChip
-                                                        label="Convention signée"
-                                                        sx={{
-                                                            backgroundColor: '#d1fae5',
-                                                            color: '#065f46',
-                                                        }}
-                                                    />
-                                                )}
-                                            </TagsContainer>
-
-                                            <Tooltip title="Accéder au suivi">
-                                                <ArrowButton
-                                                    size="small"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        navigate(`/dashboard/stage/${stage._id}`);
-                                                    }}
-                                                >
-                                                    <ArrowForward sx={{ fontSize: '20px' }} />
-                                                </ArrowButton>
-                                            </Tooltip>
-                                        </CardFooter>
-                                    </StyledCardContent>
-                                </StyledCard>
-                            </Grid>
-                        );
-                    })}
+                                    {/* ✅ Footer avec flèche */}
+                                    <CardFooter>
+                                        <Tooltip title="Voir le détail">
+                                            <ArrowButton
+                                                size="medium"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/dashboard/stage/${stage._id}`);
+                                                }}
+                                            >
+                                                <ArrowForward sx={{ fontSize: '28px' }} />
+                                            </ArrowButton>
+                                        </Tooltip>
+                                    </CardFooter>
+                                </StyledCardContent>
+                            </StyledCard>
+                        </Grid>
+                    ))}
                 </Grid>
             )}
         </PageContainer>

@@ -1,6 +1,5 @@
 // src/components/common/SidebarAuth.jsx
-// ✅ AJOUT : Lien "Suivi de stage" avec gestion des stages multiples
-// ✅ CONDITION : Visible uniquement si l'étudiant a au moins un stage accepté
+// ✅ SOLUTION FINALE - Accepte tous les statuts qui donnent 100%
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -12,17 +11,15 @@ import {
   TextField,
   Button,
   InputAdornment,
-  Divider,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { logout, login } from "../../store/slices/authSlice";
-import api from "../../services/api"; // ✅ AJOUTÉ pour appels API
+import api from "../../services/api";
 
 // ============================================
 // STYLES
 // ============================================
 
-// ✅ CARTE 1 : HAUTEUR RÉDUITE
 const SideCard = styled(Card)({
   backgroundColor: "#f7f7f7",
   borderRadius: "19px",
@@ -55,10 +52,6 @@ const AttemptsText = styled(Typography)({
   textAlign: "center",
   "& strong": { fontWeight: 700 },
 });
-
-// ============================================
-// STYLES DES CHAMPS DE SAISIE
-// ============================================
 
 const StyledTextField = styled(TextField)({
   width: "100%",
@@ -101,10 +94,6 @@ const StyledTextField = styled(TextField)({
     pointerEvents: "none",
   },
 });
-
-// ============================================
-// STYLES DU CAPTCHA
-// ============================================
 
 const CaptchaBox = styled(Box)({
   height: "42px",
@@ -207,7 +196,6 @@ const TermsText = styled(Typography)({
 // STYLES POUR LA VERSION CONNECTÉE
 // ============================================
 
-// ✅ "Bienvenue," en noir (ligne 1)
 const WelcomeText = styled(Typography)({
   fontFamily: "Inter, sans-serif",
   fontSize: "16px",
@@ -217,7 +205,6 @@ const WelcomeText = styled(Typography)({
   lineHeight: 1.2,
 });
 
-// ✅ Nom en gras (ligne 2) - DYNAMIQUE
 const WelcomeName = styled(Typography)({
   fontFamily: "Inter, sans-serif",
   fontSize: "16px",
@@ -227,7 +214,6 @@ const WelcomeName = styled(Typography)({
   lineHeight: 1.2,
 });
 
-// ✅ LIEN "Suivi des offres" - bleu, souligné, centré
 const StyledLink = styled(Button)({
   fontFamily: "Inter, sans-serif",
   fontSize: "16px",
@@ -244,7 +230,6 @@ const StyledLink = styled(Button)({
   },
 });
 
-// ✅ LIEN "Suivi de stage" - NOUVEAU - bleu, souligné, centré
 const StyledLinkStage = styled(Button)({
   fontFamily: "Inter, sans-serif",
   fontSize: "16px",
@@ -255,14 +240,13 @@ const StyledLinkStage = styled(Button)({
   textTransform: "none",
   padding: "2px 0",
   minWidth: "auto",
-  marginBottom: "8px", // Espacement
+  marginBottom: "8px",
   "&:hover": {
     color: "#0044CC",
     backgroundColor: "transparent",
   },
 });
 
-// ✅ LIEN "Changer mon mot de passe" - bleu, souligné, centré
 const StyledLink2 = styled(Button)({
   fontFamily: "Inter, sans-serif",
   fontSize: "16px",
@@ -280,7 +264,6 @@ const StyledLink2 = styled(Button)({
   },
 });
 
-// ✅ BOUTON DÉCONNEXION - bleu/turquoise, bord arrondi
 const LogoutBtn = styled(Button)({
   width: "100%",
   maxWidth: "220px",
@@ -302,6 +285,36 @@ const LogoutBtn = styled(Button)({
 });
 
 // ============================================
+// ✅ FONCTION DE PROGRESSION - TOUS LES STATUTS 100%
+// ============================================
+const getProgression = (statut) => {
+    const map = {
+        'Brouillon': 0,
+        'EnCoursCreation': 0,
+        'Soumise': 20,
+        'EnAnalyse': 20,
+        'Entretien': 20,
+        'Acceptee': 100,
+        'Acceptée': 100,
+        'EngagementEnvoye': 40,
+        'EngagementRecu': 60,
+        'EngagementValide': 80,
+        'EngagementRejete': 60,
+        'DemandeEnvoyee': 100,
+        'ValideParDirecteur': 100,
+        'Cloturee': 100,
+        'Clôturée': 100,
+        'Termine': 100,
+        'Terminé': 100,
+        'EnCours': 100,
+        'En cours': 100,
+        'Refusee': 0,
+        'Refusée': 0,
+    };
+    return map[statut] || 0;
+};
+
+// ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
@@ -320,31 +333,50 @@ const SidebarAuth = () => {
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // ✅ NOUVEAU : État pour vérifier si l'étudiant a au moins un stage accepté
-  const [hasAtLeastOneActiveInternship, setHasAtLeastOneActiveInternship] = useState(false);
+  const [hasStageCompleted, setHasStageCompleted] = useState(false);
   const [checkingInternship, setCheckingInternship] = useState(false);
 
   useEffect(() => {
     regenerateCaptcha();
   }, [location.pathname]);
 
-  // ✅ NOUVEAU : Vérifier les stages de l'étudiant quand il est connecté
   useEffect(() => {
     if (isAuthenticated && user) {
       checkInternships();
     } else {
-      setHasAtLeastOneActiveInternship(false);
+      setHasStageCompleted(false);
     }
   }, [isAuthenticated, user]);
 
   const checkInternships = async () => {
     setCheckingInternship(true);
     try {
-      const response = await api.get('/internships/student/has-active');
-      setHasAtLeastOneActiveInternship(response.data?.hasActive || false);
+      const response = await api.get('/applications', {
+        params: { etudiantId: user?.id }
+      });
+      
+      const applications = response.data?.data || [];
+      
+      console.log('[SidebarAuth] Candidatures reçues:', applications.length);
+      
+      applications.forEach((app) => {
+        const statut = app.statut || app.stageStatut;
+        const progression = getProgression(statut);
+        console.log(`[SidebarAuth] Candidature: ${app.offreId?.titre}, Statut: "${statut}", Progression: ${progression}%`);
+      });
+      
+      const hasCompleted = applications.some(app => {
+        const statut = app.statut || app.stageStatut;
+        const progression = getProgression(statut);
+        return progression === 100;
+      });
+      
+      console.log('[SidebarAuth] Candidature à 100% trouvée:', hasCompleted);
+      setHasStageCompleted(hasCompleted);
+      
     } catch (error) {
-      console.warn('⚠️ Aucun stage trouvé pour l\'étudiant');
-      setHasAtLeastOneActiveInternship(false);
+      console.warn('[SidebarAuth] Erreur:', error);
+      setHasStageCompleted(false);
     } finally {
       setCheckingInternship(false);
     }
@@ -423,30 +455,23 @@ const SidebarAuth = () => {
     return (
       <SideCard>
         <Box sx={{ width: "100%", maxWidth: "220px", textAlign: "center" }}>
-          {/* ✅ "Bienvenue," (ligne 1) */}
           <WelcomeText>Bienvenue,</WelcomeText>
-
-          {/* ✅ Nom dynamique (ligne 2) */}
           <WelcomeName>{fullName} !</WelcomeName>
 
-          {/* ✅ Lien 1 : Suivi des offres (toujours visible) */}
           <StyledLink onClick={() => navigate("/dashboard/applications")}>
             Suivi des offres
           </StyledLink>
 
-          {/* ✅ Lien 2 : Suivi de stage (visible seulement si au moins un stage accepté) */}
-          {hasAtLeastOneActiveInternship && (
+          {hasStageCompleted && (
             <StyledLinkStage onClick={() => navigate("/dashboard/stages")}>
               Suivi de stage
             </StyledLinkStage>
           )}
 
-          {/* ✅ Lien 3 : Changer mon mot de passe */}
           <StyledLink2 onClick={() => navigate("/profile")}>
             Changer mon mot de passe
           </StyledLink2>
 
-          {/* ✅ Bouton Déconnexion */}
           <LogoutBtn onClick={handleLogout}>
             <i className="fa-solid fa-arrow-right-from-bracket" style={{ fontSize: "16px" }}></i>
             Déconnexion
@@ -457,7 +482,7 @@ const SidebarAuth = () => {
   }
 
   // ========================================== //
-  // ❌ VERSION NON CONNECTÉE (Formulaire)
+  // ❌ VERSION NON CONNECTÉE
   // ========================================== //
   return (
     <SideCard>

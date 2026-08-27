@@ -1,6 +1,10 @@
 // src/controllers/internshipController.js
-// ✅ LOGIQUE : Une candidature Acceptée = stage actif
-// ✅ Plus besoin de la collection internships pour l'affichage
+// ✅ CORRECTION : Récupérer le statut du stage réel s'il existe
+// ✅ CORRECTION : Accepte les deux formes du statut (Acceptée et Acceptee)
+// ✅ CORRECTION : Récupérer l'encadrant depuis le stage réel pour les stages virtuels
+// ✅ AJOUT : Fonctions Timeline (getTimeline, postTimelineMessage, deleteTimelineMessage)
+// ✅ AJOUT : Fonctions Livrables (getLivrables)
+// ✅ AJOUT : Fonctions Évaluation (getEvaluation, updateEvaluation)
 
 const mongoose = require('mongoose');
 const path = require('path');
@@ -25,16 +29,16 @@ exports.hasActiveInternship = async (req, res) => {
 
         console.log('🔍 [hasActiveInternship] Étudiant ID:', studentId);
 
-        // ✅ Vérifier si l'étudiant a une candidature Acceptée
         const acceptedApplication = await Application.findOne({
             etudiantId: studentId,
-            statut: 'Acceptée'
+            statut: { $in: ['Acceptée', 'Acceptee'] }
         }).populate('offreId', 'titre');
 
         const hasActive = !!acceptedApplication;
 
-        console.log('🔍 [hasActiveInternship] Candidature Acceptée trouvée:', hasActive);
+        console.log('🔍 [hasActiveInternship] Candidature trouvée:', hasActive);
         if (acceptedApplication) {
+            console.log('🔍 [hasActiveInternship] Statut exact:', acceptedApplication.statut);
             console.log('🔍 [hasActiveInternship] Titre:', acceptedApplication.offreId?.titre);
         }
 
@@ -60,6 +64,7 @@ exports.hasActiveInternship = async (req, res) => {
 
 // ============================================
 // ✅ RÉCUPÉRER TOUTES LES CANDIDATURES ACCEPTÉES
+// ✅ CORRECTION : Récupérer le statut du stage réel s'il existe
 // ============================================
 exports.getStudentInternships = async (req, res) => {
     try {
@@ -70,7 +75,7 @@ exports.getStudentInternships = async (req, res) => {
         // ✅ Récupérer TOUTES les candidatures Acceptées
         const acceptedApplications = await Application.find({
             etudiantId: studentId,
-            statut: 'Acceptée'
+            statut: { $in: ['Acceptée', 'Acceptee'] }
         })
             .populate('offreId', 'titre typeStage departementId')
             .populate('etudiantId', 'nom prenom email universite filiere')
@@ -78,27 +83,56 @@ exports.getStudentInternships = async (req, res) => {
 
         console.log('🔍 [getStudentInternships] Candidatures Acceptées trouvées:', acceptedApplications.length);
 
-        // ✅ Transformer les candidatures en "stages" virtuels
-        const virtualInternships = acceptedApplications.map(app => ({
-            _id: app._id,
-            etudiantId: app.etudiantId,
-            offreId: app.offreId,
-            applicationId: app._id,
-            dateDebut: app.offreId?.dateDebut || new Date(),
-            dateFin: app.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-            statut: 'EnCours',
-            sujetTitre: app.offreId?.titre || 'Stage',
-            encadrantId: null,
-            livrables: [],
-            remarquesEncadrant: [],
-            convention: { status: 'EnAttente' },
-            evaluation: null,
-            attestationGeneree: false,
-            createdAt: app.createdAt,
-            updatedAt: app.updatedAt,
-            // ✅ Indiquer que c'est un stage virtuel
-            isVirtual: true
+        // ✅ Transformer les candidatures en "stages" virtuels avec le statut du stage réel
+        const virtualInternships = await Promise.all(acceptedApplications.map(async (app) => {
+            // ✅ RECHERCHER LE STAGE RÉEL associé à cette candidature
+            const realInternship = await Internship.findOne({ applicationId: app._id });
+            
+            // ✅ Utiliser le statut du stage réel s'il existe
+            let statut = app.statut;
+            let encadrantId = null;
+            let livrables = [];
+            let remarquesEncadrant = [];
+            let convention = { status: 'EnAttente' };
+            let evaluation = null;
+            let attestationGeneree = false;
+            
+            if (realInternship) {
+                statut = realInternship.statut;  // ← Utiliser le statut du stage
+                encadrantId = realInternship.encadrantId;
+                livrables = realInternship.livrables || [];
+                remarquesEncadrant = realInternship.remarquesEncadrant || [];
+                convention = realInternship.convention || { status: 'EnAttente' };
+                evaluation = realInternship.evaluation || null;
+                attestationGeneree = realInternship.attestationGeneree || false;
+                
+                console.log(`🔍 [getStudentInternships] Stage réel trouvé: ${realInternship.statut}`);
+            } else {
+                console.log(`🔍 [getStudentInternships] Aucun stage réel pour cette candidature, statut: ${app.statut}`);
+            }
+            
+            return {
+                _id: app._id,
+                etudiantId: app.etudiantId,
+                offreId: app.offreId,
+                applicationId: app._id,
+                dateDebut: realInternship?.dateDebut || app.offreId?.dateDebut || new Date(),
+                dateFin: realInternship?.dateFin || app.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                statut: statut,  // ← Statut du stage réel OU de la candidature
+                sujetTitre: realInternship?.sujetTitre || app.offreId?.titre || 'Stage',
+                encadrantId: encadrantId,
+                livrables: livrables,
+                remarquesEncadrant: remarquesEncadrant,
+                convention: convention,
+                evaluation: evaluation,
+                attestationGeneree: attestationGeneree,
+                createdAt: app.createdAt,
+                updatedAt: app.updatedAt,
+                isVirtual: true
+            };
         }));
+
+        console.log('🔍 [getStudentInternships] Stages virtuels créés:', virtualInternships.length);
 
         return res.status(200).json({
             success: true,
@@ -174,6 +208,7 @@ exports.getAllInternships = async (req, res) => {
 
 // ============================================
 // GET - Recuperer un stage par ID (ou candidature)
+// ✅ CORRECTION : Récupérer l'encadrant depuis le stage réel pour les stages virtuels
 // ============================================
 exports.getInternshipById = async (req, res) => {
     try {
@@ -192,23 +227,28 @@ exports.getInternshipById = async (req, res) => {
                 .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
                 .populate('offreId', 'titre description typeStage');
 
-            if (application && application.statut === 'Acceptée') {
+            if (application && (application.statut === 'Acceptee' || application.statut === 'Acceptée')) {
+                
+                // ✅ RECHERCHER LE STAGE RÉEL POUR RÉCUPÉRER L'ENCADRANT ET LES DONNÉES
+                const realInternship = await Internship.findOne({ applicationId: application._id })
+                    .populate('encadrantId', 'nom prenom email');
+
                 // Créer un stage virtuel
                 internship = {
                     _id: application._id,
                     etudiantId: application.etudiantId,
                     offreId: application.offreId,
                     applicationId: application._id,
-                    dateDebut: application.offreId?.dateDebut || new Date(),
-                    dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                    statut: 'EnCours',
-                    sujetTitre: application.offreId?.titre || 'Stage',
-                    encadrantId: null,
-                    livrables: [],
-                    remarquesEncadrant: [],
-                    convention: { status: 'EnAttente' },
-                    evaluation: null,
-                    attestationGeneree: false,
+                    dateDebut: realInternship?.dateDebut || application.offreId?.dateDebut || new Date(),
+                    dateFin: realInternship?.dateFin || application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                    statut: application.statut,
+                    sujetTitre: realInternship?.sujetTitre || application.offreId?.titre || 'Stage',
+                    encadrantId: realInternship?.encadrantId || null,
+                    livrables: realInternship?.livrables || [],
+                    remarquesEncadrant: realInternship?.remarquesEncadrant || [],
+                    convention: realInternship?.convention || { status: 'EnAttente' },
+                    evaluation: realInternship?.evaluation || null,
+                    attestationGeneree: realInternship?.attestationGeneree || false,
                     isVirtual: true
                 };
             }
@@ -318,22 +358,27 @@ exports.getInternshipByApplication = async (req, res) => {
                 .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
                 .populate('offreId', 'titre description typeStage dateDebut dateFin');
 
-            if (application && application.statut === 'Acceptée') {
+            if (application && (application.statut === 'Acceptee' || application.statut === 'Acceptée')) {
+                
+                // ✅ RECHERCHER LE STAGE RÉEL POUR RÉCUPÉRER L'ENCADRANT
+                const realInternship = await Internship.findOne({ applicationId: application._id })
+                    .populate('encadrantId', 'nom prenom email');
+
                 internship = {
                     _id: application._id,
                     etudiantId: application.etudiantId,
                     offreId: application.offreId,
                     applicationId: application._id,
-                    dateDebut: application.offreId?.dateDebut || new Date(),
-                    dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                    statut: 'EnCours',
-                    sujetTitre: application.offreId?.titre || 'Stage',
-                    encadrantId: null,
-                    livrables: [],
-                    remarquesEncadrant: [],
-                    convention: { status: 'EnAttente' },
-                    evaluation: null,
-                    attestationGeneree: false,
+                    dateDebut: realInternship?.dateDebut || application.offreId?.dateDebut || new Date(),
+                    dateFin: realInternship?.dateFin || application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                    statut: application.statut,
+                    sujetTitre: realInternship?.sujetTitre || application.offreId?.titre || 'Stage',
+                    encadrantId: realInternship?.encadrantId || null,
+                    livrables: realInternship?.livrables || [],
+                    remarquesEncadrant: realInternship?.remarquesEncadrant || [],
+                    convention: realInternship?.convention || { status: 'EnAttente' },
+                    evaluation: realInternship?.evaluation || null,
+                    attestationGeneree: realInternship?.attestationGeneree || false,
                     isVirtual: true
                 };
             }
@@ -428,6 +473,7 @@ exports.createInternship = async (req, res) => {
             sujetLivrables: sujet?.livrables || null,
         });
 
+        // ✅ Normaliser le statut de la candidature
         application.statut = 'Acceptee';
         await application.save();
 
@@ -767,6 +813,7 @@ exports.validateApplicationDocuments = async (req, res) => {
         }
 
         if (decision === 'accepte') {
+            // ✅ Normaliser le statut (sans accent)
             application.statut = 'Acceptee';
             await application.save();
 
@@ -1639,6 +1686,367 @@ exports.updateInternshipStatus = async (req, res) => {
         res.status(500).json({
             success: false,
             message: error.message
+        });
+    }
+};
+
+// ============================================
+// ✅ TIMELINE - Récupérer les messages
+// ============================================
+exports.getTimeline = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const internship = await Internship.findById(id);
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        // Vérifier les permissions
+        const userId = req.user._id;
+        const userRole = req.user.role;
+
+        const isStudent = internship.etudiantId.toString() === userId.toString();
+        const isSupervisor = internship.encadrantId && internship.encadrantId.toString() === userId.toString();
+        const isAdmin = ['RH', 'Administrateur', 'Departement'].includes(userRole);
+
+        if (!isStudent && !isSupervisor && !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'avez pas accès à ce journal de suivi'
+            });
+        }
+
+        const timeline = internship.timeline || [];
+        const populatedTimeline = await Promise.all(timeline.map(async (msg) => {
+            let authorName = 'Utilisateur';
+            let authorRole = msg.auteurRole || 'Système';
+
+            if (msg.auteurId) {
+                const internalUser = await UtilisateurInterne.findById(msg.auteurId).select('nom prenom');
+                if (internalUser) {
+                    authorName = `${internalUser.prenom || ''} ${internalUser.nom || ''}`.trim() || 'Utilisateur';
+                } else {
+                    const externalUser = await UtilisateurExterne.findById(msg.auteurId).select('nom prenom');
+                    if (externalUser) {
+                        authorName = `${externalUser.prenom || ''} ${externalUser.nom || ''}`.trim() || 'Utilisateur';
+                    }
+                }
+            }
+
+            return {
+                _id: msg._id,
+                message: msg.message,
+                date: msg.date,
+                auteurId: msg.auteurId,
+                auteurRole: authorRole,
+                auteurNom: authorName,
+                fichier: msg.fichier || null,
+                estAutomatique: msg.estAutomatique || false
+            };
+        }));
+
+        populatedTimeline.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        return res.status(200).json({
+            success: true,
+            data: populatedTimeline
+        });
+
+    } catch (error) {
+        console.error('Erreur getTimeline:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération du journal de suivi'
+        });
+    }
+};
+
+// ============================================
+// ✅ TIMELINE - Publier un message
+// ============================================
+exports.postTimelineMessage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { message } = req.body;
+        const file = req.file;
+
+        if (!message && !file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Veuillez saisir un message ou joindre un fichier'
+            });
+        }
+
+        const internship = await Internship.findById(id);
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        const userId = req.user._id;
+        const userRole = req.user.role;
+
+        const isStudent = internship.etudiantId.toString() === userId.toString();
+        const isSupervisor = internship.encadrantId && internship.encadrantId.toString() === userId.toString();
+        const isAdmin = ['RH', 'Administrateur', 'Departement'].includes(userRole);
+
+        if (!isStudent && !isSupervisor && !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'avez pas accès à ce journal de suivi'
+            });
+        }
+
+        let auteurRole = 'Système';
+        if (isStudent) auteurRole = 'Etudiant';
+        else if (isSupervisor) auteurRole = 'Encadrant';
+        else if (isAdmin) auteurRole = 'RH';
+
+        const newMessage = {
+            _id: new mongoose.Types.ObjectId(),
+            auteurId: userId,
+            auteurRole: auteurRole,
+            message: message || '',
+            date: new Date(),
+            estAutomatique: false
+        };
+
+        if (file) {
+            newMessage.fichier = {
+                nom: file.originalname,
+                chemin: file.path,
+                type: file.mimetype
+            };
+        }
+
+        internship.timeline.push(newMessage);
+        await internship.save();
+
+        const authorName = `${req.user.prenom || ''} ${req.user.nom || ''}`.trim() || 'Utilisateur';
+
+        // Notification à l'autre partie
+        const recipientId = isStudent ? internship.encadrantId : internship.etudiantId;
+        if (recipientId) {
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Nouveau message dans le suivi',
+                message: `${req.user.prenom || ''} ${req.user.nom || ''} a publié un message.`,
+                userId: recipientId,
+                userModel: isStudent ? 'UtilisateurInterne' : 'UtilisateurExterne',
+                lien: `/dashboard/stage/${internship._id}`,
+            });
+        }
+
+        return res.status(201).json({
+            success: true,
+            data: {
+                _id: newMessage._id,
+                message: newMessage.message,
+                date: newMessage.date,
+                auteurId: userId,
+                auteurRole: auteurRole,
+                auteurNom: authorName,
+                fichier: newMessage.fichier || null,
+                estAutomatique: false
+            },
+            message: 'Message publié avec succès'
+        });
+
+    } catch (error) {
+        console.error('Erreur postTimelineMessage:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la publication du message'
+        });
+    }
+};
+
+// ============================================
+// ✅ TIMELINE - Supprimer un message
+// ============================================
+exports.deleteTimelineMessage = async (req, res) => {
+    try {
+        const { id, messageId } = req.params;
+
+        const internship = await Internship.findById(id);
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        const userId = req.user._id;
+        const userRole = req.user.role;
+
+        const isStudent = internship.etudiantId.toString() === userId.toString();
+        const isSupervisor = internship.encadrantId && internship.encadrantId.toString() === userId.toString();
+        const isAdmin = ['RH', 'Administrateur', 'Departement'].includes(userRole);
+
+        if (!isStudent && !isSupervisor && !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'avez pas accès à ce journal de suivi'
+            });
+        }
+
+        const messageIndex = internship.timeline.findIndex(
+            msg => msg._id.toString() === messageId
+        );
+
+        if (messageIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message non trouvé'
+            });
+        }
+
+        const message = internship.timeline[messageIndex];
+
+        if (!isAdmin && message.auteurId.toString() !== userId.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous ne pouvez pas supprimer ce message'
+            });
+        }
+
+        internship.timeline.splice(messageIndex, 1);
+        await internship.save();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Message supprimé avec succès'
+        });
+
+    } catch (error) {
+        console.error('Erreur deleteTimelineMessage:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la suppression du message'
+        });
+    }
+};
+
+// ============================================
+// ✅ LIVRABLES - Récupérer les livrables
+// ============================================
+exports.getLivrables = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const internship = await Internship.findById(id);
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: internship.livrables || []
+        });
+
+    } catch (error) {
+        console.error('Erreur getLivrables:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération des livrables'
+        });
+    }
+};
+
+// ============================================
+// ✅ ÉVALUATION - Récupérer l'évaluation
+// ============================================
+exports.getEvaluation = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const internship = await Internship.findById(id);
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        const evaluation = await Evaluation.findOne({ stageId: internship._id });
+
+        return res.status(200).json({
+            success: true,
+            data: evaluation || null
+        });
+
+    } catch (error) {
+        console.error('Erreur getEvaluation:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération de l\'évaluation'
+        });
+    }
+};
+
+// ============================================
+// ✅ ÉVALUATION - Mettre à jour l'évaluation
+// ============================================
+exports.updateEvaluation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const evaluationData = req.body;
+
+        const internship = await Internship.findById(id);
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        // Vérifier que l'utilisateur est l'encadrant
+        if (!internship.encadrantId || internship.encadrantId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Vous n\'êtes pas l\'encadrant de ce stage'
+            });
+        }
+
+        let evaluation = await Evaluation.findOne({ stageId: internship._id });
+
+        if (evaluation) {
+            // Mettre à jour l'évaluation existante
+            Object.assign(evaluation, evaluationData);
+            evaluation.dateEvaluation = new Date();
+            await evaluation.save();
+        } else {
+            // Créer une nouvelle évaluation
+            evaluation = await Evaluation.create({
+                stageId: internship._id,
+                stagiaireId: internship.etudiantId,
+                encadrantId: req.user._id,
+                dateEvaluation: new Date(),
+                ...evaluationData,
+                statut: 'Soumise'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: evaluation,
+            message: 'Évaluation enregistrée avec succès'
+        });
+
+    } catch (error) {
+        console.error('Erreur updateEvaluation:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de l\'enregistrement de l\'évaluation'
         });
     }
 };

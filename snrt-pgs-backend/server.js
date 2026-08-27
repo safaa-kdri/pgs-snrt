@@ -24,7 +24,8 @@ const documentRoutes = require('./src/routes/documentRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const studentRoutes = require('./src/routes/studentRoutes');
-const internshipRoutes = require('./src/routes/internshipRoutes');
+const internshipRoutes = require('./src/routes/internshipRoutes.js');
+
 const resultsRoutes = require('./src/routes/resultsRoutes');
 const periodRoutes = require('./src/routes/periodRoutes');
 // AJOUT : Routes pour les rôles
