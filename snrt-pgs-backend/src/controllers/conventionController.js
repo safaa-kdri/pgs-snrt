@@ -2,6 +2,8 @@
 // ✅ CONTROLLER POUR LA GESTION DES CONVENTIONS
 // ✅ AJOUT : Ajouter la signature sur le PDF existant avec pdf-lib
 // ✅ AJOUT : Fonctions uploadConvention, signConvention, downloadConvention
+// ✅ CORRECTION : Liste complète des statuts autorisés (avec accents)
+// ✅ CORRECTION : Logs de débogage pour identifier les statuts exacts
 
 const Internship = require('../models/Internship');
 const Application = require('../models/Application');
@@ -18,11 +20,13 @@ const path = require('path');
 const { PDFDocument } = require('pdf-lib');
 
 // ============================================
-// ✅ LISTE DES STATUTS AUTORISÉS POUR LA CONVENTION
+// ✅ LISTE COMPLÈTE DES STATUTS AUTORISÉS POUR LA CONVENTION
 // ============================================
 const CONVENTION_ALLOWED_STATUSES = [
+    // Statuts de base
     'EnCours',
-    'Acceptee', 
+    'Acceptee',
+    'Acceptée',           // ← Version avec accent
     'DemandeEnvoyee',
     'EngagementEnvoye',
     'EngagementRecu',
@@ -30,7 +34,12 @@ const CONVENTION_ALLOWED_STATUSES = [
     'EnAttenteEngagement',
     'ValideParDirecteur',
     'Cloturee',
-    'Termine'
+    'Clôturée',           // ← Version avec accent
+    'Termine',
+    'Terminé',            // ← Version avec accent
+    'Valide',
+    'EnCoursCreation',
+    'Soumise'
 ];
 
 // ============================================
@@ -42,10 +51,18 @@ exports.deposerConvention = asyncHandler(async (req, res) => {
     console.log('🔍 [deposerConvention] ===== DEBUT ====');
     console.log('🔍 [deposerConvention] studentId:', studentId);
 
+    // ✅ DEBUG : Afficher tous les stages de l'étudiant
     const allInternships = await Internship.find({ etudiantId: studentId });
-    console.log('🔍 [deposerConvention] Tous les stages de l\'étudiant:', allInternships.length);
-    console.log('🔍 [deposerConvention] Statuts des stages:', allInternships.map(i => i.statut));
+    console.log('🔍 [deposerConvention] Stages trouvés:', allInternships.length);
+    console.log('🔍 [deposerConvention] Statuts des stages:', 
+        allInternships.map(i => ({
+            id: i._id,
+            statut: i.statut,
+            statutJSON: JSON.stringify(i.statut)
+        }))
+    );
 
+    // ✅ Recherche avec TOUS les statuts autorisés
     const internship = await Internship.findOne({
         etudiantId: studentId,
         statut: { $in: CONVENTION_ALLOWED_STATUSES }
@@ -55,7 +72,9 @@ exports.deposerConvention = asyncHandler(async (req, res) => {
     console.log('🔍 [deposerConvention] statut internship:', internship?.statut);
 
     if (!internship) {
-        throw ApiError.notFound('Aucun stage actif trouvé pour cet étudiant');
+        throw ApiError.notFound(
+            `Aucun stage actif trouvé pour cet étudiant. Statuts autorisés: ${CONVENTION_ALLOWED_STATUSES.join(', ')}`
+        );
     }
 
     if (!req.file) {
@@ -91,6 +110,27 @@ exports.deposerConvention = asyncHandler(async (req, res) => {
 
     const verifyInternship = await Internship.findById(internship._id);
     console.log('✅ [deposerConvention] VÉRIFICATION - verifyInternship.convention:', verifyInternship.convention);
+
+    // ✅ Notification au RH
+    try {
+        const rhUsers = await UtilisateurInterne.find({ 
+            roleId: await Role.findOne({ nom: 'RH' }) 
+        }).select('_id');
+        
+        for (const rh of rhUsers) {
+            await Notification.create({
+                type: 'InApp',
+                titre: '📄 Nouvelle convention déposée',
+                message: `L'étudiant ${req.user.prenom} ${req.user.nom} a déposé sa convention signée.`,
+                userId: rh._id,
+                userModel: 'UtilisateurInterne',
+                lien: `/rh/generate-convention`,
+            });
+        }
+        console.log('✅ [deposerConvention] Notifications envoyées aux RH');
+    } catch (notifError) {
+        console.warn('⚠️ [deposerConvention] Erreur notification:', notifError.message);
+    }
 
     logger.audit('CONVENTION_DEPOSEE', {
         studentId: studentId,
@@ -537,16 +577,24 @@ exports.uploadConvention = asyncHandler(async (req, res) => {
     await internship.save();
 
     // Notification au RH
-    const rhUsers = await UtilisateurInterne.find({ roleId: await Role.findOne({ nom: 'RH' }) }).select('_id');
-    for (const rh of rhUsers) {
-        await Notification.create({
-            type: 'InApp',
-            titre: 'Convention déposée',
-            message: `L'étudiant ${req.user.prenom} ${req.user.nom} a déposé sa convention signée.`,
-            userId: rh._id,
-            userModel: 'UtilisateurInterne',
-            lien: `/rh/generate-convention`,
-        });
+    try {
+        const rhUsers = await UtilisateurInterne.find({ 
+            roleId: await Role.findOne({ nom: 'RH' }) 
+        }).select('_id');
+        
+        for (const rh of rhUsers) {
+            await Notification.create({
+                type: 'InApp',
+                titre: '📄 Nouvelle convention déposée',
+                message: `L'étudiant ${req.user.prenom} ${req.user.nom} a déposé sa convention signée.`,
+                userId: rh._id,
+                userModel: 'UtilisateurInterne',
+                lien: `/rh/generate-convention`,
+            });
+        }
+        console.log('✅ [uploadConvention] Notifications envoyées aux RH');
+    } catch (notifError) {
+        console.warn('⚠️ [uploadConvention] Erreur notification:', notifError.message);
     }
 
     logger.audit('CONVENTION_UPLOAD', {

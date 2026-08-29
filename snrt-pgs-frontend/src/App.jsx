@@ -1,10 +1,5 @@
 // src/App.jsx
-// CORRECTION : Import correct de OfferEditPage
-// AJOUT : Route pour DepotCandidature (Workflow 3 etapes)
-// AJOUT : Route pour CandidatureManagement (RH)
-// AJOUT : Routes pour "Mes stages" et "Suivi de stage" (Étudiant)
-// AJOUT : Routes pour "Suivi des stages" (Encadrant)
-// AJOUT : Route pour /rh/candidatures
+// ✅ VERSION FINALE AVEC ROUTE UploadSignature
 
 import React, { useEffect, useState, useRef } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
@@ -51,17 +46,15 @@ import PeriodsList from "./components/admin/PeriodsList";
 import Settings from "./components/admin/Settings";
 import AdminOffres from "./components/admin/AdminOffres";
 
-// ===== SUPERVISOR PAGES (existantes) =====
+// ===== SUPERVISOR PAGES =====
 import InternsList from "./components/supervisor/InternsList";
 import InternDetailSupervisor from "./components/supervisor/InternDetail";
 import Evaluation from "./components/supervisor/Evaluation";
 import CloseInternship from "./components/supervisor/CloseInternship";
-
-// ===== SUPERVISOR PAGES (NOUVELLES - Suivi des stages) =====
 import SupervisorInternshipsList from "./components/supervisor/SupervisorInternshipsList";
 import SupervisorInternshipDetail from "./components/supervisor/SupervisorInternshipDetail";
 
-// ===== STUDENT PAGES (existantes) =====
+// ===== STUDENT PAGES =====
 import Profile from "./components/student/Profile";
 import Applications from "./components/student/Applications";
 import Favorites from "./components/student/Favorites";
@@ -72,8 +65,6 @@ import DepotRapport from "./components/student/DepotRapport";
 import Attestation from "./components/student/Attestation";
 import ApplicationDetailStudent from "./components/student/ApplicationDetail";
 import DepotCandidature from "./components/student/DepotCandidature";
-
-// ===== STUDENT PAGES (NOUVELLES - Mes stages) =====
 import StudentStagesList from "./components/student/StudentStagesList";
 import StudentInternshipDetail from "./components/student/StudentInternshipDetail";
 
@@ -100,6 +91,9 @@ import InterviewAddPage from "./components/rh/InterviewAddPage";
 import GenerateConvention from "./components/rh/GenerateConvention";
 import OfferDetailPage from "./components/rh/OfferDetailPage";
 import CandidatureManagement from './components/rh/CandidatureManagement';
+
+// ✅ AJOUT - Import de UploadSignature
+import UploadSignature from './components/rh/UploadSignature';
 
 // ============================================
 // PROTECTION DES ROUTES
@@ -213,7 +207,6 @@ function App() {
   const { isAuthenticated, status } = useSelector((state) => state.auth);
   const [authTrigger, setAuthTrigger] = useState(0);
 
-  // Nettoyage automatique si 2faEmail et token coexistent
   useEffect(() => {
     const twoFactorEmail = localStorage.getItem("2faEmail");
     const twoFactorUserId = localStorage.getItem("2faUserId");
@@ -375,7 +368,7 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* STUDENT ROUTES (existantes) */}
+        {/* STUDENT ROUTES */}
         {/* ========================================== */}
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route
@@ -468,7 +461,6 @@ function App() {
             </Layout>
           }
         />
-        {/* WORKFLOW DE CANDIDATURE EN 3 ETAPES */}
         <Route
           path="/depot-candidature"
           element={
@@ -491,7 +483,7 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* STUDENT ROUTES (NOUVELLES - Mes stages) */}
+        {/* STUDENT ROUTES - Mes stages */}
         {/* ========================================== */}
         <Route
           path="/dashboard/stages"
@@ -515,7 +507,7 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* ROUTES ADMIN */}
+        {/* ADMIN ROUTES */}
         {/* ========================================== */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route
@@ -632,7 +624,7 @@ function App() {
         />
 
         {/* ========================================== */}
-        {/* SUPERVISOR ROUTES (existantes) */}
+        {/* SUPERVISOR ROUTES */}
         {/* ========================================== */}
         <Route
           path="/supervisor"
@@ -684,10 +676,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* ========================================== */}
-        {/* SUPERVISOR ROUTES (NOUVELLES - Suivi des stages) */}
-        {/* ========================================== */}
         <Route
           path="/supervisor/stages"
           element={
@@ -742,7 +730,6 @@ function App() {
             </PrivateRoute>
           }
         />
-        {/* ✅ NOUVELLE ROUTE - GESTION DES CANDIDATURES RH */}
         <Route
           path="/rh/candidatures"
           element={
@@ -804,8 +791,20 @@ function App() {
           }
         />
 
+        {/* ✅ ROUTE AJOUTÉE - Upload Signature */}
+        <Route
+          path="/rh/upload-signature"
+          element={
+            <PrivateRoute allowedRoles={["RH", "Rh"]}>
+              <RhLayout>
+                <UploadSignature />
+              </RhLayout>
+            </PrivateRoute>
+          }
+        />
+
         {/* ========================================== */}
-        {/* DEPARTMENT ROUTES - AVEC DepartmentLayout */}
+        {/* DEPARTMENT ROUTES */}
         {/* ========================================== */}
         <Route
           path="/department"

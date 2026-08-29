@@ -1,5 +1,7 @@
 // src/components/student/StudentConvention.jsx
 // ✅ Composant : Gestion de la convention (dépôt, suivi, téléchargement)
+// ✅ CORRIGÉ : Gestion du statut "NonGeneree" comme "pas de convention"
+// ✅ CORRIGÉ : Bouton de dépôt visible quand aucune convention n'existe
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -24,7 +26,7 @@ import {
     Check,
     PictureAsPdf,
 } from '@mui/icons-material';
-import { getConventionStatus, uploadConvention, downloadConvention } from '../../services/api';
+import api from '../../services/api';
 
 // ============================================
 // STYLES
@@ -61,9 +63,8 @@ const StatusChip = styled(Chip)(({ status }) => {
         'SigneeRH': { bg: '#dbeafe', text: '#1d4ed8' },
         'EnvoyeeEtudiant': { bg: '#d1fae5', text: '#065f46' },
         'Cloturee': { bg: '#d1fae5', text: '#065f46' },
-        'EnAttente': { bg: '#f3f4f6', text: '#6b7280' },
     };
-    const color = colors[status] || colors['EnAttente'];
+    const color = colors[status] || colors['DeposeeEtudiant'];
     return {
         backgroundColor: color.bg,
         color: color.text,
@@ -89,22 +90,51 @@ const StudentConvention = ({ internshipId }) => {
     const steps = ['Déposer la convention', 'Signée par RH', 'Convention finalisée'];
 
     useEffect(() => {
-        fetchConventionStatus();
+        if (internshipId) {
+            fetchConventionStatus();
+        }
     }, [internshipId]);
 
+    // ✅ Récupérer le statut de la convention pour CE stage spécifique
     const fetchConventionStatus = async () => {
         setLoading(true);
+        setError('');
         try {
-            const data = await getConventionStatus(internshipId);
+            const response = await api.get(`/internships/${internshipId}/convention`);
+            console.log('🔍 [fetchConventionStatus] Réponse:', response.data);
+            
+            const data = response.data?.data;
             if (data) {
                 setConvention(data);
-                setStatus(data.statut || '');
-                if (data.convention) {
-                    setFile(data.convention);
+                // ✅ Si le statut est "NonGeneree" ou vide, on considère qu'il n'y a pas de convention
+                const statut = data.statut || '';
+                if (statut === 'NonGeneree' || statut === '') {
+                    setStatus('');
+                    setConvention(null);
+                } else {
+                    setStatus(statut);
+                    setConvention(data);
                 }
+                if (data.convention && statut !== 'NonGeneree') {
+                    setFile(data.convention);
+                } else {
+                    setFile(null);
+                }
+            } else {
+                setStatus('');
+                setConvention(null);
+                setFile(null);
             }
         } catch (error) {
-            console.error('❌ Erreur chargement convention:', error);
+            console.error('❌ Erreur chargement statut convention:', error);
+            // Si 404, c'est normal (pas encore de convention)
+            if (error.response?.status === 404) {
+                setStatus('');
+                setConvention(null);
+                setFile(null);
+            } else {
+                setError('Erreur lors du chargement du statut de la convention');
+            }
         } finally {
             setLoading(false);
         }
@@ -112,18 +142,40 @@ const StudentConvention = ({ internshipId }) => {
 
     const handleFileSelect = (selectedFile) => {
         if (!selectedFile) return;
+        
         if (selectedFile.type !== 'application/pdf') {
             setError('Seuls les fichiers PDF sont acceptés');
             return;
         }
+
         if (selectedFile.size > 5 * 1024 * 1024) {
             setError('Le fichier ne doit pas dépasser 5 Mo');
             return;
         }
+
         setFile(selectedFile);
         setError('');
     };
 
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('dragging');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFileSelect(files[0]);
+        }
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.add('dragging');
+    };
+
+    const handleDragLeave = (e) => {
+        e.currentTarget.classList.remove('dragging');
+    };
+
+    // ✅ Déposer la convention pour CE stage spécifique
     const handleUpload = async () => {
         if (!file) {
             setError('Veuillez sélectionner un fichier');
@@ -132,14 +184,27 @@ const StudentConvention = ({ internshipId }) => {
 
         setUploading(true);
         setError('');
+        setSuccess('');
+        
         try {
-            const result = await uploadConvention(internshipId, file);
-            if (result) {
-                setSuccess('✅ Convention déposée avec succès ! En attente de signature RH.');
-                setStatus('DeposeeEtudiant');
-                setFile(null);
-                await fetchConventionStatus();
-            }
+            const formData = new FormData();
+            formData.append('convention', file);
+
+            const response = await api.post(`/internships/${internshipId}/convention`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            console.log('✅ [handleUpload] Réponse:', response.data);
+
+            setSuccess('✅ Convention déposée avec succès ! En attente de signature RH.');
+            setStatus('DeposeeEtudiant');
+            setConvention(response.data?.data);
+            setFile(null);
+            
+            // Recharger le statut
+            await fetchConventionStatus();
+            
+            setTimeout(() => setSuccess(''), 5000);
         } catch (error) {
             console.error('❌ Erreur dépôt convention:', error);
             setError(error.response?.data?.message || 'Erreur lors du dépôt');
@@ -148,13 +213,17 @@ const StudentConvention = ({ internshipId }) => {
         }
     };
 
+    // ✅ Télécharger la convention signée pour CE stage
     const handleDownloadConvention = async () => {
         try {
-            const blob = await downloadConvention(internshipId);
-            const url = window.URL.createObjectURL(blob);
+            const response = await api.get(`/internships/${internshipId}/convention/download`, {
+                responseType: 'blob',
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `Convention_${internshipId}_signee.pdf`);
+            link.setAttribute('download', `Convention_Stage_${internshipId}.pdf`);
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -220,7 +289,12 @@ const StudentConvention = ({ internshipId }) => {
     }
 
     const statusInfo = getStatusMessage();
-    const isDeposable = !status || status === '' || status === 'EnAttente';
+    // ✅ Une convention peut être déposée si :
+    // - Pas de statut (pas de convention)
+    // - Statut "NonGeneree" (pas de convention)
+    // - Statut vide
+    const hasValidConvention = status && status !== '' && status !== 'NonGeneree';
+    const isDeposable = !hasValidConvention;
     const canDownload = status === 'EnvoyeeEtudiant' || status === 'Cloturee';
 
     return (
@@ -259,7 +333,7 @@ const StudentConvention = ({ internshipId }) => {
                     <Typography variant="body2" color="text.secondary">
                         {statusInfo.description}
                     </Typography>
-                    {status && (
+                    {hasValidConvention && (
                         <Box sx={{ mt: 1 }}>
                             <StatusChip label={status} status={status} size="small" />
                         </Box>
@@ -269,13 +343,22 @@ const StudentConvention = ({ internshipId }) => {
 
             <Divider sx={{ my: 3 }} />
 
-            {/* Dépôt */}
+            {/* ✅ ZONE DE DÉPÔT - Affichée si aucune convention valide n'existe */}
             {isDeposable ? (
                 <>
                     <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
                         📤 Déposer votre convention
                     </Typography>
-                    <DropZone onClick={() => document.getElementById('convention-file-input')?.click()}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Sélectionnez le fichier PDF de votre convention signée par votre établissement.
+                    </Typography>
+                    
+                    <DropZone
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onClick={() => document.getElementById('convention-file-input')?.click()}
+                    >
                         <CloudUpload sx={{ fontSize: 48, color: '#148aa0', mb: 2 }} />
                         <Typography variant="h6" sx={{ color: '#1a2332' }}>
                             {file ? 'Fichier sélectionné' : 'Déposez votre convention ici'}
@@ -327,7 +410,7 @@ const StudentConvention = ({ internshipId }) => {
                         Convention déjà déposée
                     </Typography>
                     <Typography variant="body2" color="#065f46">
-                        Vous avez déjà déposé votre convention. Elle est en cours de traitement.
+                        Vous avez déjà déposé votre convention pour ce stage. Elle est en cours de traitement.
                     </Typography>
                 </Box>
             )}

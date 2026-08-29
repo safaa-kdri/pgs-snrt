@@ -1,23 +1,6 @@
 // src/controllers/applicationController.js
-// CORRECTION : Ajout de la transition EnAnalyse -> Acceptee + vérification du rôle
-// AJOUT : Vérification des conflits de stage en cours
-// AJOUT : getDepartmentApplications pour le département
-// MODIFICATION : createApplication - Création directe avec statut "Soumise"
-// MODIFICATION : createApplication - Accepter les données des étapes 1 et 2
-// SUPPRESSION : Fonctions de workflow intermédiaires (saveEtape1, saveEtape2, submitWorkflow)
-// CONSERVÉ : getWorkflowState pour la consultation des candidatures existantes
-// AJOUT : Envoi automatique de l'engagement quand le statut passe à Acceptee
-// AJOUT : Imports manquants (pdfService, emailService)
-// AJOUT : refuseConflictingApplications - Refus automatique des candidatures conflictuelles
-// AJOUT : Restriction RH - Le RH ne peut pas accepter directement
-// AJOUT : Transitions d'engagement - EngagementRecu -> EngagementValide/Rejete, EngagementValide -> DemandeEnvoyee
-// AJOUT : Vérification statut identique dans changeApplicationStatus
-// CORRECTION : Récupération de etudiantId dans sendEngagementAutomatically
-// CORRECTION : Ajout de logs pour les champs dans createApplication
-// CORRECTION : Vérification si le stage existe déjà dans sendEngagementAutomatically pour éviter les doublons
-// AJOUT : closeOfferApplications - Clôturer les candidatures d'une offre
-// MODIFICATION : closeOfferApplications - Retourner l'offre et les acceptés pour permettre la saisie de la description
-// CORRECTION : closeOfferApplications - Stocker un chemin relatif pour le PDF
+// ✅ CORRECTION : Création automatique du stage pour TOUS les rôles (RH, Departement, Admin)
+// ✅ CORRECTION : Vérification si le stage existe déjà avant de le créer
 
 const Application = require('../models/Application');
 const Document = require('../models/Document');
@@ -265,7 +248,8 @@ const sendEngagementAutomatically = async (application) => {
                 dateDebut: application.offreId?.dateDebut || new Date(),
                 dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 statut: 'EnCours',
-                encadrantId: null
+                encadrantId: null,
+                sujetTitre: application.offreId?.titre || 'Stage'
             });
             console.log(`[sendEngagementAutomatically] Stage cree: ${internship._id}`);
         }
@@ -756,9 +740,8 @@ exports.submitApplication = async (req, res) => {
 };
 
 // ============================================
-// MODIFIE : changeApplicationStatus avec gestion des conflits
-// AJOUT : Restriction RH - Le RH ne peut pas accepter directement
-// AJOUT : Verification statut identique
+// ✅ CORRECTION : changeApplicationStatus avec création automatique du stage pour TOUS les rôles
+// ✅ CORRECTION : Vérification si le stage existe déjà avant de le créer
 // ============================================
 exports.changeApplicationStatus = async (req, res) => {
     try {
@@ -884,14 +867,42 @@ exports.changeApplicationStatus = async (req, res) => {
             await refuseConflictingApplications(application);
         }
 
-        // Envoi automatique de l'engagement SI le role est "Departement" et statut "Acceptee"
-        if (statut === APPLICATION_STATUS.ACCEPTEE && userRole === 'Departement') {
-            console.log(`[changeApplicationStatus] Acceptee par Departement - Envoi automatique de l'engagement`);
-            try {
-                await sendEngagementAutomatically(application);
-                console.log(`[changeApplicationStatus] Engagement envoye automatiquement`);
-            } catch (engagementError) {
-                console.error(`[changeApplicationStatus] Erreur envoi engagement:`, engagementError);
+        // ✅ CORRECTION : Création du stage pour TOUS les rôles (RH, Departement, Admin)
+        // ✅ Vérification : le stage n'existe pas déjà
+        if (statut === APPLICATION_STATUS.ACCEPTEE) {
+            console.log(`[changeApplicationStatus] Acceptee - Création du stage automatique`);
+            
+            // Vérifier si un stage existe déjà pour cette candidature
+            const existingInternship = await Internship.findOne({ applicationId: application._id });
+            
+            if (existingInternship) {
+                console.log(`[changeApplicationStatus] Stage déjà existant: ${existingInternship._id}`);
+            } else {
+                try {
+                    // Créer le stage
+                    const newInternship = await Internship.create({
+                        etudiantId: application.etudiantId._id,
+                        offreId: application.offreId._id,
+                        applicationId: application._id,
+                        dateDebut: application.offreId?.dateDebut || new Date(),
+                        dateFin: application.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                        statut: 'EnCours',
+                        encadrantId: null,
+                        sujetTitre: application.offreId?.titre || 'Stage'
+                    });
+                    console.log(`[changeApplicationStatus] Stage créé avec succès: ${newInternship._id}`);
+                    
+                    // Envoyer l'engagement automatiquement
+                    try {
+                        await sendEngagementAutomatically(application);
+                        console.log(`[changeApplicationStatus] Engagement envoyé automatiquement`);
+                    } catch (engagementError) {
+                        console.error(`[changeApplicationStatus] Erreur envoi engagement:`, engagementError);
+                    }
+                    
+                } catch (createError) {
+                    console.error(`[changeApplicationStatus] Erreur création stage:`, createError);
+                }
             }
         }
 

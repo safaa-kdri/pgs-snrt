@@ -1,6 +1,5 @@
 // src/components/rh/GenerateConvention.jsx
-// ✅ CORRECTION : Endpoints API corrigés (/rh/convention/...)
-// ✅ AJOUT : Récupération de la signature depuis le backend
+// ✅ CORRECTION : Signature avec positionnement manuel sur le PDF
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +27,8 @@ import {
     TableRow,
     Tooltip,
     Divider,
+    Slider,
+    TextField,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
@@ -37,10 +38,9 @@ import {
     CheckCircle,
     Visibility,
     PictureAsPdf,
-    InsertDriveFile,
     Send,
     Edit,
-    Refresh,
+    Add,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -82,16 +82,35 @@ const StatusChip = styled(Chip)(({ status }) => {
     };
 });
 
-const SignaturePreview = styled(Box)({
-    border: '2px solid #eef1f3',
+const PDFPreview = styled(Box)({
+    border: '1px solid #eef1f3',
     borderRadius: '8px',
     padding: '16px',
     textAlign: 'center',
     backgroundColor: '#fafbfc',
+    minHeight: '300px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
     '& img': {
-        maxWidth: '200px',
-        maxHeight: '80px',
+        maxWidth: '100%',
+        maxHeight: '400px',
         objectFit: 'contain',
+    },
+});
+
+const SignatureDropZone = styled(Box)({
+    border: '2px dashed #d1d5db',
+    borderRadius: '8px',
+    padding: '20px',
+    textAlign: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    backgroundColor: '#fafafa',
+    '&:hover': {
+        borderColor: '#148aa0',
+        backgroundColor: '#f0f7fa',
     },
 });
 
@@ -107,13 +126,22 @@ const GenerateConvention = () => {
     const [success, setSuccess] = useState('');
     const [error, setError] = useState('');
     const [conventions, setConventions] = useState([]);
-    const [openSignDialog, setOpenSignDialog] = useState(false);
-    const [selectedConvention, setSelectedConvention] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
 
-    // État pour la signature
+    // États pour la signature
     const [signatureData, setSignatureData] = useState(null);
     const [signatureLoaded, setSignatureLoaded] = useState(false);
+
+    // États pour le positionnement sur le PDF
+    const [openSignDialog, setOpenSignDialog] = useState(false);
+    const [selectedConvention, setSelectedConvention] = useState(null);
+    const [signatureX, setSignatureX] = useState(50);
+    const [signatureY, setSignatureY] = useState(280);
+    const [signatureWidth, setSignatureWidth] = useState(150);
+    const [signatureHeight, setSignatureHeight] = useState(60);
+    const [pageNumber, setPageNumber] = useState(0);
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+    const [signatureImage, setSignatureImage] = useState(null);
 
     useEffect(() => {
         fetchSignature();
@@ -125,37 +153,32 @@ const GenerateConvention = () => {
 
     // ✅ Récupérer la signature depuis le backend
     const fetchSignature = async () => {
-        console.log('🔍 [fetchSignature] Récupération de la signature');
         try {
-            const response = await api.get('/rh/signature');
+            const response = await api.get('/users/signature');
             if (response.data?.signature) {
                 setSignatureData(response.data.signature);
                 setSignatureLoaded(true);
-                console.log('✅ [fetchSignature] Signature chargée avec succès');
+                // Charger l'image pour la prévisualisation
+                const img = new Image();
+                img.src = response.data.signature;
+                img.onload = () => setSignatureImage(img);
             } else {
-                console.warn('⚠️ [fetchSignature] Aucune signature trouvée');
                 setSignatureLoaded(false);
             }
         } catch (error) {
-            console.error('❌ [fetchSignature] Erreur:', error);
             setSignatureLoaded(false);
         }
     };
 
     // ✅ Récupérer les conventions déposées
     const fetchConventions = async () => {
-        console.log('🔍 [fetchConventions] Début');
         setLoading(true);
         setError('');
         try {
-            // ✅ ENDPOINT CORRIGÉ
-            const response = await api.get('/rh/conventions');
-            console.log('🔍 [fetchConventions] Réponse reçue:', response.data);
+            const response = await api.get('/users/conventions');
             const data = response.data?.data || [];
-            console.log('🔍 [fetchConventions] Conventions trouvées:', data.length);
             setConventions(data);
         } catch (error) {
-            console.error('❌ Erreur chargement conventions:', error);
             setError(error.response?.data?.message || 'Erreur lors du chargement des conventions');
             setConventions([]);
         } finally {
@@ -203,7 +226,6 @@ const GenerateConvention = () => {
     };
 
     const handleViewConvention = (convention) => {
-        console.log('🔍 [handleViewConvention] Convention:', convention);
         const href = buildFileHref(convention.convention);
         if (href) {
             window.open(href, '_blank');
@@ -214,10 +236,8 @@ const GenerateConvention = () => {
 
     // ✅ Télécharger la convention
     const handleDownloadConvention = async (convention) => {
-        console.log('🔍 [handleDownloadConvention] Convention ID:', convention._id);
         try {
-            // ✅ ENDPOINT CORRIGÉ
-            const response = await api.get(`/rh/convention/${convention._id}/download`, {
+            const response = await api.get(`/users/convention/${convention._id}/download`, {
                 responseType: 'blob',
             });
             
@@ -229,35 +249,63 @@ const GenerateConvention = () => {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
-            console.log('✅ [handleDownloadConvention] Téléchargement réussi');
         } catch (error) {
-            console.error('❌ Erreur téléchargement:', error);
             setError('Erreur lors du téléchargement');
         }
     };
 
-    // ✅ Signer la convention
-    const handleSignConvention = async () => {
-        if (!selectedConvention) return;
-        if (!signatureData) {
-            setError('Signature non disponible');
+    // ✅ Ouvrir le dialogue de signature avec le PDF
+    const handleOpenSignDialog = async (convention) => {
+        if (!signatureLoaded || !signatureData) {
+            setError('La signature n\'est pas disponible. Veuillez contacter l\'administrateur.');
             return;
         }
 
-        console.log('🔍 [handleSignConvention] Convention ID:', selectedConvention._id);
+        setSelectedConvention(convention);
+        setOpenSignDialog(true);
+
+        // Charger le PDF pour prévisualisation
+        try {
+            const response = await api.get(`/users/convention/${convention._id}/download`, {
+                responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            setPdfPreviewUrl(url);
+        } catch (error) {
+            setError('Erreur lors du chargement du PDF');
+        }
+    };
+
+    // ✅ Fermer le dialogue
+    const handleCloseDialog = () => {
+        setOpenSignDialog(false);
+        setError('');
+        setPdfPreviewUrl(null);
+    };
+
+    // ✅ Appliquer la signature avec la position choisie
+    const handleApplySignature = async () => {
+        if (!selectedConvention) return;
+
         setActionLoading(true);
         try {
-            // ✅ ENDPOINT CORRIGÉ
-            const response = await api.put(`/rh/convention/${selectedConvention._id}/signer`, {
-                signature: signatureData
+            // Envoyer la position de la signature
+            const response = await api.put(`/users/convention/${selectedConvention._id}/signer`, {
+                signature: signatureData,
+                position: {
+                    x: signatureX,
+                    y: signatureY,
+                    width: signatureWidth,
+                    height: signatureHeight,
+                    page: pageNumber || 0
+                }
             });
-            console.log('✅ [handleSignConvention] Réponse:', response.data);
-            setSuccess('✅ Convention signée avec succès');
+
+            setSuccess('✅ Convention signée avec succès !');
             setOpenSignDialog(false);
             await fetchConventions();
             setTimeout(() => setSuccess(''), 3000);
         } catch (error) {
-            console.error('❌ Erreur signature:', error);
             setError(error.response?.data?.message || 'Erreur lors de la signature');
         } finally {
             setActionLoading(false);
@@ -268,8 +316,7 @@ const GenerateConvention = () => {
     const handleSignPDF = async (convention) => {
         try {
             setActionLoading(true);
-            // ✅ ENDPOINT CORRIGÉ
-            const response = await api.get(`/rh/convention/${convention._id}/sign-pdf`, {
+            const response = await api.get(`/users/convention/${convention._id}/sign-pdf`, {
                 responseType: 'blob',
             });
             
@@ -286,7 +333,6 @@ const GenerateConvention = () => {
             setTimeout(() => setSuccess(''), 3000);
             await fetchConventions();
         } catch (error) {
-            console.error('❌ Erreur signature PDF:', error);
             setError(error.response?.data?.message || 'Erreur lors de la signature du PDF');
         } finally {
             setActionLoading(false);
@@ -297,32 +343,17 @@ const GenerateConvention = () => {
     const handleSendToStudent = async (convention) => {
         if (!window.confirm('Envoyer la convention signée à l\'étudiant ?')) return;
 
-        console.log('🔍 [handleSendToStudent] Convention ID:', convention._id);
         setActionLoading(true);
         try {
-            // ✅ ENDPOINT CORRIGÉ
-            const response = await api.put(`/rh/convention/${convention._id}/envoyer-etudiant`);
-            console.log('✅ [handleSendToStudent] Réponse:', response.data);
+            const response = await api.put(`/users/convention/${convention._id}/envoyer-etudiant`);
             setSuccess('✅ Convention envoyée à l\'étudiant avec succès');
             await fetchConventions();
             setTimeout(() => setSuccess(''), 3000);
         } catch (error) {
-            console.error('❌ Erreur envoi:', error);
             setError(error.response?.data?.message || 'Erreur lors de l\'envoi');
         } finally {
             setActionLoading(false);
         }
-    };
-
-    // ✅ Ouvrir le dialogue de signature
-    const handleOpenSignDialog = (convention) => {
-        console.log('🔍 [handleOpenSignDialog] Convention sélectionnée:', convention);
-        if (!signatureLoaded || !signatureData) {
-            setError('La signature n\'est pas disponible. Veuillez réessayer.');
-            return;
-        }
-        setSelectedConvention(convention);
-        setOpenSignDialog(true);
     };
 
     if (loading && conventions.length === 0) {
@@ -346,24 +377,13 @@ const GenerateConvention = () => {
                         {conventions.length} convention(s) déposée(s) par les étudiants
                     </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={fetchConventions}
-                        disabled={loading}
-                        sx={{ borderRadius: '10px', textTransform: 'none' }}
-                    >
-                        Rafraîchir
-                    </Button>
-                    <Button
-                        startIcon={<ArrowBack />}
-                        onClick={() => navigate('/rh')}
-                        sx={{ color: '#6b7280', textTransform: 'none' }}
-                    >
-                        Retour
-                    </Button>
-                </Box>
+                <Button
+                    startIcon={<ArrowBack />}
+                    onClick={() => navigate('/rh/dashboard')}
+                    sx={{ color: '#6b7280', textTransform: 'none' }}
+                >
+                    Retour
+                </Button>
             </PageHeader>
 
             {error && (
@@ -407,7 +427,6 @@ const GenerateConvention = () => {
                                         const isDeposee = status === 'DeposeeEtudiant';
                                         const isSignee = status === 'SigneeRH';
                                         const isEnvoyee = status === 'EnvoyeeEtudiant' || status === 'Cloturee';
-                                        const isNonGeneree = status === 'NonGeneree';
 
                                         return (
                                             <TableRow key={conv._id} hover>
@@ -477,19 +496,23 @@ const GenerateConvention = () => {
                                                                         <Edit fontSize="small" />
                                                                     </IconButton>
                                                                 </Tooltip>
-                                                                <Tooltip title="Générer le PDF signé">
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        onClick={() => handleSignPDF(conv)}
-                                                                        sx={{ color: '#0b7890' }}
-                                                                    >
-                                                                        <PictureAsPdf fontSize="small" />
-                                                                    </IconButton>
-                                                                </Tooltip>
                                                             </>
                                                         )}
 
-                                                        {/* Envoyer à l'étudiant - uniquement si SigneeRH */}
+                                                        {/* Générer PDF signé - si SigneeRH */}
+                                                        {isSignee && (
+                                                            <Tooltip title="Générer le PDF signé">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleSignPDF(conv)}
+                                                                    sx={{ color: '#0b7890' }}
+                                                                >
+                                                                    <PictureAsPdf fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        )}
+
+                                                        {/* Envoyer à l'étudiant - si SigneeRH */}
                                                         {isSignee && (
                                                             <Tooltip title="Envoyer à l'étudiant">
                                                                 <IconButton
@@ -508,15 +531,6 @@ const GenerateConvention = () => {
                                                                 <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
                                                             </Tooltip>
                                                         )}
-
-                                                        {/* Non générée */}
-                                                        {isNonGeneree && (
-                                                            <Tooltip title="Convention non générée">
-                                                                <Box sx={{ color: '#6b7280', fontSize: 12, display: 'flex', alignItems: 'center' }}>
-                                                                    En attente
-                                                                </Box>
-                                                            </Tooltip>
-                                                        )}
                                                     </Box>
                                                 </TableCell>
                                             </TableRow>
@@ -529,57 +543,163 @@ const GenerateConvention = () => {
                 </CardContent>
             </StyledCard>
 
-            {/* DIALOGUE DE SIGNATURE */}
+            {/* DIALOGUE DE SIGNATURE AVEC POSITIONNEMENT */}
             <Dialog
                 open={openSignDialog}
-                onClose={() => {
-                    setOpenSignDialog(false);
-                    setError('');
-                }}
-                maxWidth="sm"
+                onClose={handleCloseDialog}
+                maxWidth="md"
                 fullWidth
                 PaperProps={{ sx: { borderRadius: '16px', padding: '8px' } }}
             >
                 <DialogTitle>✍️ Signer la convention</DialogTitle>
                 <DialogContent>
                     <Typography variant="body1" sx={{ mb: 2 }}>
-                        Vous êtes sur le point de signer la convention de{' '}
+                        Positionnez votre signature sur le PDF de{' '}
                         <strong>
                             {selectedConvention?.etudiantId?.prenom || ''} {selectedConvention?.etudiantId?.nom || ''}
                         </strong>
                     </Typography>
-                    
+
                     <Divider sx={{ my: 2 }} />
-                    
-                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                        Signature RH :
+
+                    {/* Aperçu du PDF */}
+                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                        📄 Aperçu du PDF
                     </Typography>
-                    
-                    {signatureLoaded && signatureData ? (
-                        <SignaturePreview>
-                            <img src={signatureData} alt="Signature RH" />
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                                Signature de {user?.prenom || ''} {user?.nom || ''}
-                            </Typography>
-                        </SignaturePreview>
-                    ) : (
-                        <Alert severity="warning" sx={{ borderRadius: '8px' }}>
-                            La signature n'est pas disponible. Veuillez contacter l'administrateur.
-                        </Alert>
-                    )}
-                    
+                    <PDFPreview>
+                        {pdfPreviewUrl ? (
+                            <object
+                                data={pdfPreviewUrl}
+                                type="application/pdf"
+                                width="100%"
+                                height="400px"
+                            >
+                                <embed src={pdfPreviewUrl} type="application/pdf" width="100%" height="400px" />
+                            </object>
+                        ) : (
+                            <CircularProgress size={32} sx={{ color: '#148aa0' }} />
+                        )}
+                    </PDFPreview>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    {/* Positionnement de la signature */}
+                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+                        🖱️ Position de la signature
+                    </Typography>
+
+                    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        <Box sx={{ flex: 1, minWidth: '200px' }}>
+                            <Typography variant="caption" fontWeight={500}>Position X (px)</Typography>
+                            <Slider
+                                value={signatureX}
+                                onChange={(e, val) => setSignatureX(val)}
+                                min={10}
+                                max={500}
+                                step={5}
+                                valueLabelDisplay="auto"
+                                sx={{ mt: 1 }}
+                            />
+                            <TextField
+                                size="small"
+                                type="number"
+                                value={signatureX}
+                                onChange={(e) => setSignatureX(Number(e.target.value))}
+                                sx={{ width: '100%', mt: 1 }}
+                            />
+                        </Box>
+
+                        <Box sx={{ flex: 1, minWidth: '200px' }}>
+                            <Typography variant="caption" fontWeight={500}>Position Y (px)</Typography>
+                            <Slider
+                                value={signatureY}
+                                onChange={(e, val) => setSignatureY(val)}
+                                min={50}
+                                max={600}
+                                step={5}
+                                valueLabelDisplay="auto"
+                                sx={{ mt: 1 }}
+                            />
+                            <TextField
+                                size="small"
+                                type="number"
+                                value={signatureY}
+                                onChange={(e) => setSignatureY(Number(e.target.value))}
+                                sx={{ width: '100%', mt: 1 }}
+                            />
+                        </Box>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mt: 2 }}>
+                        <Box sx={{ flex: 1, minWidth: '150px' }}>
+                            <Typography variant="caption" fontWeight={500}>Largeur (px)</Typography>
+                            <Slider
+                                value={signatureWidth}
+                                onChange={(e, val) => setSignatureWidth(val)}
+                                min={80}
+                                max={300}
+                                step={5}
+                                valueLabelDisplay="auto"
+                                sx={{ mt: 1 }}
+                            />
+                            <TextField
+                                size="small"
+                                type="number"
+                                value={signatureWidth}
+                                onChange={(e) => setSignatureWidth(Number(e.target.value))}
+                                sx={{ width: '100%', mt: 1 }}
+                            />
+                        </Box>
+
+                        <Box sx={{ flex: 1, minWidth: '150px' }}>
+                            <Typography variant="caption" fontWeight={500}>Hauteur (px)</Typography>
+                            <Slider
+                                value={signatureHeight}
+                                onChange={(e, val) => setSignatureHeight(val)}
+                                min={30}
+                                max={120}
+                                step={5}
+                                valueLabelDisplay="auto"
+                                sx={{ mt: 1 }}
+                            />
+                            <TextField
+                                size="small"
+                                type="number"
+                                value={signatureHeight}
+                                onChange={(e) => setSignatureHeight(Number(e.target.value))}
+                                sx={{ width: '100%', mt: 1 }}
+                            />
+                        </Box>
+                    </Box>
+
+                    {/* Aperçu de la signature */}
+                    <Box sx={{ mt: 2, p: 2, backgroundColor: '#f7f7f7', borderRadius: '8px' }}>
+                        <Typography variant="caption" fontWeight={500}>Aperçu de la signature :</Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                            <img 
+                                src={signatureData} 
+                                alt="Signature RH" 
+                                style={{ 
+                                    maxWidth: `${signatureWidth}px`, 
+                                    maxHeight: `${signatureHeight}px`, 
+                                    objectFit: 'contain',
+                                    border: '1px dashed #d1d5db',
+                                    padding: '4px'
+                                }}
+                            />
+                        </Box>
+                    </Box>
+
                     <Alert severity="info" sx={{ mt: 2, borderRadius: '8px' }}>
                         <Typography variant="body2">
-                            <strong>Information :</strong> La signature sera appliquée sur le PDF original.
+                            <strong>💡 Astuce :</strong> Utilisez les curseurs pour positionner la signature sur le PDF. 
+                            La position par défaut est en bas à gauche.
                         </Typography>
                     </Alert>
                 </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
+                <DialogActions sx={{ p: 2, pt: 0 }}>
                     <Button 
-                        onClick={() => {
-                            setOpenSignDialog(false);
-                            setError('');
-                        }}
+                        onClick={handleCloseDialog}
                         sx={{ textTransform: 'none' }}
                         disabled={actionLoading}
                     >
@@ -587,7 +707,7 @@ const GenerateConvention = () => {
                     </Button>
                     <Button
                         variant="contained"
-                        onClick={handleSignConvention}
+                        onClick={handleApplySignature}
                         disabled={actionLoading || !signatureLoaded}
                         sx={{
                             backgroundColor: '#1d4ed8',
@@ -596,7 +716,7 @@ const GenerateConvention = () => {
                             '&:hover': { backgroundColor: '#1e40af' },
                         }}
                     >
-                        {actionLoading ? <CircularProgress size={20} color="inherit" /> : '✍️ Signer'}
+                        {actionLoading ? <CircularProgress size={20} color="inherit" /> : '✅ Appliquer la signature'}
                     </Button>
                 </DialogActions>
             </Dialog>
