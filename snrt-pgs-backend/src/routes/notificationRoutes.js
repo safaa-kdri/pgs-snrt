@@ -9,6 +9,11 @@ router.use(authenticate());
 
 router.post('/', notificationController.createNotification);
 
+// Routes pour l'utilisateur authentifie (le frontend n'a pas besoin de connaitre son ID).
+router.get('/', notificationController.getCurrentUserNotifications);
+router.get('/unread/count', notificationController.getCurrentUserUnreadCount);
+router.patch('/read-all', notificationController.markCurrentUserNotificationsAsRead);
+
 router.get('/user/:userId', notificationController.getUserNotifications);
 router.get('/user/:userId/unread-count', notificationController.getUnreadCount);
 

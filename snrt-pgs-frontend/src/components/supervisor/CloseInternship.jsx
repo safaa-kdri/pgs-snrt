@@ -42,7 +42,9 @@ const StyledPaper = styled(Paper)({
     border: '1px solid #eef1f3',
 });
 
-const StepIconWrapper = styled(Box)(({ active, completed }) => ({
+const StepIconWrapper = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'completed',
+})(({ active, completed }) => ({
     width: 32,
     height: 32,
     borderRadius: '50%',

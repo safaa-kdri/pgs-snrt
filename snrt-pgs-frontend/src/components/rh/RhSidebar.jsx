@@ -1,5 +1,5 @@
 // src/components/rh/RhSidebar.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box,
@@ -12,6 +12,7 @@ import {
     Button,
     Typography,
     Avatar,
+    Chip,
     useMediaQuery,
     useTheme,
 } from '@mui/material';
@@ -30,9 +31,11 @@ import {
     Cancel,
     Pending,
     People,
+    Notifications,
 } from '@mui/icons-material';
 import { useDispatch } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
+import api from '../../services/api';
 
 const drawerWidth = 280;
 
@@ -118,6 +121,24 @@ const RhSidebar = ({ open, onClose, user }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    useEffect(() => {
+        fetchUnreadNotifications();
+        // Rafraîchir toutes les 30 secondes
+        const interval = setInterval(fetchUnreadNotifications, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const fetchUnreadNotifications = async () => {
+        try {
+            const response = await api.get('/notifications/unread/count');
+            setUnreadCount(response.data?.count || 0);
+        } catch (error) {
+            console.error('Erreur chargement notifications:', error);
+        }
+    };
+
     const handleNavigate = (path) => {
         navigate(path);
         if (isMobile) onClose();
@@ -141,12 +162,12 @@ const RhSidebar = ({ open, onClose, user }) => {
 
     const menuItems = [
         { text: 'Tableau de bord', icon: <Dashboard />, path: '/rh', key: 'dashboard' },
-        // ✅ NOUVEAU : Gestion des candidatures
         { text: 'Gestion des candidatures', icon: <People />, path: '/rh/candidatures', key: 'candidatures' },
         { text: 'Candidatures', icon: <Assignment />, path: '/rh/applications', key: 'applications' },
         { text: 'Offres à valider', icon: <Work />, path: '/rh/validate-offers', key: 'validate-offers' },
         { text: 'Entretiens', icon: <Event />, path: '/rh/interviews', key: 'interviews' },
         { text: 'Générer convention', icon: <Description />, path: '/rh/generate-convention', key: 'generate-convention' },
+        { text: 'Notifications', icon: <Notifications />, path: '/rh/notifications', key: 'notifications', badge: unreadCount > 0 ? unreadCount : null },
         { divider: true },
         { text: 'FAQ', icon: <Help />, path: '/faq', key: 'faq' },
         { text: 'Contact', icon: <ContactMail />, path: '/contact', key: 'contact' },
@@ -172,6 +193,21 @@ const RhSidebar = ({ open, onClose, user }) => {
                         >
                             <ListItemIcon>{item.icon}</ListItemIcon>
                             <ListItemText primary={item.text} />
+                            {item.badge && (
+                                <Chip
+                                    label={item.badge}
+                                    size="small"
+                                    sx={{
+                                        backgroundColor: '#dc2626',
+                                        color: '#fff',
+                                        fontWeight: 600,
+                                        fontSize: '10px',
+                                        height: '18px',
+                                        minWidth: '18px',
+                                        borderRadius: '10px',
+                                    }}
+                                />
+                            )}
                         </DrawerItem>
                     );
                 })}

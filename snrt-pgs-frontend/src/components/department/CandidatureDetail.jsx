@@ -1,6 +1,7 @@
 // src/components/department/CandidatureDetail.jsx
 // VERSION COMPLETE CORRIGEE
 // AVEC GESTION DE L'ATTENTE DU STAGE VIA useEffect
+// AVEC MODIFICATION DE L'ENCADRANT
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -210,7 +211,6 @@ const ActionButton = styled(Button)({
   fontSize: "13px",
 });
 
-// BOUTON RETOUR STYLE RH - POSITIONNE AU-DESSUS
 const BackButton = styled(Button)({
   textTransform: "none",
   color: "#666",
@@ -236,7 +236,6 @@ const DocumentItem = styled(Box)(({ verified }) => ({
   },
 }));
 
-// Correction: Supprimer l'attribut 'niveau' qui n'est pas utilise
 const CompetenceTag = styled(Chip)(({ niveau }) => {
   const colors = {
     Débutant: { bg: "#e5e7eb", text: "#6b7280" },
@@ -289,7 +288,6 @@ const CandidatureDetail = () => {
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // ✅ Etat pour l'attente du stage
   const [waitingForStage, setWaitingForStage] = useState(false);
 
   // Dialog states
@@ -297,12 +295,14 @@ const CandidatureDetail = () => {
   const [openInterviewDialog, setOpenInterviewDialog] = useState(false);
   const [openAcceptDialog, setOpenAcceptDialog] = useState(false);
   const [openAssignDialog, setOpenAssignDialog] = useState(false);
+  const [openEditEncadrantDialog, setOpenEditEncadrantDialog] = useState(false);
   const [openCommentDialog, setOpenCommentDialog] = useState(false);
 
   // Form states
   const [refusalReason, setRefusalReason] = useState("");
   const [refusalComment, setRefusalComment] = useState("");
   const [selectedEncadrant, setSelectedEncadrant] = useState("");
+  const [selectedNewEncadrant, setSelectedNewEncadrant] = useState("");
   const [selectedStageId, setSelectedStageId] = useState(null);
 
   const [interviewForm, setInterviewForm] = useState({
@@ -323,7 +323,6 @@ const CandidatureDetail = () => {
     fetchEncadrants();
   }, [id]);
 
-  // ✅ useEffect pour détecter la création du stage
   useEffect(() => {
     if (waitingForStage && internship?._id) {
       console.log("[useEffect] Stage detecte:", internship._id);
@@ -400,13 +399,6 @@ const CandidatureDetail = () => {
         const userDeptId = u.departementId?._id || u.departementId;
         const currentUserDeptId = user?.departementId;
         const isInDepartment = userDeptId === currentUserDeptId;
-
-        console.log(`[fetchEncadrants] ${u.prenom} ${u.nom}:`, {
-          isEncadrant,
-          userDeptId,
-          currentUserDeptId,
-          isInDepartment,
-        });
 
         return isEncadrant && isInDepartment;
       });
@@ -537,17 +529,12 @@ const CandidatureDetail = () => {
     setOpenAcceptDialog(false);
   };
 
-  // ============================================
-  // ✅ VERSION CORRIGEE DE handleConfirmAccept
-  // AVEC GESTION DE L'ATTENTE VIA waitingForStage
-  // ============================================
   const handleConfirmAccept = async () => {
     setSubmitting(true);
     setError("");
     try {
       console.log("[handleConfirmAccept] Debut de l'acceptation");
 
-      // 1. Changer le statut de la candidature
       await api.patch(`/applications/${application._id}/status`, {
         statut: "Acceptee",
         commentaire: "Candidature acceptee par le departement",
@@ -556,21 +543,15 @@ const CandidatureDetail = () => {
       setSuccess("Candidature acceptee avec succes");
       setOpenAcceptDialog(false);
 
-      // 2. Verifier si le stage existe deja
       if (internship?._id) {
         setSelectedStageId(internship._id);
         await fetchEncadrants();
         setOpenAssignDialog(true);
         setSuccess("Stage cree. Veuillez affecter un encadrant.");
       } else {
-        // 3. Attendre la creation du stage
         setWaitingForStage(true);
         setSuccess("Creation du stage en cours...");
-        
-        // 4. Recharger les donnees
         await fetchApplicationDetail();
-        
-        // 5. Timeout de securite (10 secondes)
         setTimeout(() => {
           if (waitingForStage) {
             setWaitingForStage(false);
@@ -583,7 +564,6 @@ const CandidatureDetail = () => {
       console.error("Erreur acceptation:", error);
       const errorMessage = error.response?.data?.message || "Erreur lors de l'acceptation";
       
-      // Gerer les erreurs de conflit de stage
       if (errorMessage.includes("deja un stage en cours") || errorMessage.includes("stage en cours")) {
         const stageData = error.response?.data?.data?.currentInternship;
         if (stageData) {
@@ -626,9 +606,6 @@ const CandidatureDetail = () => {
     setSubmitting(true);
     setError("");
     try {
-      console.log("[handleConfirmAssign] Affectation de l'encadrant:", selectedEncadrant);
-      console.log("[handleConfirmAssign] Stage ID:", selectedStageId);
-      
       await api.put(`/internships/${selectedStageId}/assign-supervisor`, {
         encadrantId: selectedEncadrant,
       });
@@ -638,8 +615,56 @@ const CandidatureDetail = () => {
       fetchApplicationDetail();
     } catch (error) {
       console.error("Erreur affectation:", error);
-      console.error("Details de l'erreur:", error.response?.data);
       setError(error.response?.data?.message || "Erreur lors de l'affectation");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ✅ NOUVEAU : Gestion de la modification de l'encadrant
+  const handleOpenEditEncadrant = () => {
+    setSelectedNewEncadrant(internship?.encadrantId?._id || internship?.encadrantId || "");
+    setOpenEditEncadrantDialog(true);
+  };
+
+  const handleCloseEditEncadrant = () => {
+    setOpenEditEncadrantDialog(false);
+    setSelectedNewEncadrant("");
+    setError("");
+  };
+
+  const handleConfirmEditEncadrant = async () => {
+    if (!selectedNewEncadrant) {
+      setError("Veuillez sélectionner un encadrant");
+      return;
+    }
+
+    if (!selectedStageId) {
+      setError("Aucun stage associé à cette candidature");
+      return;
+    }
+
+    // Vérifier si l'encadrant est le même
+    const currentEncadrantId = internship?.encadrantId?._id || internship?.encadrantId;
+    if (selectedNewEncadrant === currentEncadrantId) {
+      setError("L'encadrant sélectionné est déjà affecté");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    try {
+      await api.put(`/internships/${selectedStageId}/assign-supervisor`, {
+        encadrantId: selectedNewEncadrant,
+      });
+
+      setSuccess("Encadrant modifié avec succès");
+      setOpenEditEncadrantDialog(false);
+      setSelectedNewEncadrant("");
+      fetchApplicationDetail();
+    } catch (error) {
+      console.error("Erreur modification encadrant:", error);
+      setError(error.response?.data?.message || "Erreur lors de la modification");
     } finally {
       setSubmitting(false);
     }
@@ -788,7 +813,7 @@ const CandidatureDetail = () => {
 
   return (
     <PageContainer maxWidth="lg">
-      {/* ===== BOUTON RETOUR - AU-DESSUS DE L'AVATAR (COMME RH) ===== */}
+      {/* ===== BOUTON RETOUR ===== */}
       <BackButton
         startIcon={<ArrowBack />}
         onClick={() => navigate("/department/candidatures")}
@@ -825,7 +850,7 @@ const CandidatureDetail = () => {
         </HeaderLeft>
 
         {/* ===== BOUTONS D'ACTION - A DROITE ===== */}
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} flexWrap="wrap">
           {canAct && (
             <>
               <ActionButton
@@ -868,6 +893,17 @@ const CandidatureDetail = () => {
               }}
             >
               Affecter un encadrant
+            </ActionButton>
+          )}
+          {/* ✅ BOUTON MODIFIER ENCADRANT */}
+          {isAccepted && isAssigned && (
+            <ActionButton
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={handleOpenEditEncadrant}
+              sx={{ borderColor: "#4f46e5", color: "#4f46e5" }}
+            >
+              Modifier l'encadrant
             </ActionButton>
           )}
         </Stack>
@@ -1060,10 +1096,6 @@ const CandidatureDetail = () => {
                 <DocumentItem 
                   key={idx} 
                   verified={doc.isVerified}
-                  sx={{
-                    backgroundColor: doc.isVerified ? "#f0fdf4" : "#fafafa",
-                    border: doc.isVerified ? "1px solid #22c55e" : "1px solid #e5e7eb",
-                  }}
                 >
                   <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                     <Description
@@ -1234,7 +1266,7 @@ const CandidatureDetail = () => {
       </Grid>
 
       {/* ========================================== */}
-      {/* DIALOGS - SIMPLIFIES */}
+      {/* DIALOGS */}
       {/* ========================================== */}
 
       {/* --- DIALOG REFUS --- */}
@@ -1491,6 +1523,64 @@ const CandidatureDetail = () => {
               <CircularProgress size={20} color="inherit" />
             ) : (
               "Affecter"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* --- DIALOG MODIFIER ENCADRANT --- */}
+      <Dialog
+        open={openEditEncadrantDialog}
+        onClose={handleCloseEditEncadrant}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Modifier l'encadrant</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 2, p: 2, bgcolor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+            <Typography variant="body2" color="#166534">
+              <strong>Encadrant actuel :</strong>{' '}
+              {internship?.encadrantId 
+                ? `${internship.encadrantId.prenom || ''} ${internship.encadrantId.nom || ''}`.trim() 
+                : 'Non affecté'}
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Sélectionnez un nouvel encadrant parmi les collaborateurs du département.
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel>Nouvel encadrant *</InputLabel>
+            <Select
+              value={selectedNewEncadrant}
+              onChange={(e) => setSelectedNewEncadrant(e.target.value)}
+              label="Nouvel encadrant *"
+            >
+              {encadrants.map((enc) => (
+                <MenuItem key={enc._id || enc.id} value={enc._id || enc.id}>
+                  {enc.prenom || ''} {enc.nom || ''} - {enc.email || ''}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              {encadrants.length === 0 && "Aucun encadrant disponible dans votre département"}
+            </FormHelperText>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseEditEncadrant}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmEditEncadrant}
+            disabled={submitting || !selectedNewEncadrant}
+            sx={{
+              backgroundColor: "#4f46e5",
+              "&:hover": { backgroundColor: "#4338ca" },
+            }}
+          >
+            {submitting ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              "Modifier"
             )}
           </Button>
         </DialogActions>

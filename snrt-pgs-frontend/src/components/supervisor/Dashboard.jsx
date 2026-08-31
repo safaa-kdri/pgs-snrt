@@ -261,9 +261,10 @@ const SupervisorDashboard = () => {
             internships.forEach(intern => {
                 if (intern.livrables && intern.livrables.length > 0) {
                     intern.livrables.forEach(l => {
+                        if (l.type !== 'Rapport' || (!l.gridFsId && !l.chemin)) return;
                         totalLivrables++;
                         if (l.valide === true) livrablesValides++;
-                        if (l.valide === false && l.statut !== 'Rejete') livrablesEnAttente++;
+                        if (l.statut === 'EnAttente' || (l.valide === false && l.statut !== 'Rejete')) livrablesEnAttente++;
                     });
                 }
             });

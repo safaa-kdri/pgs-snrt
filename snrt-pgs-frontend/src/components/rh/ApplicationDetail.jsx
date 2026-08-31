@@ -1,16 +1,9 @@
 // src/components/rh/ApplicationDetail.jsx
-// ✅ NOUVEAU WORKFLOW SIMPLIFIÉ (4 ÉTAPES)
-// ✅ Étape 1 : Validation (Documents + Acceptation)
-// ✅ Étape 2 : Engagement (Dépôt + Validation)
-// ✅ Étape 3 : Directeur (Demande de stage)
-// ✅ Étape 4 : Clôture (Rapport + Attestation)
-// ✅ CORRECTION : handleViewDemandeStage utilise l'API pour générer le PDF
-// ✅ SUPPRESSION : Affichage de la date pour les documents
-// ✅ MODIFICATION : Tous les documents affichés sans scrollbar
-// ✅ SUPPRESSION : Bouton "Envoyer l'engagement" (devenu automatique)
-// ✅ MODIFICATION : Le RH valide uniquement les documents (pas l'acceptation)
-// ✅ CORRECTION : Le bouton "Valider les documents" disparaît après validation
-// ✅ CORRECTION : handleValidateDocuments vérifie le statut avant de modifier
+// WORKFLOW SIMPLIFIÉ (4 ÉTAPES)
+// Étape 1 : Validation (Documents + Acceptation)
+// Étape 2 : Engagement (Dépôt + Validation)
+// Étape 3 : Directeur (Demande de stage)
+// Étape 4 : Clôture (Rapport + Attestation) - VERSION PROFESSIONNELLE
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -239,6 +232,11 @@ const ApplicationDetail = () => {
   const [demandeStageFile, setDemandeStageFile] = useState(null);
   const [demandeStagePath, setDemandeStagePath] = useState(null);
 
+  // États pour l'attestation
+  const [attestationFile, setAttestationFile] = useState(null);
+  const [attestationViewLoading, setAttestationViewLoading] = useState(false);
+  const [attestationSendLoading, setAttestationSendLoading] = useState(false);
+
   // ============================================
   // FONCTIONS UTILITAIRES
   // ============================================
@@ -261,7 +259,6 @@ const ApplicationDetail = () => {
     return <InsertDriveFile sx={{ color: "#4f46e5", fontSize: 20 }} />;
   };
 
-  // ✅ cleanDocumentType - Mapping complet des types de documents
   const cleanDocumentType = (type) => {
     if (!type) return "Autre";
     const typeMap = {
@@ -343,7 +340,6 @@ const ApplicationDetail = () => {
     }
   };
 
-  // NOUVEAU WORKFLOW SIMPLIFIÉ (4 ÉTAPES)
   const determineActiveStep = (internshipData) => {
     if (!internshipData) {
       setActiveStep(0);
@@ -418,9 +414,6 @@ const ApplicationDetail = () => {
     setComment("");
   };
 
-  // ============================================
-  // GESTION DU STEPPER - Navigation
-  // ============================================
   const handleStepClick = (index) => {
     if (index <= maxStepReached) {
       setActiveStep(index);
@@ -441,13 +434,10 @@ const ApplicationDetail = () => {
   // WORKFLOW RH - FONCTIONS
   // ============================================
 
-  // ✅ MODIFICATION : Le RH ne fait que valider les documents
-  // ✅ Vérification du statut pour éviter les doublons
   const handleValidateDocuments = async (decision) => {
     setGenerating(true);
     try {
       if (decision === "valider") {
-        // ✅ Vérifier si les documents sont déjà validés
         if (application?.statut === "EnAnalyse") {
           setSuccess("Les documents ont déjà été validés.");
           setDialogAction("");
@@ -456,16 +446,14 @@ const ApplicationDetail = () => {
           return;
         }
 
-        // ✅ 1. Valider les documents
         await api.patch(
           `/documents/application/${application._id}/validate-all`,
         );
 
-        // ✅ 2. Changer le statut uniquement si "Soumise"
         if (application?.statut === "Soumise") {
           await api.patch(`/applications/${application._id}/status`, {
             statut: "EnAnalyse",
-            commentaire: "Documents validés par le RH"
+            commentaire: "Documents validés par le RH",
           });
         }
 
@@ -476,17 +464,16 @@ const ApplicationDetail = () => {
         fetchApplicationDetail();
         goToNextStep();
       } else {
-        // Refuser les documents
         await api.patch(`/documents/${application._id}/verify`, {
           statut: "Refuse",
           commentaire: comment || "Non conforme",
         });
-        
+
         await api.patch(`/applications/${application._id}/status`, {
           statut: "Refusee",
-          commentaire: comment || "Documents non conformes"
+          commentaire: comment || "Documents non conformes",
         });
-        
+
         setSuccess("Documents refusés - Candidature rejetée");
         setDialogAction("");
         fetchApplicationDetail();
@@ -500,7 +487,6 @@ const ApplicationDetail = () => {
     }
   };
 
-  // ✅ Conservé uniquement pour le téléchargement de l'engagement (pas l'envoi)
   const handleDownloadEngagement = async () => {
     try {
       const stageId = internship?._id || application._id;
@@ -534,31 +520,6 @@ const ApplicationDetail = () => {
       setError(
         error.response?.data?.message || "Erreur lors du téléchargement",
       );
-    }
-  };
-
-  // ⚠️ handleSendEngagement - NE PLUS UTILISER (devenu automatique)
-  // La fonction est conservée mais non utilisée dans l'interface
-  const handleSendEngagement = async () => {
-    setGenerating(true);
-    try {
-      const stageId = internship?._id || application._id;
-
-      if (!stageId) {
-        setError("ID du stage non trouvé");
-        return;
-      }
-
-      await api.post(`/internships/${stageId}/send-engagement`);
-
-      setSuccess("Engagement de confidentialité envoyé à l'étudiant");
-      setTimeout(() => setSuccess(""), 3000);
-      fetchApplicationDetail();
-    } catch (error) {
-      console.error("Erreur envoi engagement:", error);
-      setError(error.response?.data?.message || "Erreur lors de l'envoi");
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -769,6 +730,103 @@ const ApplicationDetail = () => {
     }
   };
 
+  const handleValidateRapportRh = async (rapportId) => {
+    setGenerating(true);
+    try {
+      const stageId = internship?._id || application._id;
+      await api.put(
+        `/internships/${stageId}/livrables/${rapportId}/validate-rh`,
+        {
+          valide: true,
+        },
+      );
+      setSuccess(
+        "Rapport validé par le RH. L'attestation peut maintenant être générée.",
+      );
+      await fetchApplicationDetail();
+    } catch (error) {
+      console.error("Erreur validation rapport RH:", error);
+      setError(
+        error.response?.data?.message || "Erreur lors de la validation RH",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // ============================================
+  // FONCTIONS ATTESTATION
+  // ============================================
+
+  // Voir l'attestation (prévisualiser)
+  const handleViewAttestation = async () => {
+    if (!internship?._id) {
+      setError("Aucun stage associé");
+      return;
+    }
+
+    setAttestationViewLoading(true);
+    try {
+      const response = await api.get(
+        `/internships/${internship._id}/attestation`,
+        { responseType: 'blob' }
+      );
+
+      const blob = response.data instanceof Blob 
+        ? response.data 
+        : new Blob([response.data], { type: 'application/pdf' });
+      
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+      
+      setSuccess("Attestation ouverte dans un nouvel onglet");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (error) {
+      console.error("Erreur visualisation attestation:", error);
+      setError(
+        error.response?.data?.message || 
+        "Erreur lors de la visualisation de l'attestation"
+      );
+    } finally {
+      setAttestationViewLoading(false);
+    }
+  };
+
+  // Envoyer l'attestation à l'étudiant par email
+  const handleSendAttestationToStudent = async () => {
+    if (!internship?._id) {
+      setError("Aucun stage associé");
+      return;
+    }
+
+    if (!internship?.etudiantId?.email) {
+      setError("L'étudiant n'a pas d'adresse email");
+      return;
+    }
+
+    setAttestationSendLoading(true);
+    try {
+      const response = await api.post(
+        `/internships/${internship._id}/send-attestation`
+      );
+      
+      setSuccess(
+        response.data?.message || 
+        "Attestation envoyée à l'étudiant avec succès"
+      );
+      setTimeout(() => setSuccess(""), 5000);
+    } catch (error) {
+      console.error("Erreur envoi attestation:", error);
+      setError(
+        error.response?.data?.message || 
+        "Erreur lors de l'envoi de l'attestation"
+      );
+    } finally {
+      setAttestationSendLoading(false);
+    }
+  };
+
   const steps = [
     { label: "Validation", description: "Documents & Acceptation" },
     { label: "Engagement", description: "Dépôt & Validation" },
@@ -777,7 +835,7 @@ const ApplicationDetail = () => {
   ];
 
   // ============================================
-  // RENDER STEP CONTENT (4 ÉTAPES)
+  // RENDER STEP CONTENT
   // ============================================
 
   const renderStepContent = (step) => {
@@ -806,15 +864,12 @@ const ApplicationDetail = () => {
     );
 
     switch (step) {
-      // ============================================
-      // ÉTAPE 1 : VALIDATION (Documents + Acceptation)
-      // ✅ NOUVELLE LOGIQUE D'AFFICHAGE
-      // ============================================
       case 0:
         return (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Vérifiez les documents de candidature. Une fois validés, la candidature sera transmise au département pour analyse.
+              Vérifiez les documents de candidature. Une fois validés, la
+              candidature sera transmise au département pour analyse.
             </Typography>
 
             {application?.documents?.length > 0 ? (
@@ -897,7 +952,6 @@ const ApplicationDetail = () => {
               </Typography>
             )}
 
-            {/* ✅ AFFICHAGE SANS EMOJIS */}
             {application?.statut === "Acceptee" ? (
               <Alert severity="success" sx={{ borderRadius: "8px", mt: 1 }}>
                 Candidature acceptée - Stage en cours de création.
@@ -946,10 +1000,6 @@ const ApplicationDetail = () => {
           </Box>
         );
 
-      // ============================================
-      // ÉTAPE 2 : ENGAGEMENT (Dépôt + Validation)
-      // ✅ SUPPRESSION du bouton "Envoyer l'engagement"
-      // ============================================
       case 1:
         return (
           <Box sx={{ mt: 2 }}>
@@ -961,14 +1011,21 @@ const ApplicationDetail = () => {
                   : "L'engagement sera envoyé à l'étudiant après validation de la candidature."}
             </Typography>
 
-            {/* ✅ Message informatif si l'engagement est en attente */}
-            {isEngagementEnvoye && !isEngagementRecu && !isEngagementValide && !isEngagementRejete && (
-              <Alert severity="info" sx={{ mt: 2, mb: 2, borderRadius: "8px" }}>
-                <Typography variant="body2">
-                  <strong>Engagement envoyé automatiquement :</strong> L'engagement de confidentialité a été envoyé à l'étudiant par email suite à l'acceptation du département.
-                </Typography>
-              </Alert>
-            )}
+            {isEngagementEnvoye &&
+              !isEngagementRecu &&
+              !isEngagementValide &&
+              !isEngagementRejete && (
+                <Alert
+                  severity="info"
+                  sx={{ mt: 2, mb: 2, borderRadius: "8px" }}
+                >
+                  <Typography variant="body2">
+                    <strong>Engagement envoyé automatiquement :</strong>{" "}
+                    L'engagement de confidentialité a été envoyé à l'étudiant
+                    par email suite à l'acceptation du département.
+                  </Typography>
+                </Alert>
+              )}
 
             {engagementLivrable && (
               <Box sx={{ mb: 3 }}>
@@ -1120,9 +1177,6 @@ const ApplicationDetail = () => {
           </Box>
         );
 
-      // ============================================
-      // ÉTAPE 3 : DIRECTEUR (Demande de stage)
-      // ============================================
       case 2:
         return (
           <Box sx={{ mt: 2 }}>
@@ -1219,28 +1273,61 @@ const ApplicationDetail = () => {
         );
 
       // ============================================
-      // ÉTAPE 4 : CLÔTURE (Rapport + Attestation)
+      // ÉTAPE 4 : CLÔTURE - VERSION PROFESSIONNELLE (SANS REDONDANCE)
       // ============================================
       case 3:
         return (
           <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {rapportLivrable
-                ? "L'étudiant a déposé son rapport de stage."
-                : "En attente du dépôt du rapport par l'étudiant."}
-            </Typography>
-
             {rapportLivrable ? (
               <Box>
-                <Alert severity="success" sx={{ borderRadius: "8px", mb: 2 }}>
-                  Le rapport de stage a été déposé par l'étudiant.
-                </Alert>
+                {/* === ALERT UNIQUE PAR ÉTAT === */}
+                {rapportLivrable.statut === "ValideRH" && (
+                  <Alert
+                    severity="success"
+                    sx={{
+                      borderRadius: "8px",
+                      mb: 2,
+                      "& .MuiAlert-icon": { color: "#22c55e" },
+                    }}
+                  >
+                    Rapport validé. L'attestation peut être générée.
+                  </Alert>
+                )}
 
+                {rapportLivrable.statut === "ValideEncadrant" && (
+                  <Alert
+                    severity="warning"
+                    sx={{
+                      borderRadius: "8px",
+                      mb: 2,
+                      "& .MuiAlert-icon": { color: "#d97706" },
+                    }}
+                  >
+                    Validation RH requise.
+                  </Alert>
+                )}
+
+                {rapportLivrable.statut !== "ValideRH" &&
+                  rapportLivrable.statut !== "ValideEncadrant" && (
+                    <Alert
+                      severity="info"
+                      sx={{
+                        borderRadius: "8px",
+                        mb: 2,
+                        "& .MuiAlert-icon": { color: "#1d4ed8" },
+                      }}
+                    >
+                      Rapport déposé par l'étudiant. En attente de validation.
+                    </Alert>
+                  )}
+
+                {/* === FICHIER DU RAPPORT === */}
                 <Paper
                   sx={{
                     p: 2,
                     borderRadius: "10px",
                     border: "1px solid #eef1f3",
+                    backgroundColor: "#fafbfc",
                   }}
                 >
                   <Box
@@ -1253,12 +1340,19 @@ const ApplicationDetail = () => {
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                       <PictureAsPdf sx={{ color: "#ef4444", fontSize: 24 }} />
                       <Box>
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={500}
+                          color="#1a2332"
+                        >
                           {rapportLivrable.nom || "Rapport_de_stage.pdf"}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="#94a3b8">
                           Déposé le {formatDate(rapportLivrable.dateDepot)}
-                          {rapportLivrable.valide && " • Validé"}
+                          {rapportLivrable.statut === "ValideEncadrant" &&
+                            " • Validé par l'encadrant"}
+                          {rapportLivrable.statut === "ValideRH" &&
+                            " • Validé par le RH"}
                         </Typography>
                       </Box>
                     </Box>
@@ -1270,7 +1364,7 @@ const ApplicationDetail = () => {
                           if (href) window.open(href, "_blank");
                           else setError("Impossible de visualiser ce document");
                         }}
-                        sx={{ color: "#2d3748" }}
+                        sx={{ color: "#687480" }}
                       >
                         <Visibility fontSize="small" />
                       </IconButton>
@@ -1278,66 +1372,156 @@ const ApplicationDetail = () => {
                   </Box>
                 </Paper>
 
-                {!isCloturee && rapportLivrable.valide && (
-                  <Box sx={{ mt: 2 }}>
-                    <Alert severity="info" sx={{ borderRadius: "8px", mb: 2 }}>
-                      Le rapport a été validé par l'encadrant. Clôturez le
-                      stage.
-                    </Alert>
+                {/* === BOUTONS D'ACTION === */}
+                <Box sx={{ mt: 2 }}>
+                  {/* Validation RH */}
+                  {rapportLivrable.statut === "ValideEncadrant" && (
                     <ActionButton
                       variant="contained"
                       startIcon={<CheckCircle />}
-                      onClick={async () => {
-                        try {
-                          const stageId = internship?._id || application._id;
-                          await api.patch(`/internships/${stageId}/status`, {
-                            statut: "Cloturee",
-                          });
-                          setSuccess("Stage clôturé avec succès !");
-                          setTimeout(() => setSuccess(""), 3000);
-                          fetchApplicationDetail();
-                          goToNextStep();
-                        } catch (error) {
-                          console.error("Erreur clôture:", error);
-                          setError(
-                            error.response?.data?.message ||
-                              "Erreur lors de la clôture",
-                          );
-                        }
-                      }}
+                      onClick={() =>
+                        handleValidateRapportRh(rapportLivrable._id)
+                      }
+                      disabled={generating}
                       sx={{
                         backgroundColor: "#22c55e",
                         "&:hover": { backgroundColor: "#16a34a" },
                       }}
                     >
-                      Clôturer le stage
+                      {generating
+                        ? "Validation en cours..."
+                        : "Valider le rapport"}
                     </ActionButton>
-                  </Box>
-                )}
+                  )}
 
-                {isCloturee && (
-                  <Box sx={{ mt: 2 }}>
-                    <Alert
-                      severity="success"
-                      sx={{ borderRadius: "8px", mb: 2 }}
-                    >
-                      Stage clôturé. Générez l'attestation.
-                    </Alert>
-                    <ActionButton
-                      variant="contained"
-                      startIcon={<Description />}
-                      onClick={handleGenerateAttestation}
-                      disabled={generating}
-                      sx={{
-                        backgroundColor: "#2d3748",
-                        "&:hover": { backgroundColor: "#1a202c" },
-                        mt: 1,
-                      }}
-                    >
-                      {generating ? "Génération..." : "Générer l'attestation"}
-                    </ActionButton>
-                  </Box>
-                )}
+                  {/* Génération attestation */}
+                  {rapportLivrable.statut === "ValideRH" && (
+                    <Box>
+                      {!internship?.attestationGeneree ? (
+                        // Attestation non générée → Bouton Générer
+                        <Box>
+                          <Typography variant="body2" color="#065f46" sx={{ mb: 2 }}>
+                            Le rapport est validé. L'attestation peut être générée.
+                          </Typography>
+                          <ActionButton
+                            variant="contained"
+                            startIcon={<Description />}
+                            onClick={handleGenerateAttestation}
+                            disabled={generating}
+                            sx={{
+                              backgroundColor: "#2d3748",
+                              "&:hover": { backgroundColor: "#1a202c" },
+                            }}
+                          >
+                            {generating ? "Génération en cours..." : "Générer l'attestation"}
+                          </ActionButton>
+                        </Box>
+                      ) : (
+                        // Attestation générée → Voir, Télécharger, Envoyer
+                        <Box>
+                          <Alert severity="success" sx={{ borderRadius: '8px', mb: 2 }}>
+                            Attestation générée avec succès.
+                          </Alert>
+                          
+                          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                            {/* Voir l'attestation */}
+                            <ActionButton
+                              variant="outlined"
+                              startIcon={<Visibility />}
+                              onClick={handleViewAttestation}
+                              disabled={attestationViewLoading}
+                              sx={{
+                                borderColor: "#4f46e5",
+                                color: "#4f46e5",
+                                "&:hover": {
+                                  borderColor: "#4338ca",
+                                  backgroundColor: "rgba(79, 70, 229, 0.04)",
+                                },
+                              }}
+                            >
+                              {attestationViewLoading ? "Chargement..." : "Voir l'attestation"}
+                            </ActionButton>
+
+                            {/* Télécharger l'attestation */}
+                            <ActionButton
+                              variant="outlined"
+                              startIcon={<Download />}
+                              onClick={() => {
+                                window.open(
+                                  `/uploads/attestations/attestation_${internship._id}.pdf`,
+                                  "_blank",
+                                );
+                              }}
+                              sx={{
+                                borderColor: "#2d3748",
+                                color: "#2d3748",
+                              }}
+                            >
+                              Télécharger
+                            </ActionButton>
+
+                            {/* Envoyer à l'étudiant */}
+                            <ActionButton
+                              variant="contained"
+                              startIcon={<Send />}
+                              onClick={handleSendAttestationToStudent}
+                              disabled={attestationSendLoading || !internship?.etudiantId?.email}
+                              sx={{
+                                backgroundColor: "#0f766e",
+                                "&:hover": { backgroundColor: "#115e59" },
+                              }}
+                            >
+                              {attestationSendLoading ? "Envoi..." : "Envoyer à l'étudiant"}
+                            </ActionButton>
+                          </Box>
+
+                          {internship?.etudiantId?.email && (
+                            <Typography variant="caption" color="#94a3b8" sx={{ display: 'block', mt: 1 }}>
+                              Envoyé à : {internship.etudiantId.email}
+                            </Typography>
+                          )}
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+
+                  {/* Clôture du stage */}
+                  {rapportLivrable.statut === "ValideRH" &&
+                    internship?.attestationGeneree && (
+                      <Box sx={{ mt: 2 }}>
+                        <ActionButton
+                          variant="contained"
+                          startIcon={<CheckCircle />}
+                          onClick={async () => {
+                            try {
+                              const stageId =
+                                internship?._id || application._id;
+                              await api.patch(
+                                `/internships/${stageId}/status`,
+                                {
+                                  statut: "Cloturee",
+                                },
+                              );
+                              setSuccess("Stage clôturé avec succès");
+                              fetchApplicationDetail();
+                            } catch (error) {
+                              console.error("Erreur clôture:", error);
+                              setError(
+                                error.response?.data?.message ||
+                                  "Erreur lors de la clôture",
+                              );
+                            }
+                          }}
+                          sx={{
+                            backgroundColor: "#0f766e",
+                            "&:hover": { backgroundColor: "#115e59" },
+                          }}
+                        >
+                          Clôturer le stage
+                        </ActionButton>
+                      </Box>
+                    )}
+                </Box>
               </Box>
             ) : (
               <Alert severity="info" sx={{ borderRadius: "8px" }}>
@@ -1537,7 +1721,7 @@ const ApplicationDetail = () => {
         </Grid>
       </InfoCard>
 
-      {/* ===== WORKFLOW UNIQUEMENT (DOCUMENTS SUPPRIMÉS) ===== */}
+      {/* ===== WORKFLOW ===== */}
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <WorkflowCard>

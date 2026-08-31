@@ -77,7 +77,9 @@ const StatusChip = styled(Chip)(({ status }) => {
     };
 });
 
-const StatCard = styled(Card)(({ active, color }) => ({
+const StatCard = styled(Card, {
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'color',
+})(({ active, color }) => ({
     borderRadius: '10px',
     border: `1px solid ${active ? color : '#eef1f3'}`,
     cursor: 'pointer',

@@ -198,6 +198,11 @@ const InternshipSchema = new mongoose.Schema({
         dateDepot: {
             type: Date
         },
+        statut: {
+            type: String,
+            enum: ['EnAttente', 'Rejete', 'ValideEncadrant', 'ValideRH'],
+            default: 'EnAttente'
+        },
         valide: {
             type: Boolean,
             default: false
@@ -210,6 +215,7 @@ const InternshipSchema = new mongoose.Schema({
     remarquesEncadrant: [{
         date: { type: Date, default: Date.now },
         message: String,
+        livrableId: { type: mongoose.Schema.Types.ObjectId },
         auteurId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'UtilisateurInterne'

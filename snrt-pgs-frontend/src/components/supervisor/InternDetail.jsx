@@ -1,4 +1,6 @@
 // src/components/supervisor/InternDetail.jsx
+// ✅ VERSION FINALE - SANS ÉTABLISSEMENT ET FILIÈRE
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -9,12 +11,9 @@ import {
     Grid,
     Chip,
     Button,
-    Avatar,
     Divider,
     CircularProgress,
     Alert,
-    Card,
-    CardContent,
     IconButton,
     Tooltip,
     Dialog,
@@ -22,40 +21,29 @@ import {
     DialogContent,
     DialogActions,
     TextField,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Tab,
-    Tabs,
-    Rating,
+    Collapse,
+    LinearProgress,
     Stack,
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import {
     ArrowBack,
-    Person,
     Email,
     Phone,
-    School,
-    Work,
     Description,
     CheckCircle,
-    Pending,
     Cancel,
     Visibility,
-    Message,
     ThumbUp,
     ThumbDown,
-    AddComment,
-    Edit,
-    Star,
     PictureAsPdf,
     InsertDriveFile,
     Image,
-    CalendarToday,
+    History,
+    ExpandMore,
+    ExpandLess,
+    ErrorOutline,
+    Work,
 } from '@mui/icons-material';
 import { useSelector } from 'react-redux';
 import api from '../../services/api';
@@ -65,8 +53,8 @@ import api from '../../services/api';
 // ============================================
 
 const InfoCard = styled(Paper)({
-    borderRadius: '16px',
-    padding: '20px 24px',
+    borderRadius: '12px',
+    padding: '24px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
     border: '1px solid #eef1f3',
     marginBottom: '24px',
@@ -90,14 +78,16 @@ const StatusChip = styled(Chip)(({ status }) => {
         color: color.text,
         fontWeight: 500,
         fontSize: '11px',
-        height: '24px',
+        height: '26px',
+        borderRadius: '13px',
     };
 });
 
-const LivrableStatusChip = styled(Chip)(({ status }) => {
+const VersionStatusChip = styled(Chip)(({ status }) => {
     const colors = {
         'EnAttente': { bg: '#fef3c7', text: '#d97706' },
         'Valide': { bg: '#d1fae5', text: '#065f46' },
+        'ValideEncadrant': { bg: '#d1fae5', text: '#065f46' },
         'Rejete': { bg: '#fee2e2', text: '#991b1b' },
     };
     const color = colors[status] || colors['EnAttente'];
@@ -107,41 +97,119 @@ const LivrableStatusChip = styled(Chip)(({ status }) => {
         fontWeight: 500,
         fontSize: '11px',
         height: '24px',
+        borderRadius: '12px',
     };
 });
 
 const InfoRow = styled(Box)({
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: '12px',
     padding: '6px 0',
-    '& .MuiSvgIcon-root': {
-        color: '#687480',
-        fontSize: '18px',
-    },
 });
 
-const StyledTableCell = styled(TableCell)({
+const InfoIcon = styled(Box)(({ color }) => ({
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    backgroundColor: alpha(color || '#1387A7', 0.08),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: color || '#1387A7',
+    flexShrink: 0,
+    fontSize: '16px',
+}));
+
+const InfoLabel = styled(Typography)({
+    fontSize: '12px',
+    color: '#94a3b8',
+    fontWeight: 500,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+});
+
+const InfoValue = styled(Typography)({
+    fontSize: '14px',
+    color: '#1a2332',
+    fontWeight: 500,
+});
+
+const VersionCard = styled(Paper)(({ status, isLatest }) => ({
+    padding: '16px 20px',
+    borderRadius: '10px',
+    border: isLatest ? '2px solid #1387A7' : '1px solid #eef1f3',
+    backgroundColor: status === 'Rejete' ? '#fff7f7' : '#ffffff',
+    marginBottom: '12px',
+    '&:hover': {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+    },
+}));
+
+const VersionHeader = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: '12px',
+});
+
+const VersionInfo = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    flexWrap: 'wrap',
+});
+
+const VersionName = styled(Typography)({
+    fontSize: '14px',
     fontWeight: 600,
     color: '#1a2332',
+});
+
+const VersionMeta = styled(Typography)({
+    fontSize: '12px',
+    color: '#94a3b8',
+});
+
+const VersionActions = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+});
+
+const RejectionBox = styled(Box)({
+    backgroundColor: '#fff7f7',
+    border: '1px solid #fecaca',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    marginTop: '12px',
+});
+
+const RejectionLabel = styled(Typography)({
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#991b1b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    marginBottom: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+});
+
+const RejectionText = styled(Typography)({
     fontSize: '13px',
+    color: '#991b1b',
+    lineHeight: 1.5,
 });
 
 const ActionButton = styled(Button)({
-    borderRadius: '10px',
+    borderRadius: '8px',
     textTransform: 'none',
-    fontWeight: 600,
-    padding: '8px 20px',
-});
-
-const RemarkItem = styled(Box)({
-    display: 'flex',
-    gap: '12px',
-    padding: '12px 0',
-    borderBottom: '1px solid #f0f2f5',
-    '&:last-child': {
-        borderBottom: 'none',
-    },
+    fontWeight: 500,
+    fontSize: '13px',
+    padding: '6px 16px',
 });
 
 // ============================================
@@ -159,25 +227,15 @@ const InternDetail = () => {
     const [student, setStudent] = useState(null);
     const [offer, setOffer] = useState(null);
     const [livrables, setLivrables] = useState([]);
-    const [remarks, setRemarks] = useState([]);
-    const [evaluation, setEvaluation] = useState(null);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [activeTab, setActiveTab] = useState(0);
+    const [showHistory, setShowHistory] = useState(true);
 
     // Dialog states
-    const [openRemarkDialog, setOpenRemarkDialog] = useState(false);
-    const [newRemark, setNewRemark] = useState('');
     const [openLivrableDialog, setOpenLivrableDialog] = useState(false);
     const [selectedLivrable, setSelectedLivrable] = useState(null);
     const [livrableDecision, setLivrableDecision] = useState('');
     const [livrableComment, setLivrableComment] = useState('');
-    const [openEvaluationDialog, setOpenEvaluationDialog] = useState(false);
-    const [evaluationData, setEvaluationData] = useState({
-        note: 0,
-        commentaires: '',
-        competences: [],
-    });
 
     useEffect(() => {
         fetchInternshipDetail();
@@ -187,16 +245,20 @@ const InternDetail = () => {
         setLoading(true);
         setError('');
         try {
-            // ✅ Route correcte : /internships/:id
             const response = await api.get(`/internships/${id}`);
-            const data = response.data?.data || response.data;
+            const data = response.data?.data?.internship
+                || response.data?.data
+                || response.data?.internship
+                || response.data;
             
             setInternship(data);
-            setStudent(data.etudiantId || {});
-            setOffer(data.offreId || {});
-            setLivrables(data.livrables || []);
-            setRemarks(data.remarquesEncadrant || []);
-            setEvaluation(data.evaluation || null);
+            setStudent(data.etudiantId || data.etudiant || {});
+            setOffer(data.offreId || data.offre || {});
+            
+            const reports = (data.livrables || [])
+                .filter((livrable) => livrable.type === 'Rapport')
+                .sort((a, b) => new Date(b.dateDepot) - new Date(a.dateDepot));
+            setLivrables(reports);
 
         } catch (error) {
             console.error('Erreur chargement:', error);
@@ -225,128 +287,24 @@ const InternDetail = () => {
     };
 
     const handleValidateLivrable = async () => {
+        if (livrableDecision === 'Rejete' && !livrableComment.trim()) {
+            setError('Veuillez indiquer le motif du rejet');
+            return;
+        }
+
         setSubmitting(true);
+        setError('');
         try {
-            // ✅ Route correcte : /internships/:id/validate-deliverable
-            await api.put(`/internships/${id}/validate-deliverable`, {
-                livrableId: selectedLivrable._id,
+            await api.put(`/internships/${id}/livrables/${selectedLivrable._id}/validate`, {
                 valide: livrableDecision === 'Valide',
                 commentaire: livrableComment,
             });
-            setSuccess(`Livrable ${livrableDecision === 'Valide' ? 'validé' : 'rejeté'} avec succès`);
+            setSuccess(`Rapport ${livrableDecision === 'Valide' ? 'validé' : 'rejeté'} avec succès`);
             handleCloseLivrableDialog();
             fetchInternshipDetail();
         } catch (error) {
             console.error('Erreur validation:', error);
             setError(error.response?.data?.message || 'Erreur lors de la validation');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    // ============================================
-    // FONCTIONS REMARQUES
-    // ============================================
-
-    const handleOpenRemarkDialog = () => {
-        setNewRemark('');
-        setOpenRemarkDialog(true);
-    };
-
-    const handleCloseRemarkDialog = () => {
-        setOpenRemarkDialog(false);
-        setNewRemark('');
-    };
-
-    const handleAddRemark = async () => {
-        if (!newRemark.trim()) {
-            setError('Veuillez saisir une remarque');
-            return;
-        }
-        setSubmitting(true);
-        try {
-            // ✅ Route correcte : /internships/:id/remarks
-            await api.post(`/internships/${id}/remarks`, {
-                message: newRemark,
-            });
-            setSuccess('Remarque ajoutée avec succès');
-            handleCloseRemarkDialog();
-            fetchInternshipDetail();
-        } catch (error) {
-            console.error('Erreur ajout remarque:', error);
-            setError(error.response?.data?.message || 'Erreur lors de l\'ajout');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    // ============================================
-    // FONCTIONS ÉVALUATION
-    // ============================================
-
-    const handleOpenEvaluationDialog = () => {
-        setEvaluationData({
-            note: evaluation?.note || 0,
-            commentaires: evaluation?.commentaires || '',
-            competences: evaluation?.competencesEvaluees || [
-                { nom: 'Autonomie', niveau: 'Intermediaire', note: 0 },
-                { nom: 'Qualité du travail', niveau: 'Intermediaire', note: 0 },
-                { nom: 'Relationnel', niveau: 'Intermediaire', note: 0 },
-                { nom: 'Technique', niveau: 'Intermediaire', note: 0 },
-            ],
-        });
-        setOpenEvaluationDialog(true);
-    };
-
-    const handleCloseEvaluationDialog = () => {
-        setOpenEvaluationDialog(false);
-    };
-
-    const handleEvaluationChange = (field, value) => {
-        setEvaluationData({ ...evaluationData, [field]: value });
-    };
-
-    const handleCompetenceChange = (index, field, value) => {
-        const newCompetences = [...evaluationData.competences];
-        newCompetences[index][field] = value;
-        setEvaluationData({ ...evaluationData, competences: newCompetences });
-    };
-
-    const handleSubmitEvaluation = async () => {
-        if (evaluationData.note === 0) {
-            setError('Veuillez attribuer une note');
-            return;
-        }
-        setSubmitting(true);
-        try {
-            // ✅ Route correcte : /internships/:id/evaluate
-            await api.put(`/internships/${id}/evaluate`, evaluationData);
-            setSuccess('Évaluation enregistrée avec succès');
-            handleCloseEvaluationDialog();
-            fetchInternshipDetail();
-        } catch (error) {
-            console.error('Erreur évaluation:', error);
-            setError(error.response?.data?.message || 'Erreur lors de l\'évaluation');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    // ============================================
-    // FONCTIONS CLÔTURE
-    // ============================================
-
-    const handleCloture = async () => {
-        if (!window.confirm('Êtes-vous sûr de vouloir clôturer ce stage ?')) return;
-        setSubmitting(true);
-        try {
-            // ✅ Route correcte : /internships/:id/close
-            await api.put(`/internships/${id}/close`);
-            setSuccess('Stage clôturé avec succès');
-            fetchInternshipDetail();
-        } catch (error) {
-            console.error('Erreur clôture:', error);
-            setError(error.response?.data?.message || 'Erreur lors de la clôture');
         } finally {
             setSubmitting(false);
         }
@@ -371,13 +329,14 @@ const InternDetail = () => {
         return labels[status] || status;
     };
 
-    const getLivrableStatusLabel = (status) => {
+    const getVersionStatusLabel = (status) => {
         const labels = {
             'EnAttente': 'En attente',
             'Valide': 'Validé',
+            'ValideEncadrant': 'Validé',
             'Rejete': 'Rejeté',
         };
-        return labels[status] || status;
+        return labels[status] || 'En attente';
     };
 
     const formatDate = (dateStr) => {
@@ -400,11 +359,6 @@ const InternDetail = () => {
         });
     };
 
-    const getInitials = (nom, prenom) => {
-        if (!nom && !prenom) return '?';
-        return `${(prenom || '')[0] || ''}${(nom || '')[0] || ''}`.toUpperCase() || '?';
-    };
-
     const getFileIcon = (doc) => {
         if (!doc) return <InsertDriveFile />;
         const name = doc.nom || '';
@@ -421,6 +375,9 @@ const InternDetail = () => {
     const buildFileHref = (doc) => {
         if (!doc) return null;
         const apiRoot = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+        if (doc.gridFsId) {
+            return `${apiRoot}/api/v1/documents/file/${doc.gridFsId}`;
+        }
         if (doc.chemin) {
             if (doc.chemin.startsWith('/')) return `${apiRoot}${doc.chemin}`;
             return doc.chemin;
@@ -428,12 +385,11 @@ const InternDetail = () => {
         return null;
     };
 
-    const isCloturable = () => {
-        const tousLivrablesValides = livrables.every(l => l.valide === true);
-        return internship?.statut === 'EnCours' && tousLivrablesValides && evaluation;
-    };
+    const isEditable = internship && !['Termine', 'Cloturee', 'Annule'].includes(internship.statut);
 
-    const isEditable = internship?.statut === 'EnCours';
+    const latestLivrable = livrables.length > 0 ? livrables[0] : null;
+    const hasHistory = livrables.length > 1;
+    const validCount = livrables.filter(l => l.statut === 'ValideEncadrant' || l.valide === true).length;
 
     if (loading) {
         return (
@@ -463,14 +419,31 @@ const InternDetail = () => {
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
             {/* ===== HEADER ===== */}
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: 4 }}>
                 <Button
                     startIcon={<ArrowBack />}
                     onClick={() => navigate('/supervisor/stagiaires')}
-                    sx={{ mb: 2, textTransform: 'none', color: '#666' }}
+                    sx={{ mb: 2, textTransform: 'none', color: '#687480' }}
                 >
-                    Retour à la liste
+                    Retour aux stagiaires
                 </Button>
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+                    <Box>
+                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
+                            {student?.prenom || ''} {student?.nom || ''}
+                        </Typography>
+                        <Typography variant="body1" color="#687480">
+                            {offer?.titre || 'Stage sans titre'} • {offer?.typeStage || 'Stage'}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
+                            <Typography variant="body2" color="#94a3b8">
+                                {formatDate(internship?.dateDebut)} → {formatDate(internship?.dateFin)}
+                            </Typography>
+                            <StatusChip label={getStatusLabel(internship?.statut)} status={internship?.statut} />
+                        </Box>
+                    </Box>
+                </Box>
             </Box>
 
             {success && (
@@ -484,432 +457,267 @@ const InternDetail = () => {
                 </Alert>
             )}
 
-            {/* ===== CARTE INFORMATIONS STAGIAIRE ===== */}
+            {/* ===== INFORMATIONS DU STAGE ===== */}
             <InfoCard>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2 }}>
-                    <Avatar
-                        sx={{
-                            width: 64,
-                            height: 64,
-                            backgroundColor: '#2d3748',
-                            fontSize: 24,
-                            fontWeight: 700,
-                            color: '#fff',
-                        }}
-                    >
-                        {getInitials(student?.nom, student?.prenom)}
-                    </Avatar>
-                    <Box sx={{ flex: 1 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                            {student?.prenom || ''} {student?.nom || ''}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {offer?.titre || 'Stage sans titre'} • {offer?.typeStage || 'Stage'}
-                        </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                        <StatusChip label={getStatusLabel(internship?.statut)} status={internship?.statut} />
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                            Début: {formatDate(internship?.dateDebut)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                            Fin: {formatDate(internship?.dateFin)}
-                        </Typography>
-                    </Box>
-                </Box>
-
-                <Divider sx={{ mb: 2 }} />
-
-                <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6} md={3}>
+                <Grid container spacing={3}>
+                    <Grid item xs={12} sm={6} md={4}>
                         <InfoRow>
-                            <Email />
+                            <InfoIcon color="#1387A7">
+                                <Email sx={{ fontSize: 18 }} />
+                            </InfoIcon>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Email
-                                </Typography>
-                                <Typography variant="body2">
-                                    {student?.email || 'Non renseigné'}
-                                </Typography>
+                                <InfoLabel>Email</InfoLabel>
+                                <InfoValue>{student?.email || 'Non renseigné'}</InfoValue>
                             </Box>
                         </InfoRow>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={12} sm={6} md={4}>
                         <InfoRow>
-                            <Phone />
+                            <InfoIcon color="#f59e0b">
+                                <Phone sx={{ fontSize: 18 }} />
+                            </InfoIcon>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Téléphone
-                                </Typography>
-                                <Typography variant="body2">
-                                    {student?.telephone || 'Non renseigné'}
-                                </Typography>
+                                <InfoLabel>Téléphone</InfoLabel>
+                                <InfoValue>{student?.telephone || 'Non renseigné'}</InfoValue>
                             </Box>
                         </InfoRow>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={12} sm={6} md={4}>
                         <InfoRow>
-                            <School />
+                            <InfoIcon color="#4f46e5">
+                                <Work sx={{ fontSize: 18 }} />
+                            </InfoIcon>
                             <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Université
-                                </Typography>
-                                <Typography variant="body2">
-                                    {student?.universite || 'Non renseignée'}
-                                </Typography>
-                            </Box>
-                        </InfoRow>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <InfoRow>
-                            <Work />
-                            <Box>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                    Filière
-                                </Typography>
-                                <Typography variant="body2">
-                                    {student?.filiere || 'Non renseignée'}
-                                </Typography>
+                                <InfoLabel>Type de stage</InfoLabel>
+                                <InfoValue>{offer?.typeStage || 'Stage'}</InfoValue>
                             </Box>
                         </InfoRow>
                     </Grid>
                 </Grid>
             </InfoCard>
 
-            {/* ===== TABS ===== */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-                <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)}>
-                    <Tab label="Livrables" icon={<Description />} iconPosition="start" />
-                    <Tab label="Remarques" icon={<Message />} iconPosition="start" />
-                    <Tab label="Évaluation" icon={<Star />} iconPosition="start" />
-                </Tabs>
-            </Box>
+            {/* ===== RAPPORT DE STAGE ===== */}
+            <Paper sx={{ borderRadius: '12px', p: 3, border: '1px solid #eef1f3' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: '12px' }}>
+                    <Typography variant="h6" fontWeight={600} color="#1a2332">
+                        Rapport de stage
+                    </Typography>
+                    <Chip
+                        label={`${livrables.length} version${livrables.length > 1 ? 's' : ''} • ${validCount > 0 ? 'Validé' : 'En attente'}`}
+                        sx={{ backgroundColor: '#f1f5f9', color: '#475569' }}
+                    />
+                </Box>
 
-            {/* ===== TAB 0 : LIVRABLES ===== */}
-            {activeTab === 0 && (
-                <Paper sx={{ borderRadius: '16px', p: 3, border: '1px solid #eef1f3' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography variant="h6" fontWeight={600}>
-                            Livrables déposés
-                        </Typography>
-                        <Chip
-                            label={`${livrables.filter(l => l.valide === true).length}/${livrables.length} validés`}
-                            sx={{ backgroundColor: '#d1fae5', color: '#065f46' }}
-                        />
-                    </Box>
-
-                    {livrables.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                            Aucun livrable déposé par le stagiaire
-                        </Typography>
-                    ) : (
-                        <TableContainer>
-                            <Table>
-                                <TableHead>
-                                    <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
-                                        <StyledTableCell>Nom</StyledTableCell>
-                                        <StyledTableCell>Type</StyledTableCell>
-                                        <StyledTableCell>Date dépôt</StyledTableCell>
-                                        <StyledTableCell>Statut</StyledTableCell>
-                                        <StyledTableCell align="center">Actions</StyledTableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {livrables.map((livrable) => (
-                                        <TableRow key={livrable._id} hover>
-                                            <TableCell>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    {getFileIcon(livrable)}
-                                                    <Typography variant="body2" fontWeight={500}>
-                                                        {livrable.nom || 'Sans nom'}
-                                                    </Typography>
-                                                </Box>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip
-                                                    label={livrable.type || 'Autre'}
-                                                    size="small"
-                                                    sx={{ backgroundColor: '#e0e7ff', color: '#4338ca' }}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {formatDate(livrable.dateDepot)}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                                <LivrableStatusChip
-                                                    label={livrable.valide ? 'Validé' : livrable.statut === 'Rejete' ? 'Rejeté' : 'En attente'}
-                                                    status={livrable.valide ? 'Valide' : livrable.statut === 'Rejete' ? 'Rejete' : 'EnAttente'}
-                                                    size="small"
-                                                />
-                                            </TableCell>
-                                            <TableCell align="center">
-                                                <Stack direction="row" spacing={1} justifyContent="center">
-                                                    <Tooltip title="Voir">
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => {
-                                                                const href = buildFileHref(livrable);
-                                                                if (href) window.open(href, '_blank');
-                                                                else setError('Impossible de visualiser ce document');
-                                                            }}
-                                                            sx={{ color: '#2d3748' }}
-                                                        >
-                                                            <Visibility fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    {isEditable && !livrable.valide && livrable.statut !== 'Rejete' && (
-                                                        <>
-                                                            <Tooltip title="Valider">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleOpenLivrableDialog(livrable, 'Valide')}
-                                                                    sx={{ color: '#22c55e' }}
-                                                                >
-                                                                    <ThumbUp fontSize="small" />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                            <Tooltip title="Rejeter">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleOpenLivrableDialog(livrable, 'Rejete')}
-                                                                    sx={{ color: '#ef4444' }}
-                                                                >
-                                                                    <ThumbDown fontSize="small" />
-                                                                </IconButton>
-                                                            </Tooltip>
-                                                        </>
-                                                    )}
-                                                    {livrable.valide === true && (
-                                                        <Tooltip title="Validé">
-                                                            <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
-                                                        </Tooltip>
-                                                    )}
-                                                    {livrable.statut === 'Rejete' && (
-                                                        <Tooltip title="Rejeté">
-                                                            <Cancel sx={{ color: '#ef4444', fontSize: 20 }} />
-                                                        </Tooltip>
-                                                    )}
-                                                </Stack>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    )}
-                </Paper>
-            )}
-
-            {/* ===== TAB 1 : REMARQUES ===== */}
-            {activeTab === 1 && (
-                <Paper sx={{ borderRadius: '16px', p: 3, border: '1px solid #eef1f3' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography variant="h6" fontWeight={600}>
-                            Remarques
-                        </Typography>
-                        {isEditable && (
-                            <ActionButton
-                                variant="contained"
-                                startIcon={<AddComment />}
-                                onClick={handleOpenRemarkDialog}
-                                sx={{ backgroundColor: '#2d3748', '&:hover': { backgroundColor: '#1a202c' } }}
-                            >
-                                Ajouter une remarque
-                            </ActionButton>
-                        )}
-                    </Box>
-
-                    {remarks.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                            Aucune remarque
-                        </Typography>
-                    ) : (
-                        <Box>
-                            {remarks.map((remark, index) => (
-                                <RemarkItem key={index}>
-                                    <Avatar
-                                        sx={{
-                                            width: 36,
-                                            height: 36,
-                                            backgroundColor: '#2d3748',
-                                            fontSize: 14,
-                                            fontWeight: 600,
-                                            color: '#fff',
-                                            flexShrink: 0,
-                                        }}
-                                    >
-                                        {remark.auteurId?.prenom?.[0] || 'E'}
-                                    </Avatar>
-                                    <Box sx={{ flex: 1 }}>
-                                        <Typography variant="body2" fontWeight={500}>
-                                            {remark.auteurId?.prenom || 'Encadrant'} {remark.auteurId?.nom || ''}
-                                            <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
-                                                {formatDateTime(remark.date)}
-                                            </Typography>
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                            {remark.message}
-                                        </Typography>
-                                    </Box>
-                                </RemarkItem>
-                            ))}
-                        </Box>
-                    )}
-                </Paper>
-            )}
-
-            {/* ===== TAB 2 : ÉVALUATION ===== */}
-            {activeTab === 2 && (
-                <Paper sx={{ borderRadius: '16px', p: 3, border: '1px solid #eef1f3' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography variant="h6" fontWeight={600}>
-                            Évaluation du stagiaire
-                        </Typography>
-                        {isEditable && !evaluation && (
-                            <ActionButton
-                                variant="contained"
-                                startIcon={<Star />}
-                                onClick={handleOpenEvaluationDialog}
-                                sx={{ backgroundColor: '#2d3748', '&:hover': { backgroundColor: '#1a202c' } }}
-                            >
-                                Évaluer
-                            </ActionButton>
-                        )}
-                        {isEditable && evaluation && (
-                            <ActionButton
-                                variant="outlined"
-                                startIcon={<Edit />}
-                                onClick={handleOpenEvaluationDialog}
-                                sx={{ borderColor: '#2d3748', color: '#2d3748' }}
-                            >
-                                Modifier l'évaluation
-                            </ActionButton>
-                        )}
-                    </Box>
-
-                    {evaluation ? (
-                        <Box>
-                            <Grid container spacing={3}>
-                                <Grid item xs={12} md={4}>
-                                    <Card sx={{ borderRadius: '12px', p: 3, textAlign: 'center', backgroundColor: '#f7f8fa' }}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Note finale
-                                        </Typography>
-                                        <Typography variant="h2" fontWeight={700} color="#1a2332">
-                                            {evaluation.note || 0}/20
-                                        </Typography>
-                                        <Rating
-                                            value={Math.min((evaluation.note || 0) / 4, 5)}
-                                            readOnly
-                                            precision={0.5}
-                                            sx={{ mt: 1 }}
+                {livrables.length === 0 ? (
+                    <Typography variant="body2" color="#94a3b8" sx={{ textAlign: 'center', py: 4 }}>
+                        Aucun rapport déposé par le stagiaire
+                    </Typography>
+                ) : (
+                    <Box>
+                        {/* === VERSION LA PLUS RÉCENTE === */}
+                        {latestLivrable && (
+                            <VersionCard status={latestLivrable.statut} isLatest>
+                                <VersionHeader>
+                                    <VersionInfo>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Chip
+                                                label={`V${livrables.length}`}
+                                                size="small"
+                                                sx={{ backgroundColor: '#1387A7', color: '#ffffff', fontWeight: 600 }}
+                                            />
+                                            <VersionName>
+                                                {latestLivrable.nom || 'Rapport_Stage.pdf'}
+                                            </VersionName>
+                                        </Box>
+                                        <VersionMeta>
+                                            Déposé le {formatDateTime(latestLivrable.dateDepot)}
+                                        </VersionMeta>
+                                        <VersionStatusChip
+                                            label={getVersionStatusLabel(latestLivrable.statut || 'EnAttente')}
+                                            status={latestLivrable.statut || 'EnAttente'}
+                                            size="small"
                                         />
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={12} md={8}>
-                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                        <strong>Commentaires :</strong>
-                                    </Typography>
-                                    <Typography variant="body2">
-                                        {evaluation.commentaires || 'Aucun commentaire'}
-                                    </Typography>
-                                </Grid>
-                                {evaluation.competencesEvaluees?.length > 0 && (
-                                    <Grid item xs={12}>
-                                        <Divider sx={{ my: 2 }} />
-                                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                                            Compétences évaluées
-                                        </Typography>
-                                        <Grid container spacing={2}>
-                                            {evaluation.competencesEvaluees.map((comp, idx) => (
-                                                <Grid item xs={6} md={4} key={idx}>
-                                                    <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#f7f8fa' }}>
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {comp.nom}
-                                                        </Typography>
-                                                        <Typography variant="h6" fontWeight={600}>
-                                                            {comp.note || 0}/5
-                                                        </Typography>
-                                                        <Chip
-                                                            label={comp.niveau || 'Intermediaire'}
-                                                            size="small"
-                                                            sx={{ mt: 0.5, backgroundColor: '#e0e7ff', color: '#4338ca' }}
-                                                        />
-                                                    </Paper>
-                                                </Grid>
-                                            ))}
-                                        </Grid>
-                                    </Grid>
-                                )}
-                            </Grid>
-                            {isEditable && (
-                                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                                    <ActionButton
-                                        variant="contained"
-                                        onClick={handleCloture}
-                                        disabled={!isCloturable() || submitting}
-                                        sx={{
-                                            backgroundColor: isCloturable() ? '#22c55e' : '#999',
-                                            '&:hover': { backgroundColor: isCloturable() ? '#16a34a' : '#999' },
-                                        }}
-                                    >
-                                        {submitting ? 'Traitement...' : 'Clôturer le stage'}
-                                    </ActionButton>
-                                </Box>
-                            )}
-                        </Box>
-                    ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                            Aucune évaluation pour le moment
-                        </Typography>
-                    )}
+                                    </VersionInfo>
+                                    <VersionActions>
+                                        <Tooltip title="Voir le rapport">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => {
+                                                    const href = buildFileHref(latestLivrable);
+                                                    if (href) window.open(href, '_blank');
+                                                    else setError('Impossible de visualiser ce document');
+                                                }}
+                                                sx={{ color: '#687480' }}
+                                            >
+                                                <Visibility fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        {isEditable && (!latestLivrable.statut || latestLivrable.statut === 'EnAttente') && (
+                                            <>
+                                                <Tooltip title="Valider">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleOpenLivrableDialog(latestLivrable, 'Valide')}
+                                                        sx={{ color: '#22c55e' }}
+                                                    >
+                                                        <ThumbUp fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Demander une correction">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleOpenLivrableDialog(latestLivrable, 'Rejete')}
+                                                        sx={{ color: '#ef4444' }}
+                                                    >
+                                                        <ThumbDown fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </>
+                                        )}
+                                        {latestLivrable.statut === 'ValideEncadrant' && (
+                                            <Tooltip title="Validé">
+                                                <CheckCircle sx={{ color: '#22c55e', fontSize: 20 }} />
+                                            </Tooltip>
+                                        )}
+                                        {latestLivrable.statut === 'Rejete' && (
+                                            <Tooltip title="Correction demandée">
+                                                <Cancel sx={{ color: '#ef4444', fontSize: 20 }} />
+                                            </Tooltip>
+                                        )}
+                                    </VersionActions>
+                                </VersionHeader>
 
-                    {!isCloturable() && isEditable && evaluation && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
-                            {livrables.some(l => !l.valide && l.statut !== 'Rejete') && 'Tous les livrables doivent être validés avant la clôture'}
-                        </Typography>
-                    )}
-                </Paper>
-            )}
+                                {latestLivrable.statut === 'Rejete' && latestLivrable.commentaire && (
+                                    <RejectionBox>
+                                        <RejectionLabel>
+                                            <ErrorOutline sx={{ fontSize: 14 }} />
+                                            Motif de la correction demandée
+                                        </RejectionLabel>
+                                        <RejectionText>{latestLivrable.commentaire}</RejectionText>
+                                    </RejectionBox>
+                                )}
+                            </VersionCard>
+                        )}
+
+                        {/* === HISTORIQUE === */}
+                        {hasHistory && (
+                            <Box sx={{ mt: 2 }}>
+                                <Button
+                                    onClick={() => setShowHistory(!showHistory)}
+                                    size="small"
+                                    startIcon={<History />}
+                                    endIcon={showHistory ? <ExpandLess /> : <ExpandMore />}
+                                    sx={{ color: '#94a3b8', textTransform: 'none' }}
+                                >
+                                    {showHistory ? 'Masquer l\'historique' : 'Voir l\'historique'} ({livrables.length - 1} version{livrables.length - 1 > 1 ? 's' : ''})
+                                </Button>
+
+                                <Collapse in={showHistory}>
+                                    <Box sx={{ mt: 2 }}>
+                                        {livrables.slice(1).map((livrable, index) => {
+                                            const versionNumber = livrables.length - index - 1;
+                                            const isRejected = livrable.statut === 'Rejete';
+                                            return (
+                                                <VersionCard key={livrable._id} status={livrable.statut} isLatest={false}>
+                                                    <VersionHeader>
+                                                        <VersionInfo>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <Chip
+                                                                    label={`V${versionNumber}`}
+                                                                    size="small"
+                                                                    sx={{ 
+                                                                        backgroundColor: isRejected ? '#fee2e2' : '#f1f5f9',
+                                                                        color: isRejected ? '#991b1b' : '#475569',
+                                                                        fontWeight: 500,
+                                                                    }}
+                                                                />
+                                                                <VersionName>
+                                                                    {livrable.nom || 'Rapport_Stage.pdf'}
+                                                                </VersionName>
+                                                            </Box>
+                                                            <VersionMeta>
+                                                                {formatDate(livrable.dateDepot)}
+                                                            </VersionMeta>
+                                                            <VersionStatusChip
+                                                                label={getVersionStatusLabel(livrable.statut || 'EnAttente')}
+                                                                status={livrable.statut || 'EnAttente'}
+                                                                size="small"
+                                                            />
+                                                        </VersionInfo>
+                                                        <VersionActions>
+                                                            <Tooltip title="Voir le rapport">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => {
+                                                                        const href = buildFileHref(livrable);
+                                                                        if (href) window.open(href, '_blank');
+                                                                        else setError('Impossible de visualiser ce document');
+                                                                    }}
+                                                                    sx={{ color: '#687480' }}
+                                                                >
+                                                                    <Visibility fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </VersionActions>
+                                                    </VersionHeader>
+
+                                                    {isRejected && livrable.commentaire && (
+                                                        <RejectionBox>
+                                                            <RejectionLabel>
+                                                                <ErrorOutline sx={{ fontSize: 14 }} />
+                                                                Motif de la correction demandée
+                                                            </RejectionLabel>
+                                                            <RejectionText>{livrable.commentaire}</RejectionText>
+                                                        </RejectionBox>
+                                                    )}
+                                                </VersionCard>
+                                            );
+                                        })}
+                                    </Box>
+                                </Collapse>
+                            </Box>
+                        )}
+                    </Box>
+                )}
+            </Paper>
 
             {/* ========================================== */}
-            {/* DIALOG VALIDATION LIVRABLE */}
+            {/* DIALOG VALIDATION / CORRECTION */}
             {/* ========================================== */}
             <Dialog
                 open={openLivrableDialog}
                 onClose={handleCloseLivrableDialog}
                 maxWidth="sm"
                 fullWidth
-                PaperProps={{ sx: { borderRadius: '16px', padding: '8px' } }}
+                PaperProps={{ sx: { borderRadius: '12px', padding: '8px' } }}
             >
                 <DialogTitle>
                     {livrableDecision === 'Valide' ? (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ThumbUp sx={{ color: '#22c55e' }} /> Valider le livrable
+                            <CheckCircle sx={{ color: '#22c55e' }} /> Valider le rapport
                         </Box>
                     ) : (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ThumbDown sx={{ color: '#ef4444' }} /> Rejeter le livrable
+                            <ErrorOutline sx={{ color: '#ef4444' }} /> Demander une correction
                         </Box>
                     )}
                 </DialogTitle>
                 <DialogContent>
                     <Typography variant="body1" sx={{ mb: 2 }}>
                         {livrableDecision === 'Valide'
-                            ? `Êtes-vous sûr de vouloir valider le livrable "${selectedLivrable?.nom}" ?`
-                            : `Êtes-vous sûr de vouloir rejeter le livrable "${selectedLivrable?.nom}" ?`}
+                            ? `Vous êtes sur le point de valider le rapport "${selectedLivrable?.nom}"`
+                            : `Vous êtes sur le point de demander une correction pour "${selectedLivrable?.nom}". Veuillez indiquer les points à corriger.`}
                     </Typography>
                     {livrableDecision === 'Rejete' && (
                         <TextField
-                            label="Motif du rejet *"
+                            label="Motif de la correction *"
                             value={livrableComment}
                             onChange={(e) => setLivrableComment(e.target.value)}
                             fullWidth
                             multiline
                             rows={3}
-                            placeholder="Expliquez la raison du rejet..."
+                            placeholder="Expliquez les corrections à apporter..."
+                            helperText="Ce message sera transmis au stagiaire"
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
                         />
                     )}
@@ -931,153 +739,11 @@ const InternDetail = () => {
                             },
                         }}
                     >
-                        {submitting ? 'Traitement...' : livrableDecision === 'Valide' ? 'Valider' : 'Rejeter'}
+                        {submitting ? 'Traitement...' : livrableDecision === 'Valide' ? 'Valider' : 'Demander une correction'}
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* ========================================== */}
-            {/* DIALOG REMARQUE */}
-            {/* ========================================== */}
-            <Dialog
-                open={openRemarkDialog}
-                onClose={handleCloseRemarkDialog}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{ sx: { borderRadius: '16px', padding: '8px' } }}
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <AddComment sx={{ color: '#2d3748' }} /> Ajouter une remarque
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    <TextField
-                        label="Remarque *"
-                        value={newRemark}
-                        onChange={(e) => setNewRemark(e.target.value)}
-                        fullWidth
-                        multiline
-                        rows={4}
-                        placeholder="Saisissez votre remarque..."
-                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                    />
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button onClick={handleCloseRemarkDialog} sx={{ borderRadius: '10px', textTransform: 'none' }}>
-                        Annuler
-                    </Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleAddRemark}
-                        disabled={submitting || !newRemark.trim()}
-                        sx={{
-                            backgroundColor: '#2d3748',
-                            borderRadius: '10px',
-                            textTransform: 'none',
-                            '&:hover': { backgroundColor: '#1a202c' },
-                        }}
-                    >
-                        {submitting ? 'Envoi...' : 'Ajouter'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* ========================================== */}
-            {/* DIALOG ÉVALUATION */}
-            {/* ========================================== */}
-            <Dialog
-                open={openEvaluationDialog}
-                onClose={handleCloseEvaluationDialog}
-                maxWidth="md"
-                fullWidth
-                PaperProps={{ sx: { borderRadius: '16px', padding: '8px' } }}
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Star sx={{ color: '#f59e0b' }} /> Évaluer le stagiaire
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    <Grid container spacing={3} sx={{ mt: 1 }}>
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                                Note finale (sur 20)
-                            </Typography>
-                            <TextField
-                                type="number"
-                                value={evaluationData.note}
-                                onChange={(e) => handleEvaluationChange('note', Math.min(20, Math.max(0, Number(e.target.value))))}
-                                fullWidth
-                                InputProps={{ inputProps: { min: 0, max: 20, step: 0.5 } }}
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                                Commentaires
-                            </Typography>
-                            <TextField
-                                value={evaluationData.commentaires}
-                                onChange={(e) => handleEvaluationChange('commentaires', e.target.value)}
-                                fullWidth
-                                multiline
-                                rows={3}
-                                placeholder="Commentaires sur le stage..."
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                                Compétences évaluées (sur 5)
-                            </Typography>
-                            <Grid container spacing={2}>
-                                {evaluationData.competences.map((comp, idx) => (
-                                    <Grid item xs={12} sm={6} key={idx}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                                            <Typography variant="body2" sx={{ minWidth: 100 }}>
-                                                {comp.nom}
-                                            </Typography>
-                                            <TextField
-                                                type="number"
-                                                value={comp.note}
-                                                onChange={(e) => handleCompetenceChange(idx, 'note', Math.min(5, Math.max(0, Number(e.target.value))))}
-                                                size="small"
-                                                sx={{ width: 70 }}
-                                                InputProps={{ inputProps: { min: 0, max: 5, step: 0.5 } }}
-                                            />
-                                            <Rating
-                                                value={comp.note || 0}
-                                                onChange={(e, v) => handleCompetenceChange(idx, 'note', v || 0)}
-                                                precision={0.5}
-                                                size="small"
-                                            />
-                                        </Box>
-                                    </Grid>
-                                ))}
-                            </Grid>
-                        </Grid>
-                    </Grid>
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button onClick={handleCloseEvaluationDialog} sx={{ borderRadius: '10px', textTransform: 'none' }}>
-                        Annuler
-                    </Button>
-                    <Button
-                        variant="contained"
-                        onClick={handleSubmitEvaluation}
-                        disabled={submitting}
-                        sx={{
-                            backgroundColor: '#2d3748',
-                            borderRadius: '10px',
-                            textTransform: 'none',
-                            '&:hover': { backgroundColor: '#1a202c' },
-                        }}
-                    >
-                        {submitting ? 'Enregistrement...' : 'Enregistrer l\'évaluation'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
         </Container>
     );
 };

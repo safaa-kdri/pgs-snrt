@@ -6,6 +6,9 @@
 // AJOUT : Fonctions Livrables (getLivrables)
 // AJOUT : Fonctions Évaluation (getEvaluation, updateEvaluation)
 // CORRECTION : uploadEngagementConfidentialite avec GridFS
+// AJOUT : Notification RH après validation encadrant
+// AJOUT : Validation du rapport par le RH (validateDeliverableByRh)
+// CORRECTION : Liens des notifications
 
 const mongoose = require('mongoose');
 const path = require('path');
@@ -14,6 +17,7 @@ const Internship = require('../models/Internship');
 const Application = require('../models/Application');
 const Offer = require('../models/Offer');
 const Evaluation = require('../models/Evaluation');
+const Role = require('../models/Role');
 const UtilisateurInterne = require('../models/UtilisateurInterne');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const Notification = require('../models/Notification');
@@ -22,6 +26,24 @@ const pdfService = require('../services/pdfService');
 const emailService = require('../services/emailService');
 const gridfsService = require('../services/gridfsService');
 const logger = require('../utils/logger');
+
+const resolveInternshipForStudent = async (id, studentId) => {
+    let internship = await Internship.findById(id);
+
+    if (!internship && id) {
+        const application = await Application.findById(id);
+        if (application && application.etudiantId?.toString() === studentId.toString()
+            && ['Acceptee', 'Acceptée'].includes(application.statut)) {
+            internship = await Internship.findOne({ applicationId: application._id });
+        }
+    }
+
+    if (!internship || internship.etudiantId?.toString() !== studentId.toString()) {
+        return null;
+    }
+
+    return internship;
+};
 
 // ============================================
 // VERIFIER SI L'ETUDIANT A UNE CANDIDATURE ACCEPTEE
@@ -59,13 +81,11 @@ exports.hasActiveInternship = async (req, res) => {
 
 // ============================================
 // RECUPERER TOUTES LES CANDIDATURES ACCEPTEES
-// CORRECTION : Récupérer le statut du stage réel s'il existe
 // ============================================
 exports.getStudentInternships = async (req, res) => {
     try {
         const studentId = req.user._id;
 
-        // Récupérer TOUTES les candidatures Acceptées
         const acceptedApplications = await Application.find({
             etudiantId: studentId,
             statut: { $in: ['Acceptée', 'Acceptee'] }
@@ -74,12 +94,9 @@ exports.getStudentInternships = async (req, res) => {
             .populate('etudiantId', 'nom prenom email universite filiere')
             .sort({ createdAt: -1 });
 
-        // Transformer les candidatures en "stages" virtuels avec le statut du stage réel
         const virtualInternships = await Promise.all(acceptedApplications.map(async (app) => {
-            // RECHERCHER LE STAGE REEL associé à cette candidature
             const realInternship = await Internship.findOne({ applicationId: app._id });
             
-            // Utiliser le statut du stage réel s'il existe
             let statut = app.statut;
             let encadrantId = null;
             let livrables = [];
@@ -188,21 +205,19 @@ exports.getAllInternships = async (req, res) => {
 };
 
 // ============================================
-// GET - Recuperer un stage par ID (ou candidature)
-// CORRECTION : Récupérer l'encadrant depuis le stage réel pour les stages virtuels
+// GET - Recuperer un stage par ID
 // ============================================
 exports.getInternshipById = async (req, res) => {
     try {
         const { id } = req.params;
         let internship = null;
 
-        // 1. Chercher dans internships
         internship = await Internship.findById(id)
             .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
             .populate('encadrantId', 'nom prenom email')
-            .populate('offreId', 'titre description typeStage');
+            .populate('offreId', 'titre description typeStage')
+            .lean();
 
-        // 2. Si pas trouvé, chercher dans applications (candidature Acceptée)
         if (!internship) {
             const application = await Application.findById(id)
                 .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
@@ -210,11 +225,10 @@ exports.getInternshipById = async (req, res) => {
 
             if (application && (application.statut === 'Acceptee' || application.statut === 'Acceptée')) {
                 
-                // RECHERCHER LE STAGE REEL POUR RECUPERER L'ENCADRANT ET LES DONNEES
                 const realInternship = await Internship.findOne({ applicationId: application._id })
-                    .populate('encadrantId', 'nom prenom email');
+                    .populate('encadrantId', 'nom prenom email')
+                    .lean();
 
-                // Créer un stage virtuel
                 internship = {
                     _id: application._id,
                     etudiantId: application.etudiantId,
@@ -242,13 +256,11 @@ exports.getInternshipById = async (req, res) => {
             });
         }
         
-        const evaluation = await Evaluation.findOne({ stageId: internship._id });
-        
         res.status(200).json({
             success: true,
             data: {
                 ...internship,
-                evaluation: evaluation || null
+                evaluation: null
             }
         });
     } catch (error) {
@@ -324,14 +336,12 @@ exports.getInternshipByApplication = async (req, res) => {
 
         let internship = null;
 
-        // 1. Chercher dans internships
         internship = await Internship.findOne({ applicationId: applicationId })
             .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
             .populate('encadrantId', 'nom prenom email')
             .populate('offreId', 'titre description typeStage dateDebut dateFin')
             .populate('applicationId');
 
-        // 2. Si pas trouvé, chercher dans applications
         if (!internship) {
             const application = await Application.findById(applicationId)
                 .populate('etudiantId', 'nom prenom email telephone cin universite filiere niveau')
@@ -339,7 +349,6 @@ exports.getInternshipByApplication = async (req, res) => {
 
             if (application && (application.statut === 'Acceptee' || application.statut === 'Acceptée')) {
                 
-                // RECHERCHER LE STAGE REEL POUR RECUPERER L'ENCADRANT
                 const realInternship = await Internship.findOne({ applicationId: application._id })
                     .populate('encadrantId', 'nom prenom email');
 
@@ -395,7 +404,7 @@ exports.getInternshipByApplication = async (req, res) => {
 };
 
 // ============================================
-// POST - Creer un stage (RH, Admin ou Departement)
+// POST - Creer un stage
 // ============================================
 exports.createInternship = async (req, res) => {
     try {
@@ -446,7 +455,6 @@ exports.createInternship = async (req, res) => {
             sujetLivrables: sujet?.livrables || null,
         });
 
-        // Normaliser le statut de la candidature
         application.statut = 'Acceptee';
         await application.save();
 
@@ -457,7 +465,11 @@ exports.createInternship = async (req, res) => {
                 message: `Votre stage "${offer.titre}" a ete cree avec succes.`,
                 userId: etudiantId,
                 userModel: 'UtilisateurExterne',
-                lien: `/dashboard/internships/${internship._id}`,
+                referenceId: internship._id,
+                referenceType: 'Internship',
+                lien: `/dashboard/stage/${internship._id}`,
+                lu: false,
+                createdAt: new Date(),
             });
         } catch (notifError) {
             logger.warn(`[createInternship] Notification non envoyee: ${notifError.message}`);
@@ -501,7 +513,7 @@ exports.addRemark = async (req, res) => {
                 message: 'Stage non trouve'
             });
         }
-        
+
         internship.remarquesEncadrant.push({
             date: new Date(),
             message,
@@ -612,7 +624,7 @@ exports.closeInternship = async (req, res) => {
         }
         
         const hasRapport = internship.livrables.some(l => 
-            l.type === 'Rapport' && l.valide === true
+            l.type === 'Rapport' && l.statut === 'ValideRH'
         );
         
         if (!hasRapport) {
@@ -672,7 +684,7 @@ exports.addDeliverable = async (req, res) => {
             });
         }
 
-        const internship = await Internship.findById(req.params.id);
+        const internship = await resolveInternshipForStudent(req.params.id, req.user._id);
 
         if (!internship) {
             return res.status(404).json({
@@ -709,11 +721,23 @@ exports.addDeliverable = async (req, res) => {
             gridFsId: uploadedFile._id,
             url: `/api/v1/documents/file/${uploadedFile._id}`,
             dateDepot: new Date(),
+            statut: 'EnAttente',
             valide: false,
             commentaire: ''
         };
 
-        internship.livrables.push(livrable);
+        if (livrableType === 'Rapport') {
+            const rejectedReportIndex = internship.livrables.findIndex(
+                (item) => item.type === 'Rapport' && item.statut === 'Rejete'
+            );
+            if (rejectedReportIndex >= 0) {
+                internship.livrables[rejectedReportIndex] = livrable;
+            } else {
+                internship.livrables.push(livrable);
+            }
+        } else {
+            internship.livrables.push(livrable);
+        }
         await internship.save();
 
         logger.info(`Livrable ajoute au stage ${internship._id} par ${req.user?.email}`);
@@ -733,11 +757,12 @@ exports.addDeliverable = async (req, res) => {
 };
 
 // ============================================
-// PUT - Valider un livrable (Encadrant)
+// PUT - Valider un livrable (Encadrant) AVEC NOTIFICATION RH
 // ============================================
 exports.validateDeliverable = async (req, res) => {
     try {
-        const { livrableId, valide, commentaire } = req.body;
+        const livrableId = req.params.livrableId || req.body.livrableId;
+        const { valide, commentaire } = req.body;
         
         if (!livrableId) {
             return res.status(400).json({
@@ -746,7 +771,8 @@ exports.validateDeliverable = async (req, res) => {
             });
         }
         
-        const internship = await Internship.findById(req.params.id);
+        const internship = await Internship.findById(req.params.id)
+            .populate('etudiantId', 'prenom nom email');
         
         if (!internship) {
             return res.status(404).json({
@@ -769,27 +795,270 @@ exports.validateDeliverable = async (req, res) => {
                 message: 'Livrable non trouve'
             });
         }
-        
-        livrable.valide = valide !== undefined ? valide : true;
-        if (commentaire) {
-            livrable.commentaire = commentaire;
+
+        const isValid = valide !== false;
+
+        // Si l'encadrant valide le rapport
+        if (isValid) {
+            livrable.valide = true;
+            livrable.statut = 'ValideEncadrant';
+            livrable.commentaire = commentaire || livrable.commentaire || '';
+            livrable.dateValidationEncadrant = new Date();
+            
+            await internship.save();
+
+            // NOTIFICATION À L'ÉTUDIANT
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Rapport validé par l\'encadrant',
+                message: `Votre rapport de stage a été validé par votre encadrant. En attente de validation RH.`,
+                userId: internship.etudiantId._id,
+                userModel: 'UtilisateurExterne',
+                referenceId: internship._id,
+                referenceType: 'Internship',
+                lien: `/dashboard/stage/${internship._id}`,
+                lu: false,
+                createdAt: new Date(),
+            });
+
+            // NOTIFICATION AUX RH
+            const roleRH = await Role.findOne({ nom: 'RH' });
+            if (roleRH) {
+                const rhUsers = await UtilisateurInterne.find({ roleId: roleRH._id, actif: true });
+                for (const rh of rhUsers) {
+                    await Notification.create({
+                        type: 'InApp',
+                        titre: 'Rapport de stage à valider',
+                        message: `Le rapport de stage de ${internship.etudiantId.prenom} ${internship.etudiantId.nom} a été validé par l'encadrant.`,
+                        userId: rh._id,
+                        userModel: 'UtilisateurInterne',
+                        referenceId: internship._id,
+                        referenceType: 'Internship',
+                        lien: `/rh/application/${internship.applicationId}`,
+                        lu: false,
+                        createdAt: new Date(),
+                        priority: 'high',
+                    });
+                }
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: internship,
+                message: 'Rapport validé par l\'encadrant. Notification envoyée au RH.'
+            });
+        } 
+        // Si rejet
+        else {
+            livrable.valide = false;
+            livrable.statut = 'Rejete';
+            livrable.commentaire = commentaire || 'Rapport rejeté';
+            
+            await internship.save();
+
+            // Notification à l'étudiant
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Rapport à corriger',
+                message: `Votre rapport de stage a été rejeté par l'encadrant. Motif : ${commentaire || 'Non spécifié'}`,
+                userId: internship.etudiantId._id,
+                userModel: 'UtilisateurExterne',
+                referenceId: internship._id,
+                referenceType: 'Internship',
+                lien: `/dashboard/stage/${internship._id}`,
+                lu: false,
+                createdAt: new Date(),
+            });
+
+            return res.status(200).json({
+                success: true,
+                data: internship,
+                message: 'Rapport rejeté. L\'étudiant a été notifié.'
+            });
         }
-        
-        await internship.save();
-        
-        logger.info(`Livrable ${livrableId} valide par ${req.user?.email}`);
-        
-        res.status(200).json({
-            success: true,
-            data: internship,
-            message: valide ? 'Livrable valide avec succes' : 'Livrable refuse'
-        });
     } catch (error) {
         logger.error(`Erreur validateDeliverable: ${error.message}`);
         res.status(500).json({
             success: false,
             message: error.message
         });
+    }
+};
+
+// ============================================
+// VALIDATION LIVRABLE PAR RH - AVEC NOTIFICATION
+// ============================================
+exports.validateDeliverableByRh = async (req, res) => {
+    try {
+        const { id, livrableId } = req.params;
+        const { valide, commentaire } = req.body;
+
+        const internship = await Internship.findById(id)
+            .populate('etudiantId', 'prenom nom email')
+            .populate('offreId', 'titre');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        const livrable = internship.livrables.id(livrableId);
+        if (!livrable) {
+            return res.status(404).json({
+                success: false,
+                message: 'Livrable non trouvé'
+            });
+        }
+
+        if (livrable.type !== 'Rapport') {
+            return res.status(400).json({
+                success: false,
+                message: 'Ce livrable n\'est pas un rapport'
+            });
+        }
+
+        if (livrable.statut !== 'ValideEncadrant') {
+            return res.status(400).json({
+                success: false,
+                message: 'Le rapport doit être validé par l\'encadrant avant la validation RH'
+            });
+        }
+
+        // Si le RH valide le rapport
+        if (valide) {
+            livrable.statut = 'ValideRH';
+            livrable.valide = true;
+            livrable.valideParRH = true;
+            livrable.dateValidationRH = new Date();
+            if (commentaire) {
+                livrable.commentaire = commentaire;
+            }
+            
+            await internship.save();
+
+            // NOTIFICATION À L'ÉTUDIANT
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Rapport validé par le RH',
+                message: `Votre rapport de stage a été validé par le RH. L'attestation peut maintenant être générée.`,
+                userId: internship.etudiantId._id,
+                userModel: 'UtilisateurExterne',
+                referenceId: internship._id,
+                referenceType: 'Internship',
+                lien: `/dashboard/stage/${internship._id}`,
+                lu: false,
+                createdAt: new Date(),
+            });
+
+            // NOTIFICATION À L'ENCADRANT
+            if (internship.encadrantId) {
+                await Notification.create({
+                    type: 'InApp',
+                    titre: 'Rapport validé par le RH',
+                    message: `Le rapport de ${internship.etudiantId.prenom} ${internship.etudiantId.nom} a été validé par le RH.`,
+                    userId: internship.encadrantId,
+                    userModel: 'UtilisateurInterne',
+                    referenceId: internship._id,
+                    referenceType: 'Internship',
+                    lien: `/supervisor/stage/${internship._id}`,
+                    lu: false,
+                    createdAt: new Date(),
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Rapport validé par le RH. L\'attestation peut maintenant être générée.',
+                data: internship
+            });
+        }
+
+        // Si le RH rejette le rapport
+        else {
+            livrable.valide = false;
+            livrable.statut = 'RejeteRH';
+            livrable.commentaire = commentaire || 'Rapport rejeté par le RH';
+            
+            await internship.save();
+
+            // Notification à l'étudiant
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Rapport rejeté par le RH',
+                message: `Votre rapport de stage a été rejeté par le RH. Motif : ${commentaire || 'Non spécifié'}`,
+                userId: internship.etudiantId._id,
+                userModel: 'UtilisateurExterne',
+                referenceId: internship._id,
+                referenceType: 'Internship',
+                lien: `/dashboard/stage/${internship._id}`,
+                lu: false,
+                createdAt: new Date(),
+            });
+
+            // Notification à l'encadrant
+            if (internship.encadrantId) {
+                await Notification.create({
+                    type: 'InApp',
+                    titre: 'Rapport rejeté par le RH',
+                    message: `Le rapport de ${internship.etudiantId.prenom} ${internship.etudiantId.nom} a été rejeté par le RH.`,
+                    userId: internship.encadrantId,
+                    userModel: 'UtilisateurInterne',
+                    referenceId: internship._id,
+                    referenceType: 'Internship',
+                    lien: `/supervisor/stage/${internship._id}`,
+                    lu: false,
+                    createdAt: new Date(),
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Rapport rejeté par le RH. L\'étudiant et l\'encadrant ont été notifiés.',
+                data: internship
+            });
+        }
+
+    } catch (error) {
+        console.error('Erreur validation RH:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la validation RH'
+        });
+    }
+};
+
+// ============================================
+// PUT - Ajouter une remarque sur un livrable
+// ============================================
+exports.addDeliverableRemark = async (req, res) => {
+    try {
+        const { message } = req.body;
+        const internship = await Internship.findById(req.params.id);
+        const livrable = internship?.livrables.id(req.params.livrableId);
+
+        if (!internship || !livrable) {
+            return res.status(404).json({ success: false, message: 'Rapport non trouve' });
+        }
+        if (!internship.encadrantId || internship.encadrantId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ success: false, message: 'Vous n etes pas l encadrant de ce stage' });
+        }
+        if (!message?.trim()) {
+            return res.status(400).json({ success: false, message: 'La remarque est obligatoire' });
+        }
+
+        livrable.commentaire = message.trim();
+        internship.remarquesEncadrant.push({
+            message: message.trim(),
+            livrableId: livrable._id,
+            auteurId: req.user._id,
+        });
+        await internship.save();
+        return res.status(200).json({ success: true, data: livrable, message: 'Remarque ajoutee avec succes' });
+    } catch (error) {
+        logger.error(`Erreur addDeliverableRemark: ${error.message}`);
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -811,7 +1080,6 @@ exports.validateApplicationDocuments = async (req, res) => {
         }
 
         if (decision === 'accepte') {
-            // Normaliser le statut (sans accent)
             application.statut = 'Acceptee';
             await application.save();
 
@@ -878,7 +1146,7 @@ exports.validateApplicationDocuments = async (req, res) => {
 // ============================================
 exports.sendToDirecteur = async (req, res) => {
     try {
-        const { internshipId } = req.params;
+        const internshipId = req.params.internshipId || req.params.id;
         const { directeurEmail, directeurNom } = req.body;
 
         const internship = await Internship.findById(internshipId)
@@ -980,7 +1248,7 @@ exports.sendFicheSigneeToStudent = async (req, res) => {
 // ============================================
 exports.generateAttestation = async (req, res) => {
     try {
-        const { internshipId } = req.params;
+        const { id: internshipId } = req.params;
 
         const internship = await Internship.findById(internshipId)
             .populate('etudiantId')
@@ -994,8 +1262,8 @@ exports.generateAttestation = async (req, res) => {
             });
         }
 
-        const hasRapport = internship.livrables.some(l => 
-            l.type === 'Rapport' && l.valide === true
+        const hasRapport = internship.livrables.some(l =>
+            l.type === 'Rapport' && l.statut === 'ValideRH'
         );
 
         if (!hasRapport) {
@@ -1014,7 +1282,38 @@ exports.generateAttestation = async (req, res) => {
         });
 
         internship.statut = 'Termine';
+        internship.attestationGeneree = true;
         await internship.save();
+
+        // NOTIFICATION À L'ÉTUDIANT
+        await Notification.create({
+            type: 'InApp',
+            titre: 'Attestation de stage disponible',
+            message: `Votre attestation de stage a été générée. Vous pouvez la télécharger depuis votre espace.`,
+            userId: internship.etudiantId._id,
+            userModel: 'UtilisateurExterne',
+            referenceId: internship._id,
+            referenceType: 'Internship',
+            lien: `/dashboard/stage/${internship._id}`,
+            lu: false,
+            createdAt: new Date(),
+        });
+
+        // NOTIFICATION À L'ENCADRANT
+        if (internship.encadrantId) {
+            await Notification.create({
+                type: 'InApp',
+                titre: 'Attestation générée',
+                message: `L'attestation de stage de ${internship.etudiantId.prenom} ${internship.etudiantId.nom} a été générée.`,
+                userId: internship.encadrantId,
+                userModel: 'UtilisateurInterne',
+                referenceId: internship._id,
+                referenceType: 'Internship',
+                lien: `/supervisor/stage/${internship._id}`,
+                lu: false,
+                createdAt: new Date(),
+            });
+        }
 
         res.status(200).json({
             success: true,
@@ -1032,7 +1331,6 @@ exports.generateAttestation = async (req, res) => {
 
 // ============================================
 // ETUDIANT - DEPOSER LE PDF D'ENGAGEMENT SIGNE
-// CORRECTION : Utiliser GridFS au lieu du disque
 // ============================================
 exports.uploadEngagementConfidentialite = async (req, res) => {
     try {
@@ -1086,7 +1384,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
             throw new Error('Le fichier reçu est vide ou invalide');
         }
 
-        // Stocker dans GridFS
         const gridfsFile = await gridfsService.uploadFile(
             fileBuffer,
             file.originalname,
@@ -1125,7 +1422,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
             }
         );
 
-        // Créer le livrable avec la même référence GridFS pour le stage
         const livrable = {
             _id: new mongoose.Types.ObjectId(),
             nom: 'Engagement Confidentialité Signé',
@@ -1138,7 +1434,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
             commentaire: '',
         };
 
-        // Éviter les doublons dans le tableau de livrables
         const existingIndex = internship.livrables.findIndex(
             (item) => item.gridFsId && item.gridFsId.toString() === gridfsFile._id.toString()
         );
@@ -1426,6 +1721,20 @@ exports.sendDemandeStageToStudent = async (req, res) => {
             pdfPath: pdfPath,
         });
 
+        // NOTIFICATION À L'ÉTUDIANT
+        await Notification.create({
+            type: 'InApp',
+            titre: 'Demande de stage disponible',
+            message: `Votre demande de stage a été générée. Vous pouvez la télécharger depuis votre espace.`,
+            userId: internship.etudiantId._id,
+            userModel: 'UtilisateurExterne',
+            referenceId: internship._id,
+            referenceType: 'Internship',
+            lien: `/dashboard/stage/${internship._id}`,
+            lu: false,
+            createdAt: new Date(),
+        });
+
         logger.info(`Demande de stage envoyee a l'etudiant ${internship.etudiantId.email}`);
 
         return res.status(200).json({
@@ -1502,7 +1811,11 @@ exports.assignSupervisor = async (req, res) => {
             message: `Le stagiaire ${internship.etudiantId?.prenom || ''} ${internship.etudiantId?.nom || ''} vous a ete affecte pour le stage "${internship.offreId?.titre || ''}".`,
             userId: encadrantId,
             userModel: 'UtilisateurInterne',
-            lien: `/supervisor/interns/${internship._id}`,
+            referenceId: internship._id,
+            referenceType: 'Internship',
+            lien: `/supervisor/stage/${internship._id}`,
+            lu: false,
+            createdAt: new Date(),
         });
 
         logger.info(`Encadrant ${encadrantId} affecte au stage ${id} par ${req.user?.email}`);
@@ -1768,7 +2081,6 @@ exports.getTimeline = async (req, res) => {
             });
         }
 
-        // Vérifier les permissions
         const userId = req.user._id;
         const userRole = req.user.role;
 
@@ -1893,7 +2205,6 @@ exports.postTimelineMessage = async (req, res) => {
 
         const authorName = `${req.user.prenom || ''} ${req.user.nom || ''}`.trim() || 'Utilisateur';
 
-        // Notification à l'autre partie
         const recipientId = isStudent ? internship.encadrantId : internship.etudiantId;
         if (recipientId) {
             await Notification.create({
@@ -1902,7 +2213,11 @@ exports.postTimelineMessage = async (req, res) => {
                 message: `${req.user.prenom || ''} ${req.user.nom || ''} a publié un message.`,
                 userId: recipientId,
                 userModel: isStudent ? 'UtilisateurInterne' : 'UtilisateurExterne',
+                referenceId: internship._id,
+                referenceType: 'Internship',
                 lien: `/dashboard/stage/${internship._id}`,
+                lu: false,
+                createdAt: new Date(),
             });
         }
 
@@ -2003,7 +2318,9 @@ exports.getLivrables = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const internship = await Internship.findById(id);
+        const internship = req.user.role === 'Etudiant'
+            ? await resolveInternshipForStudent(id, req.user._id)
+            : await Internship.findById(id);
         if (!internship) {
             return res.status(404).json({
                 success: false,
@@ -2072,7 +2389,6 @@ exports.updateEvaluation = async (req, res) => {
             });
         }
 
-        // Vérifier que l'utilisateur est l'encadrant
         if (!internship.encadrantId || internship.encadrantId.toString() !== req.user._id.toString()) {
             return res.status(403).json({
                 success: false,
@@ -2083,12 +2399,10 @@ exports.updateEvaluation = async (req, res) => {
         let evaluation = await Evaluation.findOne({ stageId: internship._id });
 
         if (evaluation) {
-            // Mettre à jour l'évaluation existante
             Object.assign(evaluation, evaluationData);
             evaluation.dateEvaluation = new Date();
             await evaluation.save();
         } else {
-            // Créer une nouvelle évaluation
             evaluation = await Evaluation.create({
                 stageId: internship._id,
                 stagiaireId: internship.etudiantId,
@@ -2110,6 +2424,76 @@ exports.updateEvaluation = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de l\'enregistrement de l\'évaluation'
+        });
+    }
+};
+
+exports.sendAttestationToStudent = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const internship = await Internship.findById(id)
+            .populate('etudiantId', 'prenom nom email')
+            .populate('offreId', 'titre');
+
+        if (!internship) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stage non trouvé'
+            });
+        }
+
+        if (!internship.attestationGeneree) {
+            return res.status(400).json({
+                success: false,
+                message: 'L\'attestation n\'a pas encore été générée'
+            });
+        }
+
+        if (!internship.etudiantId || !internship.etudiantId.email) {
+            return res.status(400).json({
+                success: false,
+                message: 'L\'étudiant n\'a pas d\'adresse email'
+            });
+        }
+
+        // Générer le PDF de l'attestation pour l'email
+        const pdfPath = await pdfService.generateAttestation(internship);
+
+        // Envoyer l'email
+        await emailService.sendAttestationStage({
+            to: internship.etudiantId.email,
+            studentName: `${internship.etudiantId.prenom} ${internship.etudiantId.nom}`,
+            pdfPath: pdfPath,
+        });
+
+        // Notification à l'étudiant
+        await Notification.create({
+            type: 'InApp',
+            titre: 'Attestation de stage disponible',
+            message: `Votre attestation de stage vous a été envoyée par email.`,
+            userId: internship.etudiantId._id,
+            userModel: 'UtilisateurExterne',
+            referenceId: internship._id,
+            referenceType: 'Internship',
+            lien: `/dashboard/stage/${internship._id}`,
+            lu: false,
+            createdAt: new Date(),
+        });
+
+        logger.info(`Attestation envoyée à ${internship.etudiantId.email} pour le stage ${internship._id}`);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Attestation envoyée à l\'étudiant avec succès'
+        });
+
+    } catch (error) {
+        logger.error(`Erreur sendAttestationToStudent: ${error.message}`);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur lors de l\'envoi de l\'attestation',
+            error: error.message
         });
     }
 };

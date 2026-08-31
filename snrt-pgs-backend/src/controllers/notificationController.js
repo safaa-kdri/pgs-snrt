@@ -214,3 +214,18 @@ exports.deleteNotification = async (req, res) => {
         });
     }
 };
+
+exports.getCurrentUserNotifications = (req, res) => {
+    req.params.userId = req.user.id;
+    return exports.getUserNotifications(req, res);
+};
+
+exports.getCurrentUserUnreadCount = (req, res) => {
+    req.params.userId = req.user.id;
+    return exports.getUnreadCount(req, res);
+};
+
+exports.markCurrentUserNotificationsAsRead = (req, res) => {
+    req.params.userId = req.user.id;
+    return exports.markAllAsRead(req, res);
+};

@@ -327,6 +327,19 @@ export const validateLivrable = async (internshipId, livrableId, valide, comment
     }
 };
 
+export const validateLivrableByRh = async (internshipId, livrableId, valide, commentaire = '') => {
+    try {
+        const response = await api.put(`/internships/${internshipId}/livrables/${livrableId}/validate-rh`, {
+            valide,
+            commentaire,
+        });
+        return response.data?.data || null;
+    } catch (error) {
+        console.error('Erreur validateLivrableByRh:', error);
+        throw error;
+    }
+};
+
 // ============================================
 // 6. ÉVALUATION
 // ============================================

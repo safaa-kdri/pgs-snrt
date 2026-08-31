@@ -1,5 +1,5 @@
 // src/App.jsx
-// ✅ VERSION FINALE AVEC ROUTE UploadSignature
+// VERSION FINALE AVEC ROUTE UploadSignature ET Notifications RH
 
 import React, { useEffect, useState, useRef } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
@@ -92,9 +92,8 @@ import GenerateConvention from "./components/rh/GenerateConvention";
 import SignConvention from "./components/rh/SignConvention";
 import OfferDetailPage from "./components/rh/OfferDetailPage";
 import CandidatureManagement from './components/rh/CandidatureManagement';
-
-// ✅ AJOUT - Import de UploadSignature
 import UploadSignature from './components/rh/UploadSignature';
+import RhNotifications from './components/rh/Notifications';
 
 // ============================================
 // PROTECTION DES ROUTES
@@ -802,13 +801,25 @@ function App() {
           }
         />
 
-        {/* ✅ ROUTE AJOUTÉE - Upload Signature */}
+        {/* Route Upload Signature */}
         <Route
           path="/rh/upload-signature"
           element={
             <PrivateRoute allowedRoles={["RH", "Rh"]}>
               <RhLayout>
                 <UploadSignature />
+              </RhLayout>
+            </PrivateRoute>
+          }
+        />
+
+        {/* Route Notifications RH - AJOUTÉE */}
+        <Route
+          path="/rh/notifications"
+          element={
+            <PrivateRoute allowedRoles={["RH", "Rh"]}>
+              <RhLayout>
+                <RhNotifications />
               </RhLayout>
             </PrivateRoute>
           }

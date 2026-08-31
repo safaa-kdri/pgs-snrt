@@ -1,4 +1,6 @@
 // src/components/supervisor/InternsList.jsx
+// ✅ VERSION PROFESSIONNELLE - STATISTIQUES COMPACTES
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -23,8 +25,7 @@ import {
     MenuItem,
     Alert,
     Pagination,
-    Card,
-    CardContent,
+    Stack,
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import {
@@ -44,15 +45,79 @@ const PageHeader = styled(Box)({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '24px',
+    marginBottom: '20px',
     flexWrap: 'wrap',
     gap: '16px',
 });
+
+const PageTitle = styled(Typography)({
+    fontWeight: 700,
+    fontSize: '24px',
+    color: '#1a2332',
+    letterSpacing: '-0.02em',
+});
+
+const PageSubtitle = styled(Typography)({
+    color: '#687480',
+    fontSize: '14px',
+    marginTop: '2px',
+});
+
+// ✅ Statistiques compactes
+const StatsContainer = styled(Box)({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '24px',
+    padding: '12px 0',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+});
+
+const StatItem = styled(Box)(({ active, color }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    cursor: 'pointer',
+    padding: '4px 12px',
+    borderRadius: '20px',
+    backgroundColor: active ? alpha(color, 0.08) : 'transparent',
+    border: active ? `1px solid ${color}` : '1px solid transparent',
+    transition: 'all 0.2s ease',
+    '&:hover': {
+        backgroundColor: active ? alpha(color, 0.12) : alpha('#1a2332', 0.04),
+    },
+}));
+
+const StatNumber = styled(Typography)({
+    fontWeight: 700,
+    fontSize: '16px',
+    color: '#1a2332',
+});
+
+const StatLabel = styled(Typography)({
+    fontSize: '13px',
+    color: '#687480',
+    fontWeight: 500,
+});
+
+const StatDot = styled(Box)(({ color }) => ({
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    backgroundColor: color,
+}));
 
 const StyledTableCell = styled(TableCell)({
     fontWeight: 600,
     color: '#1a2332',
     fontSize: '13px',
+    borderBottom: '1px solid #eef1f3',
+});
+
+const StyledTableRow = styled(TableRow)({
+    '&:hover': {
+        backgroundColor: '#f8f9fa',
+    },
 });
 
 const StatusChip = styled(Chip)(({ status }) => {
@@ -74,28 +139,33 @@ const StatusChip = styled(Chip)(({ status }) => {
         fontWeight: 500,
         fontSize: '11px',
         height: '24px',
+        borderRadius: '12px',
     };
 });
 
-const StatCard = styled(Card)(({ active, color }) => ({
-    borderRadius: '10px',
-    border: `1px solid ${active ? color : '#eef1f3'}`,
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    backgroundColor: active ? alpha(color, 0.05) : '#ffffff',
-    boxShadow: active ? `0 4px 12px ${alpha(color, 0.15)}` : 'none',
-    '&:hover': {
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        transform: 'translateY(-2px)',
-    },
+const ReportChip = styled(Chip)(({ hasReport, needsAction }) => ({
+    backgroundColor: needsAction ? '#fef3c7' : hasReport ? '#dbeafe' : '#f1f5f9',
+    color: needsAction ? '#d97706' : hasReport ? '#1d4ed8' : '#94a3b8',
+    fontWeight: 500,
+    fontSize: '11px',
+    height: '24px',
+    borderRadius: '12px',
 }));
 
 const FiltersContainer = styled(Paper)({
-    padding: '16px 20px',
-    marginBottom: '24px',
-    borderRadius: '12px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    borderRadius: '10px',
     backgroundColor: '#fafbfc',
     border: '1px solid #eef1f3',
+});
+
+const ActionButton = styled(IconButton)({
+    color: '#687480',
+    '&:hover': {
+        backgroundColor: alpha('#1a2332', 0.06),
+        color: '#1a2332',
+    },
 });
 
 // ============================================
@@ -112,7 +182,6 @@ const InternsList = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
@@ -138,7 +207,6 @@ const InternsList = () => {
         setLoading(true);
         setError('');
         try {
-            // ✅ Route correcte : /internships/my-internships
             const response = await api.get('/internships/my-internships');
             
             let data = [];
@@ -240,11 +308,6 @@ const InternsList = () => {
         return `${(prenom || '')[0] || ''}${(nom || '')[0] || ''}`.toUpperCase() || '?';
     };
 
-    const isCardActive = (statutKey) => {
-        if (statutKey === 'all') return statusFilter === 'all';
-        return statusFilter === statutKey;
-    };
-
     const handleStatusFilterChange = (newStatus) => {
         setStatusFilter(newStatus);
         setPage(1);
@@ -284,25 +347,63 @@ const InternsList = () => {
             {/* ===== EN-TETE ===== */}
             <PageHeader>
                 <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1a2332' }}>
-                        Mes stagiaires
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        {filteredInterns.length} stagiaire(s) trouvé(s)
-                        {statusFilter !== 'all' && ` • Filtre par : ${getStatusLabel(statusFilter)}`}
-                    </Typography>
+                    <PageTitle>Mes stagiaires</PageTitle>
+                    <PageSubtitle>
+                        Suivi des stagiaires qui vous sont affectés
+                    </PageSubtitle>
                 </Box>
             </PageHeader>
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '10px' }}>{error}</Alert>}
-            {success && <Alert severity="success" sx={{ mb: 3, borderRadius: '10px' }}>{success}</Alert>}
+
+            {/* ===== STATISTIQUES COMPACTES ===== */}
+            <StatsContainer>
+                <StatItem
+                    active={statusFilter === 'all'}
+                    color="#1a2332"
+                    onClick={() => handleStatusFilterChange('all')}
+                >
+                    <StatNumber>{stats.total}</StatNumber>
+                    <StatLabel>Total</StatLabel>
+                </StatItem>
+
+                <StatItem
+                    active={statusFilter === 'EnCours'}
+                    color="#1d4ed8"
+                    onClick={() => handleStatusFilterChange('EnCours')}
+                >
+                    <StatDot color="#1d4ed8" />
+                    <StatNumber>{stats.enCours}</StatNumber>
+                    <StatLabel>En cours</StatLabel>
+                </StatItem>
+
+                <StatItem
+                    active={statusFilter === 'Termine'}
+                    color="#16a34a"
+                    onClick={() => handleStatusFilterChange('Termine')}
+                >
+                    <StatDot color="#16a34a" />
+                    <StatNumber>{stats.termines}</StatNumber>
+                    <StatLabel>Terminés</StatLabel>
+                </StatItem>
+
+                <StatItem
+                    active={statusFilter === 'Annule'}
+                    color="#dc2626"
+                    onClick={() => handleStatusFilterChange('Annule')}
+                >
+                    <StatDot color="#dc2626" />
+                    <StatNumber>{stats.annules}</StatNumber>
+                    <StatLabel>Annulés</StatLabel>
+                </StatItem>
+            </StatsContainer>
 
             {/* ===== FILTRES ===== */}
             <FiltersContainer>
                 <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} sm={7}>
                         <TextField
-                            placeholder="Rechercher par nom, offre..."
+                            placeholder="Rechercher un stagiaire ou un stage..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             size="small"
@@ -310,14 +411,14 @@ const InternsList = () => {
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
-                                        <Search sx={{ color: '#999', fontSize: 20 }} />
+                                        <Search sx={{ color: '#94a3b8', fontSize: 20 }} />
                                     </InputAdornment>
                                 ),
                             }}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: '10px',
-                                    backgroundColor: '#fff',
+                                    backgroundColor: '#ffffff',
                                 },
                             }}
                         />
@@ -333,7 +434,7 @@ const InternsList = () => {
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: '10px',
-                                    backgroundColor: '#fff',
+                                    backgroundColor: '#ffffff',
                                 },
                             }}
                         >
@@ -347,79 +448,26 @@ const InternsList = () => {
                 </Grid>
             </FiltersContainer>
 
-            {/* ===== STATS RAPIDES ===== */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={6} sm={3}>
-                    <StatCard
-                        active={isCardActive('all')}
-                        color="#2d3748"
-                        onClick={() => handleStatusFilterChange('all')}
-                    >
-                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                            <Typography variant="caption" color="text.secondary">Total</Typography>
-                            <Typography variant="h6" fontWeight={700}>{stats.total}</Typography>
-                        </CardContent>
-                    </StatCard>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                    <StatCard
-                        active={isCardActive('EnCours')}
-                        color="#1d4ed8"
-                        onClick={() => handleStatusFilterChange('EnCours')}
-                    >
-                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                            <Typography variant="caption" color="#1d4ed8">En cours</Typography>
-                            <Typography variant="h6" fontWeight={700} color="#1d4ed8">{stats.enCours}</Typography>
-                        </CardContent>
-                    </StatCard>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                    <StatCard
-                        active={isCardActive('Termine')}
-                        color="#065f46"
-                        onClick={() => handleStatusFilterChange('Termine')}
-                    >
-                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                            <Typography variant="caption" color="#065f46">Terminés</Typography>
-                            <Typography variant="h6" fontWeight={700} color="#065f46">{stats.termines}</Typography>
-                        </CardContent>
-                    </StatCard>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                    <StatCard
-                        active={isCardActive('Annule')}
-                        color="#991b1b"
-                        onClick={() => handleStatusFilterChange('Annule')}
-                    >
-                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                            <Typography variant="caption" color="#991b1b">Annulés</Typography>
-                            <Typography variant="h6" fontWeight={700} color="#991b1b">{stats.annules}</Typography>
-                        </CardContent>
-                    </StatCard>
-                </Grid>
-            </Grid>
-
             {/* ===== TABLEAU ===== */}
             <TableContainer
                 component={Paper}
-                sx={{ borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
+                sx={{ borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #eef1f3' }}
             >
                 <Table>
                     <TableHead>
-                        <TableRow sx={{ backgroundColor: '#f7f7f7' }}>
-                            <StyledTableCell>Stagiaire</StyledTableCell>
-                            <StyledTableCell>Stage</StyledTableCell>
-                            <StyledTableCell>Début</StyledTableCell>
-                            <StyledTableCell>Fin</StyledTableCell>
-                            <StyledTableCell>Livrables</StyledTableCell>
-                            <StyledTableCell>Statut</StyledTableCell>
-                            <StyledTableCell align="center">Actions</StyledTableCell>
+                        <TableRow sx={{ backgroundColor: '#f7f8fa' }}>
+                            <StyledTableCell>STAGIAIRE</StyledTableCell>
+                            <StyledTableCell>STAGE</StyledTableCell>
+                            <StyledTableCell>PÉRIODE</StyledTableCell>
+                            <StyledTableCell>RAPPORT</StyledTableCell>
+                            <StyledTableCell>STATUT</StyledTableCell>
+                            <StyledTableCell align="center">ACTION</StyledTableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {paginatedData.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                                <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
                                         {statusFilter !== 'all'
                                             ? `Aucun stagiaire avec le statut "${getStatusLabel(statusFilter)}"`
@@ -428,84 +476,87 @@ const InternsList = () => {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            paginatedData.map((intern) => (
-                                <TableRow key={intern._id || intern.id} hover>
-                                    <TableCell>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <Avatar
-                                                sx={{
-                                                    backgroundColor: '#2d3748',
-                                                    width: 36,
-                                                    height: 36,
-                                                    fontSize: 14,
-                                                    fontWeight: 600,
-                                                    color: '#fff',
-                                                }}
-                                            >
-                                                {getInitials(
-                                                    intern.etudiant?.nom,
-                                                    intern.etudiant?.prenom
-                                                )}
-                                            </Avatar>
-                                            <Box>
-                                                <Typography variant="body2" fontWeight={600}>
-                                                    {intern.etudiant?.prenom || ''} {intern.etudiant?.nom || ''}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                    {intern.etudiant?.email || ''}
-                                                </Typography>
+                            paginatedData.map((intern) => {
+                                const reports = intern.livrables?.filter(
+                                    (l) => l.type === 'Rapport' && (l.gridFsId || l.chemin)
+                                ) || [];
+                                const hasReport = reports.length > 0;
+                                const needsAction = hasReport && reports.some(r => !r.statut || r.statut === 'EnAttente' || r.valide === false);
+                                const latestReport = reports.length > 0 ? reports[0] : null;
+                                const isRejected = latestReport?.statut === 'Rejete';
+
+                                return (
+                                    <StyledTableRow key={intern._id || intern.id}>
+                                        <TableCell>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                <Avatar
+                                                    sx={{
+                                                        backgroundColor: '#2d3748',
+                                                        width: 36,
+                                                        height: 36,
+                                                        fontSize: 14,
+                                                        fontWeight: 600,
+                                                        color: '#fff',
+                                                    }}
+                                                >
+                                                    {getInitials(intern.etudiant?.nom, intern.etudiant?.prenom)}
+                                                </Avatar>
+                                                <Box>
+                                                    <Typography variant="body2" fontWeight={600}>
+                                                        {intern.etudiant?.prenom || ''} {intern.etudiant?.nom || ''}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="#94a3b8" display="block">
+                                                        {intern.etudiant?.email || ''}
+                                                    </Typography>
+                                                </Box>
                                             </Box>
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2">
-                                            {intern.offre?.titre || 'Stage sans titre'}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {formatDate(intern.dateDebut)}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {formatDate(intern.dateFin)}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Tooltip title={`${intern.livrables?.length || 0} livrable(s)`}>
-                                            <Chip
-                                                label={intern.livrables?.length || 0}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" fontWeight={500}>
+                                                {intern.offre?.titre || 'Stage sans titre'}
+                                            </Typography>
+                                            <Typography variant="caption" color="#94a3b8" display="block">
+                                                {intern.offre?.typeStage || ''}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {formatDate(intern.dateDebut)} → {formatDate(intern.dateFin)}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <ReportChip
+                                                label={
+                                                    isRejected ? 'Rejeté' :
+                                                    needsAction ? 'À valider' :
+                                                    hasReport ? `${reports.length} rapport` :
+                                                    '0 rapport'
+                                                }
+                                                hasReport={hasReport}
+                                                needsAction={needsAction}
                                                 size="small"
-                                                icon={<Description sx={{ fontSize: 14 }} />}
-                                                sx={{
-                                                    backgroundColor: '#f3e8ff',
-                                                    color: '#6b21a8',
-                                                    fontWeight: 500,
-                                                }}
                                             />
-                                        </Tooltip>
-                                    </TableCell>
-                                    <TableCell>
-                                        <StatusChip
-                                            label={getStatusLabel(intern.statut)}
-                                            status={intern.statut}
-                                            size="small"
-                                        />
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        <Tooltip title="Voir le détail">
-                                            <IconButton
+                                        </TableCell>
+                                        <TableCell>
+                                            <StatusChip
+                                                label={getStatusLabel(intern.statut)}
+                                                status={intern.statut}
                                                 size="small"
-                                                onClick={() => navigate(`/supervisor/stagiaire/${intern._id || intern.id}`)}
-                                                sx={{ color: '#2d3748' }}
-                                            >
-                                                <Visibility fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                                            />
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Tooltip title="Consulter le dossier">
+                                                <ActionButton
+                                                    size="small"
+                                                    onClick={() => navigate(`/supervisor/stagiaire/${intern._id || intern.id}`)}
+                                                >
+                                                    <Visibility fontSize="small" />
+                                                </ActionButton>
+                                            </Tooltip>
+                                        </TableCell>
+                                    </StyledTableRow>
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>

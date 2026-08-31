@@ -1,7 +1,7 @@
 // src/routes/internshipRoutes.js
-// ✅ ORDRE CORRIGÉ : Routes spécifiques AVANT /:id
-// ✅ TOUTES LES ROUTES AVEC PARAMÈTRES SONT AVANT /:id
-// ✅ CHEMINS AVEC EXTENSIONS .js POUR ÉVITER LES ERREURS
+// ORDRE CORRIGÉ : Routes spécifiques AVANT /:id
+// TOUTES LES ROUTES AVEC PARAMÈTRES SONT AVANT /:id
+// CHEMINS AVEC EXTENSIONS .js POUR ÉVITER LES ERREURS
 
 const express = require('express');
 const router = express.Router();
@@ -88,10 +88,10 @@ router.use(authenticate());
 router.use(logRequest);
 
 // ============================================
-// ✅ ROUTES SANS PARAMÈTRES (SPÉCIFIQUES)
+// ROUTES SANS PARAMÈTRES (SPÉCIFIQUES)
 // ============================================
 
-// 📌 ROUTES ÉTUDIANT
+// ROUTES ÉTUDIANT
 router.get(
     '/student/has-active',
     authorize(ROLES.ETUDIANT),
@@ -106,7 +106,7 @@ router.get(
     internshipController.getStudentInternships
 );
 
-// 📌 ROUTES ENCADRANT
+// ROUTES ENCADRANT
 router.get(
     '/supervisor',
     authorize(ROLES.ENCADRANT),
@@ -114,7 +114,7 @@ router.get(
     internshipController.getSupervisorInternships
 );
 
-// 📌 ROUTES APPLICATION
+// ROUTES APPLICATION
 router.get(
     '/application/:applicationId',
     authorize(ROLES.ETUDIANT, ROLES.DEPARTEMENT, ROLES.RH, ROLES.ADMIN),
@@ -129,14 +129,14 @@ router.post(
     internshipController.validateApplicationDocuments
 );
 
-// 📌 ROUTES DÉPARTEMENT
+// ROUTES DÉPARTEMENT
 router.get(
     '/department',
     authorize(ROLES.DEPARTEMENT),
     internshipController.getDepartmentInternships
 );
 
-// 📌 ROUTES ENCADRANT (DEPRECATED)
+// ROUTES ENCADRANT (DEPRECATED)
 router.get(
     '/my-internships',
     authorize(ROLES.ENCADRANT),
@@ -149,7 +149,7 @@ router.get(
     internshipController.getInternshipsByStudent
 );
 
-// 📌 ROUTES CONVENTION (ANCIENNES - SANS ID)
+// ROUTES CONVENTION (ANCIENNES - SANS ID)
 router.post(
     '/convention/deposer',
     authorize(ROLES.ETUDIANT),
@@ -208,10 +208,10 @@ router.get(
 );
 
 // ============================================
-// ✅ ROUTES AVEC PARAMÈTRES :id (AVANT /:id)
+// ROUTES AVEC PARAMÈTRES :id (AVANT /:id)
 // ============================================
 
-// 📌 TIMELINE
+// TIMELINE
 router.get(
     '/:id/timeline',
     authorize(ROLES.ETUDIANT, ROLES.ENCADRANT, ROLES.DEPARTEMENT, ROLES.RH, ROLES.ADMIN),
@@ -234,7 +234,7 @@ router.delete(
     internshipController.deleteTimelineMessage
 );
 
-// 📌 CONVENTION
+// CONVENTION
 router.get(
     '/:id/convention',
     authorize(ROLES.ETUDIANT, ROLES.ENCADRANT, ROLES.DEPARTEMENT, ROLES.RH, ROLES.ADMIN),
@@ -264,7 +264,7 @@ router.put(
     conventionController.signConvention
 );
 
-// 📌 LIVRABLES
+// LIVRABLES
 router.get(
     '/:id/livrables',
     authorize(ROLES.ETUDIANT, ROLES.ENCADRANT, ROLES.DEPARTEMENT, ROLES.RH, ROLES.ADMIN),
@@ -287,7 +287,22 @@ router.put(
     internshipController.validateDeliverable
 );
 
-// 📌 ÉVALUATION
+router.put(
+    '/:id/livrables/:livrableId/remark',
+    authorize(ROLES.ENCADRANT),
+    logAction('LIVRABLE_REMARK'),
+    internshipController.addDeliverableRemark
+);
+
+// ROUTE DE VALIDATION RH - AJOUTÉE
+router.put(
+    '/:id/livrables/:livrableId/validate-rh',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('LIVRABLES_VALIDATE_RH'),
+    internshipController.validateDeliverableByRh
+);
+
+// ÉVALUATION
 router.get(
     '/:id/evaluation',
     authorize(ROLES.ETUDIANT, ROLES.ENCADRANT, ROLES.DEPARTEMENT, ROLES.RH, ROLES.ADMIN),
@@ -302,7 +317,7 @@ router.put(
     internshipController.updateEvaluation
 );
 
-// 📌 ENGAGEMENT
+// ENGAGEMENT
 router.get(
     '/:id/generate-engagement',
     authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.ADMIN),
@@ -325,7 +340,7 @@ router.post(
     internshipController.sendEngagementToStudent
 );
 
-// 📌 DEMANDE DE STAGE
+// DEMANDE DE STAGE
 router.get(
     '/:id/download-demande-stage',
     authorize(ROLES.ETUDIANT, ROLES.RH, ROLES.ADMIN),
@@ -347,7 +362,7 @@ router.post(
     internshipController.sendDemandeStageToStudent
 );
 
-// 📌 AUTRES ACTIONS AVEC PARAMÈTRES
+// AUTRES ACTIONS AVEC PARAMÈTRES
 router.put(
     '/:id/assign-supervisor',
     authorize(ROLES.DEPARTEMENT, ROLES.ADMIN),
@@ -432,29 +447,36 @@ router.patch(
 );
 
 // ============================================
-// ✅ ROUTE GÉNÉRIQUE /:id (PLACÉE EN DERNIER)
+// ROUTE GÉNÉRIQUE /:id (PLACÉE EN DERNIER)
 // ============================================
 
-// 📌 Récupérer tous les stages
+// Récupérer tous les stages
 router.get(
     '/',
     authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT),
     internshipController.getAllInternships
 );
 
-// 📌 Récupérer un stage par ID (EN DERNIER)
+// Récupérer un stage par ID (EN DERNIER)
 router.get(
     '/:id',
     authorize(ROLES.ADMIN, ROLES.RH, ROLES.ENCADRANT, ROLES.ETUDIANT),
     internshipController.getInternshipById
 );
 
-// 📌 Créer un stage
+// Créer un stage
 router.post(
     '/',
     authorize(ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT),
     logAction('INTERNSHIP_CREATE'),
     internshipController.createInternship
+);
+
+router.post(
+    '/:id/send-attestation',
+    authorize(ROLES.RH, ROLES.ADMIN),
+    logAction('INTERNSHIP_SEND_ATTESTATION'),
+    internshipController.sendAttestationToStudent
 );
 
 module.exports = router;

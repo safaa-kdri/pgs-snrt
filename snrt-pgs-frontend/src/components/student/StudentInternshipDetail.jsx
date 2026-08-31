@@ -1,5 +1,5 @@
 // src/components/student/StudentInternshipDetail.jsx
-// ✅ VERSION ULTRA MINIMALISTE - SANS STATUT
+// ✅ CORRIGÉ : Récupération correcte du stage
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -19,14 +19,14 @@ import {
     ArrowBack,
     Description,
     FilePresent,
-    StarOutline,
     PersonOutline,
+    PictureAsPdf,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
-import { getInternshipDetail } from '../../services/api';
+import { getInternshipDetail, getInternshipByApplication } from '../../services/api';
 import StudentConvention from './StudentConvention';
 import StudentLivrables from './StudentLivrables';
-import StudentEvaluation from './StudentEvaluation';
+import StudentAttestation from './StudentAttestation';
 
 // ============================================
 // STYLES - ULTRA MINIMALISTES
@@ -57,7 +57,6 @@ const StyledPaper = styled(Paper)({
     marginTop: '12px',
 });
 
-// ✅ Header ultra minimaliste
 const HeaderSection = styled(Box)({
     padding: '16px 24px 12px',
     backgroundColor: '#ffffff',
@@ -78,7 +77,6 @@ const HeaderTitle = styled(Typography)({
     letterSpacing: '-0.02em',
 });
 
-// ✅ Info unique : Encadrant
 const InfoRow = styled(Box)({
     display: 'flex',
     alignItems: 'center',
@@ -106,7 +104,6 @@ const InfoValue = styled(Typography)({
     fontWeight: 500,
 });
 
-// ✅ Tabs minimalistes
 const StyledTabs = styled(Tabs)({
     borderTop: '1px solid #f1f5f9',
     borderBottom: '1px solid #f1f5f9',
@@ -151,6 +148,7 @@ const StudentInternshipDetail = () => {
     const [tabValue, setTabValue] = useState(0);
 
     useEffect(() => {
+        console.log('🔍 [StudentInternshipDetail] ID reçu:', id);
         fetchInternshipDetail();
     }, [id]);
 
@@ -158,14 +156,30 @@ const StudentInternshipDetail = () => {
         setLoading(true);
         setError('');
         try {
-            const data = await getInternshipDetail(id);
-            if (data) {
+            // ✅ Essayer d'abord via getInternshipDetail
+            let data = await getInternshipDetail(id);
+            
+            // ✅ Si pas trouvé, essayer via getInternshipByApplication
+            if (!data || !data._id) {
+                console.log('🔍 [StudentInternshipDetail] Stage non trouvé, essai via application');
+                data = await getInternshipByApplication(id);
+            }
+            
+            console.log('📥 [StudentInternshipDetail] Données reçues:', data);
+            console.log('📥 [StudentInternshipDetail] attestationGeneree:', data?.attestationGeneree);
+            console.log('📥 [StudentInternshipDetail] statut:', data?.statut);
+            
+            if (data && data._id) {
                 setInternship(data);
+                console.log('✅ [StudentInternshipDetail] Stage chargé avec succès');
             } else {
                 setError('Stage non trouvé');
+                setTimeout(() => {
+                    navigate('/dashboard/stages');
+                }, 2000);
             }
         } catch (error) {
-            console.error('Erreur chargement stage:', error);
+            console.error('❌ [StudentInternshipDetail] Erreur:', error);
             setError(error.response?.data?.message || 'Erreur lors du chargement');
         } finally {
             setLoading(false);
@@ -199,12 +213,31 @@ const StudentInternshipDetail = () => {
         );
     }
 
-    // ✅ Définir les onglets
+    // ✅ 3 ONGLETS : Convention + Rapport + Attestation
     const tabs = [
         { label: 'Convention', icon: <FilePresent sx={{ fontSize: 18 }} />, component: <StudentConvention internshipId={id} /> },
         { label: 'Rapport', icon: <Description sx={{ fontSize: 18 }} />, component: <StudentLivrables internshipId={id} user={user} /> },
-        { label: 'Évaluation', icon: <StarOutline sx={{ fontSize: 18 }} />, component: <StudentEvaluation internshipId={id} /> },
     ];
+
+    // ✅ AJOUTER L'ONGLET ATTESTATION UNIQUEMENT SI DISPONIBLE
+    const hasAttestation = internship?.attestationGeneree === true || 
+                          internship?.statut === 'Cloturee' || 
+                          internship?.statut === 'Termine';
+
+    console.log('🔍 [StudentInternshipDetail] hasAttestation:', hasAttestation);
+    console.log('🔍 [StudentInternshipDetail] attestationGeneree:', internship?.attestationGeneree);
+    console.log('🔍 [StudentInternshipDetail] statut:', internship?.statut);
+
+    if (hasAttestation) {
+        console.log('✅ [StudentInternshipDetail] Ajout de l\'onglet Attestation');
+        tabs.push({
+            label: 'Attestation',
+            icon: <PictureAsPdf sx={{ fontSize: 18 }} />,
+            component: <StudentAttestation internshipId={id} internship={internship} />,
+        });
+    } else {
+        console.log('ℹ️ [StudentInternshipDetail] Pas d\'attestation disponible');
+    }
 
     const hasEncadrant = internship.encadrantId && 
         (internship.encadrantId.nom || internship.encadrantId.prenom);
@@ -214,14 +247,11 @@ const StudentInternshipDetail = () => {
 
     return (
         <PageContainer maxWidth="lg">
-            {/* ===== BACK ===== */}
             <BackButton startIcon={<ArrowBack />} onClick={() => navigate('/dashboard/stages')}>
                 Mes stages
             </BackButton>
 
-            {/* ===== CARD ===== */}
             <StyledPaper>
-                {/* ===== HEADER ULTRA MINIMALISTE ===== */}
                 <HeaderSection>
                     <HeaderRow>
                         <HeaderTitle>
@@ -229,7 +259,6 @@ const StudentInternshipDetail = () => {
                         </HeaderTitle>
                     </HeaderRow>
 
-                    {/* ✅ UNIQUEMENT ENCADRANT */}
                     <InfoRow>
                         <InfoItem>
                             <PersonOutline />
@@ -238,7 +267,6 @@ const StudentInternshipDetail = () => {
                     </InfoRow>
                 </HeaderSection>
 
-                {/* ===== TABS ===== */}
                 <StyledTabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
                     {tabs.map((tab, index) => (
                         <StyledTab 

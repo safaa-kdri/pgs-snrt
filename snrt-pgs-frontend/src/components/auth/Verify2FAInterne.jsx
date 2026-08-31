@@ -126,7 +126,9 @@ const DotIndicator = styled(Box)({
     marginBottom: '16px',
 });
 
-const Dot = styled(Box)(({ active }) => ({
+const Dot = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'active',
+})(({ active }) => ({
     width: '32px',
     height: '4px',
     borderRadius: '2px',

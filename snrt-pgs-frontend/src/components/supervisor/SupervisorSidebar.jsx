@@ -63,7 +63,9 @@ const DrawerFooter = styled(Box)({
     flexShrink: 0,
 });
 
-const DrawerItem = styled(ListItem)(({ active }) => ({
+const DrawerItem = styled(ListItem, {
+    shouldForwardProp: (prop) => prop !== 'active',
+})(({ active }) => ({
     borderRadius: '8px',
     margin: '2px 8px',
     padding: '8px 12px',
