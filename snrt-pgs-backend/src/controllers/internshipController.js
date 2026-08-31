@@ -1,10 +1,11 @@
 // src/controllers/internshipController.js
-// ✅ CORRECTION : Récupérer le statut du stage réel s'il existe
-// ✅ CORRECTION : Accepte les deux formes du statut (Acceptée et Acceptee)
-// ✅ CORRECTION : Récupérer l'encadrant depuis le stage réel pour les stages virtuels
-// ✅ AJOUT : Fonctions Timeline (getTimeline, postTimelineMessage, deleteTimelineMessage)
-// ✅ AJOUT : Fonctions Livrables (getLivrables)
-// ✅ AJOUT : Fonctions Évaluation (getEvaluation, updateEvaluation)
+// CORRECTION : Récupérer le statut du stage réel s'il existe
+// CORRECTION : Accepte les deux formes du statut (Acceptée et Acceptee)
+// CORRECTION : Récupérer l'encadrant depuis le stage réel pour les stages virtuels
+// AJOUT : Fonctions Timeline (getTimeline, postTimelineMessage, deleteTimelineMessage)
+// AJOUT : Fonctions Livrables (getLivrables)
+// AJOUT : Fonctions Évaluation (getEvaluation, updateEvaluation)
+// CORRECTION : uploadEngagementConfidentialite avec GridFS
 
 const mongoose = require('mongoose');
 const path = require('path');
@@ -16,18 +17,18 @@ const Evaluation = require('../models/Evaluation');
 const UtilisateurInterne = require('../models/UtilisateurInterne');
 const UtilisateurExterne = require('../models/UtilisateurExterne');
 const Notification = require('../models/Notification');
+const Document = require('../models/Document');
 const pdfService = require('../services/pdfService');
 const emailService = require('../services/emailService');
+const gridfsService = require('../services/gridfsService');
 const logger = require('../utils/logger');
 
 // ============================================
-// ✅ VÉRIFIER SI L'ÉTUDIANT A UNE CANDIDATURE ACCEPTÉE
+// VERIFIER SI L'ETUDIANT A UNE CANDIDATURE ACCEPTEE
 // ============================================
 exports.hasActiveInternship = async (req, res) => {
     try {
         const studentId = req.user._id;
-
-        console.log('🔍 [hasActiveInternship] Étudiant ID:', studentId);
 
         const acceptedApplication = await Application.findOne({
             etudiantId: studentId,
@@ -35,12 +36,6 @@ exports.hasActiveInternship = async (req, res) => {
         }).populate('offreId', 'titre');
 
         const hasActive = !!acceptedApplication;
-
-        console.log('🔍 [hasActiveInternship] Candidature trouvée:', hasActive);
-        if (acceptedApplication) {
-            console.log('🔍 [hasActiveInternship] Statut exact:', acceptedApplication.statut);
-            console.log('🔍 [hasActiveInternship] Titre:', acceptedApplication.offreId?.titre);
-        }
 
         return res.status(200).json({
             success: true,
@@ -53,7 +48,7 @@ exports.hasActiveInternship = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ [hasActiveInternship] Erreur:', error);
+        logger.error(`[hasActiveInternship] Erreur: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la vérification',
@@ -63,16 +58,14 @@ exports.hasActiveInternship = async (req, res) => {
 };
 
 // ============================================
-// ✅ RÉCUPÉRER TOUTES LES CANDIDATURES ACCEPTÉES
-// ✅ CORRECTION : Récupérer le statut du stage réel s'il existe
+// RECUPERER TOUTES LES CANDIDATURES ACCEPTEES
+// CORRECTION : Récupérer le statut du stage réel s'il existe
 // ============================================
 exports.getStudentInternships = async (req, res) => {
     try {
         const studentId = req.user._id;
 
-        console.log('🔍 [getStudentInternships] Étudiant ID:', studentId);
-
-        // ✅ Récupérer TOUTES les candidatures Acceptées
+        // Récupérer TOUTES les candidatures Acceptées
         const acceptedApplications = await Application.find({
             etudiantId: studentId,
             statut: { $in: ['Acceptée', 'Acceptee'] }
@@ -81,14 +74,12 @@ exports.getStudentInternships = async (req, res) => {
             .populate('etudiantId', 'nom prenom email universite filiere')
             .sort({ createdAt: -1 });
 
-        console.log('🔍 [getStudentInternships] Candidatures Acceptées trouvées:', acceptedApplications.length);
-
-        // ✅ Transformer les candidatures en "stages" virtuels avec le statut du stage réel
+        // Transformer les candidatures en "stages" virtuels avec le statut du stage réel
         const virtualInternships = await Promise.all(acceptedApplications.map(async (app) => {
-            // ✅ RECHERCHER LE STAGE RÉEL associé à cette candidature
+            // RECHERCHER LE STAGE REEL associé à cette candidature
             const realInternship = await Internship.findOne({ applicationId: app._id });
             
-            // ✅ Utiliser le statut du stage réel s'il existe
+            // Utiliser le statut du stage réel s'il existe
             let statut = app.statut;
             let encadrantId = null;
             let livrables = [];
@@ -98,17 +89,13 @@ exports.getStudentInternships = async (req, res) => {
             let attestationGeneree = false;
             
             if (realInternship) {
-                statut = realInternship.statut;  // ← Utiliser le statut du stage
+                statut = realInternship.statut;
                 encadrantId = realInternship.encadrantId;
                 livrables = realInternship.livrables || [];
                 remarquesEncadrant = realInternship.remarquesEncadrant || [];
                 convention = realInternship.convention || { status: 'EnAttente' };
                 evaluation = realInternship.evaluation || null;
                 attestationGeneree = realInternship.attestationGeneree || false;
-                
-                console.log(`🔍 [getStudentInternships] Stage réel trouvé: ${realInternship.statut}`);
-            } else {
-                console.log(`🔍 [getStudentInternships] Aucun stage réel pour cette candidature, statut: ${app.statut}`);
             }
             
             return {
@@ -118,7 +105,7 @@ exports.getStudentInternships = async (req, res) => {
                 applicationId: app._id,
                 dateDebut: realInternship?.dateDebut || app.offreId?.dateDebut || new Date(),
                 dateFin: realInternship?.dateFin || app.offreId?.dateFin || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                statut: statut,  // ← Statut du stage réel OU de la candidature
+                statut: statut,
                 sujetTitre: realInternship?.sujetTitre || app.offreId?.titre || 'Stage',
                 encadrantId: encadrantId,
                 livrables: livrables,
@@ -132,8 +119,6 @@ exports.getStudentInternships = async (req, res) => {
             };
         }));
 
-        console.log('🔍 [getStudentInternships] Stages virtuels créés:', virtualInternships.length);
-
         return res.status(200).json({
             success: true,
             count: virtualInternships.length,
@@ -141,7 +126,7 @@ exports.getStudentInternships = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ [getStudentInternships] Erreur:', error);
+        logger.error(`[getStudentInternships] Erreur: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la récupération des stages'
@@ -150,21 +135,17 @@ exports.getStudentInternships = async (req, res) => {
 };
 
 // ============================================
-// ✅ RÉCUPÉRER TOUS LES STAGES DE L'ENCADRANT
+// RECUPERER TOUS LES STAGES DE L'ENCADRANT
 // ============================================
 exports.getSupervisorInternships = async (req, res) => {
     try {
         const supervisorId = req.user._id;
-
-        console.log('🔍 [getSupervisorInternships] Encadrant ID:', supervisorId);
 
         const internships = await Internship.find({ encadrantId: supervisorId })
             .populate('offreId', 'titre typeStage departementId')
             .populate('etudiantId', 'nom prenom email universite filiere')
             .populate('encadrantId', 'nom prenom email')
             .sort({ createdAt: -1 });
-
-        console.log('🔍 [getSupervisorInternships] Stages trouvés:', internships.length);
 
         return res.status(200).json({
             success: true,
@@ -173,7 +154,7 @@ exports.getSupervisorInternships = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ [getSupervisorInternships] Erreur:', error);
+        logger.error(`[getSupervisorInternships] Erreur: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la récupération des stages'
@@ -208,7 +189,7 @@ exports.getAllInternships = async (req, res) => {
 
 // ============================================
 // GET - Recuperer un stage par ID (ou candidature)
-// ✅ CORRECTION : Récupérer l'encadrant depuis le stage réel pour les stages virtuels
+// CORRECTION : Récupérer l'encadrant depuis le stage réel pour les stages virtuels
 // ============================================
 exports.getInternshipById = async (req, res) => {
     try {
@@ -229,7 +210,7 @@ exports.getInternshipById = async (req, res) => {
 
             if (application && (application.statut === 'Acceptee' || application.statut === 'Acceptée')) {
                 
-                // ✅ RECHERCHER LE STAGE RÉEL POUR RÉCUPÉRER L'ENCADRANT ET LES DONNÉES
+                // RECHERCHER LE STAGE REEL POUR RECUPERER L'ENCADRANT ET LES DONNEES
                 const realInternship = await Internship.findOne({ applicationId: application._id })
                     .populate('encadrantId', 'nom prenom email');
 
@@ -341,8 +322,6 @@ exports.getInternshipByApplication = async (req, res) => {
         const userId = req.user.id;
         const userRole = req.user.role;
 
-        console.log(`[getInternshipByApplication] applicationId: ${applicationId}`);
-
         let internship = null;
 
         // 1. Chercher dans internships
@@ -360,7 +339,7 @@ exports.getInternshipByApplication = async (req, res) => {
 
             if (application && (application.statut === 'Acceptee' || application.statut === 'Acceptée')) {
                 
-                // ✅ RECHERCHER LE STAGE RÉEL POUR RÉCUPÉRER L'ENCADRANT
+                // RECHERCHER LE STAGE REEL POUR RECUPERER L'ENCADRANT
                 const realInternship = await Internship.findOne({ applicationId: application._id })
                     .populate('encadrantId', 'nom prenom email');
 
@@ -406,7 +385,7 @@ exports.getInternshipByApplication = async (req, res) => {
             data: internship
         });
     } catch (error) {
-        console.error('Erreur getInternshipByApplication:', error);
+        logger.error(`Erreur getInternshipByApplication: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la recuperation du stage',
@@ -421,12 +400,6 @@ exports.getInternshipByApplication = async (req, res) => {
 exports.createInternship = async (req, res) => {
     try {
         const { etudiantId, offreId, applicationId, dateDebut, dateFin, encadrantId } = req.body;
-
-        console.log('[createInternship] Donnees recues:', {
-            etudiantId,
-            offreId,
-            applicationId
-        });
 
         const application = await Application.findById(applicationId);
         if (!application) {
@@ -473,7 +446,7 @@ exports.createInternship = async (req, res) => {
             sujetLivrables: sujet?.livrables || null,
         });
 
-        // ✅ Normaliser le statut de la candidature
+        // Normaliser le statut de la candidature
         application.statut = 'Acceptee';
         await application.save();
 
@@ -487,7 +460,7 @@ exports.createInternship = async (req, res) => {
                 lien: `/dashboard/internships/${internship._id}`,
             });
         } catch (notifError) {
-            console.warn('[createInternship] Notification non envoyee:', notifError.message);
+            logger.warn(`[createInternship] Notification non envoyee: ${notifError.message}`);
         }
 
         logger.info(`Stage cree pour l'etudiant ${etudiantId} par ${req.user?.email}`);
@@ -498,7 +471,6 @@ exports.createInternship = async (req, res) => {
             message: 'Stage cree avec succes'
         });
     } catch (error) {
-        console.error('[createInternship] Erreur:', error);
         logger.error(`Erreur createInternship: ${error.message}`);
         res.status(400).json({
             success: false,
@@ -690,39 +662,65 @@ exports.closeInternship = async (req, res) => {
 // ============================================
 exports.addDeliverable = async (req, res) => {
     try {
-        const { nom, type, chemin } = req.body;
-        
-        if (!nom || !type || !chemin) {
+        const { nom, type } = req.body;
+        const file = req.file;
+
+        if (!file) {
             return res.status(400).json({
                 success: false,
-                message: 'Nom, type et chemin sont obligatoires'
+                message: 'Aucun fichier fourni'
             });
         }
-        
+
         const internship = await Internship.findById(req.params.id);
-        
+
         if (!internship) {
             return res.status(404).json({
                 success: false,
                 message: 'Stage non trouve'
             });
         }
-        
-        internship.livrables.push({
-            nom,
-            type,
-            chemin,
+
+        let fileBuffer;
+        if (file.buffer && Buffer.isBuffer(file.buffer)) {
+            fileBuffer = file.buffer;
+        } else if (file.path) {
+            fileBuffer = fs.readFileSync(file.path);
+        } else if (file.data) {
+            fileBuffer = Buffer.from(file.data);
+        } else {
+            throw new Error('Le fichier reçu est vide ou invalide');
+        }
+
+        const uploadedFile = await gridfsService.uploadFile(
+            fileBuffer,
+            file.originalname || nom || 'livrable.pdf',
+            file.mimetype || 'application/pdf'
+        );
+
+        const livrableType = type || 'Autre';
+        const livrableName = nom || file.originalname || `${livrableType}_${Date.now()}.pdf`;
+
+        const livrable = {
+            _id: new mongoose.Types.ObjectId(),
+            nom: livrableName,
+            type: livrableType,
+            chemin: '',
+            gridFsId: uploadedFile._id,
+            url: `/api/v1/documents/file/${uploadedFile._id}`,
             dateDepot: new Date(),
-            valide: false
-        });
-        
+            valide: false,
+            commentaire: ''
+        };
+
+        internship.livrables.push(livrable);
         await internship.save();
-        
+
         logger.info(`Livrable ajoute au stage ${internship._id} par ${req.user?.email}`);
-        
+
         res.status(200).json({
             success: true,
-            data: internship,
+            data: livrable,
             message: 'Livrable depose avec succes'
         });
     } catch (error) {
@@ -813,7 +811,7 @@ exports.validateApplicationDocuments = async (req, res) => {
         }
 
         if (decision === 'accepte') {
-            // ✅ Normaliser le statut (sans accent)
+            // Normaliser le statut (sans accent)
             application.statut = 'Acceptee';
             await application.save();
 
@@ -1034,6 +1032,7 @@ exports.generateAttestation = async (req, res) => {
 
 // ============================================
 // ETUDIANT - DEPOSER LE PDF D'ENGAGEMENT SIGNE
+// CORRECTION : Utiliser GridFS au lieu du disque
 // ============================================
 exports.uploadEngagementConfidentialite = async (req, res) => {
     try {
@@ -1055,7 +1054,6 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
         }
 
         const internship = await Internship.findById(id);
-
         if (!internship) {
             return res.status(404).json({
                 success: false,
@@ -1077,28 +1075,94 @@ exports.uploadEngagementConfidentialite = async (req, res) => {
             });
         }
 
-        internship.livrables.push({
-            nom: 'Engagement Confidentialite Signe',
+        let fileBuffer;
+        if (file.buffer && Buffer.isBuffer(file.buffer)) {
+            fileBuffer = file.buffer;
+        } else if (file.path) {
+            fileBuffer = fs.readFileSync(file.path);
+        } else if (file.data) {
+            fileBuffer = Buffer.from(file.data);
+        } else {
+            throw new Error('Le fichier reçu est vide ou invalide');
+        }
+
+        // Stocker dans GridFS
+        const gridfsFile = await gridfsService.uploadFile(
+            fileBuffer,
+            file.originalname,
+            file.mimetype
+        );
+
+        if (!gridfsFile || !gridfsFile._id) {
+            throw new Error('Erreur lors de l\'upload vers GridFS');
+        }
+
+        const document = await Document.findOneAndUpdate(
+            {
+                applicationId: internship.applicationId,
+                type: 'Autre',
+                gridFsId: gridfsFile._id,
+            },
+            {
+                nomOriginal: file.originalname || 'Engagement Confidentialite Signe.pdf',
+                nomStocke: file.originalname || 'Engagement Confidentialite Signe.pdf',
+                type: 'Autre',
+                mimeType: file.mimetype || 'application/pdf',
+                taille: file.size || 0,
+                gridFsId: gridfsFile._id,
+                url: `/api/v1/documents/file/${gridfsFile._id}`,
+                candidatId: internship.etudiantId,
+                applicationId: internship.applicationId,
+                uploadedBy: req.user?._id,
+                uploadedByModel: 'UtilisateurExterne',
+                statut: 'Valide',
+                isVerified: true,
+            },
+            {
+                upsert: true,
+                new: true,
+                setDefaultsOnInsert: true,
+            }
+        );
+
+        // Créer le livrable avec la même référence GridFS pour le stage
+        const livrable = {
+            _id: new mongoose.Types.ObjectId(),
+            nom: 'Engagement Confidentialité Signé',
             type: 'Autre',
-            chemin: file.path,
+            chemin: '',
+            gridFsId: gridfsFile._id,
+            url: document.url,
             dateDepot: new Date(),
-            valide: false,
-        });
+            valide: true,
+            commentaire: '',
+        };
+
+        // Éviter les doublons dans le tableau de livrables
+        const existingIndex = internship.livrables.findIndex(
+            (item) => item.gridFsId && item.gridFsId.toString() === gridfsFile._id.toString()
+        );
+
+        if (existingIndex >= 0) {
+            internship.livrables[existingIndex] = livrable;
+        } else {
+            internship.livrables.push(livrable);
+        }
 
         internship.statut = 'EngagementRecu';
         await internship.save();
 
         logger.info(`Document d'engagement depose pour le stage ${internship._id} par ${req.user?.email}`);
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Document d\'engagement depose avec succes',
-            data: internship
+            data: livrable
         });
+
     } catch (error) {
-        console.error('[uploadEngagementConfidentialite] Erreur:', error);
         logger.error(`Erreur uploadEngagementConfidentialite: ${error.message}`);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: error.message
         });
@@ -1244,7 +1308,7 @@ exports.downloadDemandeStage = async (req, res) => {
 
         res.download(filePath, `Demande_Stage_${internship.etudiantId.prenom || ''}_${internship.etudiantId.nom || ''}.pdf`, (err) => {
             if (err) {
-                console.error('Erreur telechargement demande:', err.message);
+                logger.error(`Erreur telechargement demande: ${err.message}`);
                 if (!res.headersSent) {
                     res.status(500).json({
                         success: false,
@@ -1255,7 +1319,6 @@ exports.downloadDemandeStage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur downloadDemandeStage:', error);
         logger.error(`Erreur downloadDemandeStage: ${error.message}`);
         res.status(500).json({
             success: false,
@@ -1371,7 +1434,6 @@ exports.sendDemandeStageToStudent = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[sendDemandeStageToStudent] Erreur:', error);
         logger.error(`Erreur sendDemandeStageToStudent: ${error.message}`);
         return res.status(500).json({
             success: false,
@@ -1563,7 +1625,7 @@ exports.getInternshipReport = async (req, res) => {
         }
 
         const rapport = internship.livrables.find(l => l.type === 'Rapport');
-        if (!rapport || !rapport.chemin) {
+        if (!rapport || (!rapport.chemin && !rapport.gridFsId)) {
             return res.status(404).json({
                 success: false,
                 message: 'Aucun rapport de stage n\'a ete depose'
@@ -1582,7 +1644,9 @@ exports.getInternshipReport = async (req, res) => {
             data: {
                 id: rapport._id,
                 nom: rapport.nom,
-                chemin: rapport.chemin,
+                chemin: rapport.chemin || null,
+                gridFsId: rapport.gridFsId || null,
+                url: rapport.url || null,
                 dateDepot: rapport.dateDepot,
                 valide: rapport.valide,
                 commentaire: rapport.commentaire
@@ -1681,7 +1745,6 @@ exports.updateInternshipStatus = async (req, res) => {
             data: internship
         });
     } catch (error) {
-        console.error('[updateInternshipStatus] Erreur:', error);
         logger.error(`Erreur updateInternshipStatus: ${error.message}`);
         res.status(500).json({
             success: false,
@@ -1691,7 +1754,7 @@ exports.updateInternshipStatus = async (req, res) => {
 };
 
 // ============================================
-// ✅ TIMELINE - Récupérer les messages
+// TIMELINE - Récupérer les messages
 // ============================================
 exports.getTimeline = async (req, res) => {
     try {
@@ -1757,7 +1820,7 @@ exports.getTimeline = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur getTimeline:', error);
+        logger.error(`Erreur getTimeline: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la récupération du journal de suivi'
@@ -1766,7 +1829,7 @@ exports.getTimeline = async (req, res) => {
 };
 
 // ============================================
-// ✅ TIMELINE - Publier un message
+// TIMELINE - Publier un message
 // ============================================
 exports.postTimelineMessage = async (req, res) => {
     try {
@@ -1859,7 +1922,7 @@ exports.postTimelineMessage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur postTimelineMessage:', error);
+        logger.error(`Erreur postTimelineMessage: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la publication du message'
@@ -1868,7 +1931,7 @@ exports.postTimelineMessage = async (req, res) => {
 };
 
 // ============================================
-// ✅ TIMELINE - Supprimer un message
+// TIMELINE - Supprimer un message
 // ============================================
 exports.deleteTimelineMessage = async (req, res) => {
     try {
@@ -1925,7 +1988,7 @@ exports.deleteTimelineMessage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur deleteTimelineMessage:', error);
+        logger.error(`Erreur deleteTimelineMessage: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la suppression du message'
@@ -1934,7 +1997,7 @@ exports.deleteTimelineMessage = async (req, res) => {
 };
 
 // ============================================
-// ✅ LIVRABLES - Récupérer les livrables
+// LIVRABLES - Récupérer les livrables
 // ============================================
 exports.getLivrables = async (req, res) => {
     try {
@@ -1954,7 +2017,7 @@ exports.getLivrables = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur getLivrables:', error);
+        logger.error(`Erreur getLivrables: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la récupération des livrables'
@@ -1963,7 +2026,7 @@ exports.getLivrables = async (req, res) => {
 };
 
 // ============================================
-// ✅ ÉVALUATION - Récupérer l'évaluation
+// EVALUATION - Récupérer l'évaluation
 // ============================================
 exports.getEvaluation = async (req, res) => {
     try {
@@ -1985,7 +2048,7 @@ exports.getEvaluation = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur getEvaluation:', error);
+        logger.error(`Erreur getEvaluation: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de la récupération de l\'évaluation'
@@ -1994,7 +2057,7 @@ exports.getEvaluation = async (req, res) => {
 };
 
 // ============================================
-// ✅ ÉVALUATION - Mettre à jour l'évaluation
+// EVALUATION - Mettre à jour l'évaluation
 // ============================================
 exports.updateEvaluation = async (req, res) => {
     try {
@@ -2043,7 +2106,7 @@ exports.updateEvaluation = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur updateEvaluation:', error);
+        logger.error(`Erreur updateEvaluation: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: 'Erreur lors de l\'enregistrement de l\'évaluation'

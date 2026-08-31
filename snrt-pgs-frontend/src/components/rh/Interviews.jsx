@@ -1,5 +1,5 @@
 // src/components/rh/Interviews.jsx
-// ✅ VERSION AVEC FILTRES AU-DESSUS DES CARTES
+// ✅ VERSION CORRIGÉE
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -17,7 +17,6 @@ import {
   Button,
   TextField,
   Chip,
-  Avatar,
   IconButton,
   Grid,
   CircularProgress,
@@ -39,7 +38,6 @@ import {
 import { styled, alpha } from "@mui/material/styles";
 import {
   Search,
-  Refresh,
   Event,
   Visibility,
   Edit,
@@ -133,7 +131,6 @@ const StatCard = styled(Card)(({ active, color }) => ({
   },
 }));
 
-// ✅ Filtres Container
 const FiltersContainer = styled(Paper)({
   padding: "16px 20px",
   marginBottom: "24px",
@@ -178,7 +175,6 @@ const Interviews = () => {
   const [selectedInterview, setSelectedInterview] = useState(null);
 
   const [formData, setFormData] = useState({
-    applicationId: "",
     date: "",
     heure: "",
     duree: 30,
@@ -190,6 +186,36 @@ const Interviews = () => {
   });
 
   const limit = 10;
+
+  // ✅ FONCTION SÉCURISÉE
+  const safeString = (value) => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "object") return "";
+    return String(value);
+  };
+
+  // ✅ RÉCUPÉRER LE NOM DU CANDIDAT
+  const getCandidateName = (interview) => {
+    // Essayer plusieurs sources
+    const candidat = interview?.candidat || interview?.etudiantId || {};
+    const prenom = safeString(candidat?.prenom || interview?.prenom);
+    const nom = safeString(candidat?.nom || interview?.nom);
+    const fullName = `${prenom} ${nom}`.trim();
+    return fullName || "Candidat";
+  };
+
+  // ✅ RÉCUPÉRER LE TITRE DE L'OFFRE
+  const getOfferTitle = (interview) => {
+    const offre = interview?.offre || interview?.offreId || {};
+    const titre = safeString(offre?.titre || interview?.offre);
+    return titre || "-";
+  };
+
+  // ✅ RÉCUPÉRER L'EMAIL DU CANDIDAT
+  const getCandidateEmail = (interview) => {
+    const candidat = interview?.candidat || interview?.etudiantId || {};
+    return safeString(candidat?.email || interview?.email);
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -222,26 +248,35 @@ const Interviews = () => {
       const response = await api.get("/interviews", { params });
 
       let data = [];
-      let pagination = {};
-
       if (response.data?.interviews) {
         data = response.data.interviews;
-        pagination = response.data.pagination || {};
       } else if (response.data?.data) {
         data = response.data.data;
-        pagination = response.data.pagination || {};
       } else if (Array.isArray(response.data)) {
         data = response.data;
       }
 
-      const formattedData = data.map((interview) => ({
-        ...interview,
-        _id: interview._id || interview.id,
-        candidat: interview.candidat || interview.etudiantId || {},
-        offre: interview.offre || interview.offreId || {},
-        statut: interview.statut || "Planifie",
-        type: interview.type || "presentiel",
-      }));
+      console.log("📥 Données brutes des entretiens:", JSON.stringify(data, null, 2));
+
+      const formattedData = data.map((interview) => {
+        // Debug: afficher la structure
+        console.log("🔍 Interview:", {
+          id: interview._id,
+          candidat: interview.candidat,
+          etudiantId: interview.etudiantId,
+          offre: interview.offre,
+          offreId: interview.offreId,
+        });
+
+        return {
+          ...interview,
+          _id: interview._id || interview.id,
+          candidat: interview.candidat || interview.etudiantId || {},
+          offre: interview.offre || interview.offreId || {},
+          statut: interview.statut || "Planifie",
+          type: interview.type || "presentiel",
+        };
+      });
 
       setAllInterviews(formattedData);
       setFilteredInterviews(formattedData);
@@ -256,7 +291,6 @@ const Interviews = () => {
 
       const totalPages = Math.ceil(formattedData.length / limit) || 1;
       setTotalPages(totalPages);
-
     } catch (error) {
       console.error("Erreur chargement entretiens:", error);
       setError(error.response?.data?.message || "Erreur de chargement");
@@ -284,12 +318,11 @@ const Interviews = () => {
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (i) =>
-          (i.candidat?.nom || i.candidat || "").toLowerCase().includes(term) ||
-          (i.candidat?.prenom || "").toLowerCase().includes(term) ||
-          (i.offre?.titre || i.offre || "").toLowerCase().includes(term)
-      );
+      filtered = filtered.filter((i) => {
+        const candidateName = getCandidateName(i).toLowerCase();
+        const offerTitle = getOfferTitle(i).toLowerCase();
+        return candidateName.includes(term) || offerTitle.includes(term);
+      });
     }
 
     setTotal(filtered.length);
@@ -304,18 +337,18 @@ const Interviews = () => {
 
   const getStatusLabel = (status) => {
     const labels = {
-      Planifie: "Planifie",
-      Realise: "Realise",
-      Annule: "Annule",
+      Planifie: "Planifié",
+      Realise: "Réalisé",
+      Annule: "Annulé",
     };
     return labels[status] || status;
   };
 
   const getTypeLabel = (type) => {
     const labels = {
-      presentiel: "Presentiel",
+      presentiel: "Présentiel",
       visio: "Visio",
-      telephonique: "Telephonique",
+      telephonique: "Téléphonique",
     };
     return labels[type] || type;
   };
@@ -333,18 +366,15 @@ const Interviews = () => {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
-    return format(new Date(dateStr), "dd MMM yyyy", { locale: fr });
-  };
-
-  const getInitials = (nom, prenom) => {
-    if (!nom && !prenom) return "?";
-    return (
-      `${(prenom || "")[0] || ""}${(nom || "")[0] || ""}`.toUpperCase() || "?"
-    );
+    try {
+      return format(new Date(dateStr), "dd MMM yyyy", { locale: fr });
+    } catch {
+      return "-";
+    }
   };
 
   const handleAddInterview = () => {
-    navigate('/rh/interviews/new');
+    navigate("/rh/interviews/new");
   };
 
   const handleView = (interview) => {
@@ -370,7 +400,6 @@ const Interviews = () => {
       lienVisio: interview.lienVisio || "",
       commentaires: interview.commentaires || "",
       resultat: interview.resultat || "EnAttente",
-      applicationId: interview.applicationId || "",
     });
     setOpenEditDialog(true);
   };
@@ -396,15 +425,56 @@ const Interviews = () => {
     setSubmitting(true);
     setError("");
     try {
+      // ✅ 1. Mettre à jour l'entretien
       await api.put(`/interviews/${selectedInterview._id}`, formData);
-      setSuccess("Entretien modifie avec succes");
+      
+      // ✅ 2. Récupérer les emails des candidats
+      const applicationIds = selectedInterview.applicationIds || [selectedInterview.applicationId];
+      const emailPromises = applicationIds.map(async (appId) => {
+        try {
+          const appRes = await api.get(`/applications/${appId}`);
+          const app = appRes.data?.data || appRes.data;
+          return app?.etudiantId?.email || app?.etudiantEmail;
+        } catch {
+          return null;
+        }
+      });
+      
+      const emails = await Promise.all(emailPromises);
+      const validEmails = emails.filter(Boolean);
+      
+      // ✅ 3. Envoyer un email de mise à jour à chaque candidat
+      if (validEmails.length > 0) {
+        const emailPromises2 = validEmails.map(async (email) => {
+          try {
+            await api.post('/interviews/send-update-email', {
+              email,
+              interviewId: selectedInterview._id,
+              interviewDetails: {
+                date: formData.date,
+                heure: formData.heure,
+                duree: formData.duree,
+                type: formData.type,
+                lieu: formData.lieu,
+                lienVisio: formData.lienVisio,
+                commentaires: formData.commentaires,
+              }
+            });
+          } catch (err) {
+            console.warn(`Email non envoyé à ${email}:`, err.message);
+          }
+        });
+        await Promise.all(emailPromises2);
+        setSuccess(`Entretien modifié et ${validEmails.length} email(s) envoyé(s)`);
+      } else {
+        setSuccess("Entretien modifié avec succès");
+      }
+      
       setOpenEditDialog(false);
       fetchInterviews();
     } catch (error) {
       console.error("Erreur modification:", error);
-      setError(
-        error.response?.data?.message || "Erreur lors de la modification"
-      );
+      setError(error.response?.data?.message || "Erreur lors de la modification");
     } finally {
       setSubmitting(false);
     }
@@ -414,7 +484,7 @@ const Interviews = () => {
     if (!window.confirm("Voulez-vous vraiment annuler cet entretien ?")) return;
     try {
       await api.put(`/interviews/${id}/cancel`);
-      setSuccess("Entretien annule avec succes");
+      setSuccess("Entretien annulé avec succès");
       fetchInterviews();
     } catch (error) {
       console.error("Erreur annulation:", error);
@@ -456,21 +526,21 @@ const Interviews = () => {
 
   const statusOptions = [
     { value: "all", label: "Tous les statuts" },
-    { value: "Planifie", label: "Planifie" },
-    { value: "Realise", label: "Realise" },
-    { value: "Annule", label: "Annule" },
+    { value: "Planifie", label: "Planifié" },
+    { value: "Realise", label: "Réalisé" },
+    { value: "Annule", label: "Annulé" },
   ];
 
   const typeOptions = [
-    { value: "presentiel", label: "Presentiel" },
+    { value: "presentiel", label: "Présentiel" },
     { value: "visio", label: "Visio" },
-    { value: "telephonique", label: "Telephonique" },
+    { value: "telephonique", label: "Téléphonique" },
   ];
 
   const resultatOptions = [
     { value: "EnAttente", label: "En attente" },
     { value: "Positive", label: "Positif" },
-    { value: "Negative", label: "Negatif" },
+    { value: "Negative", label: "Négatif" },
   ];
 
   if (loading && allInterviews.length === 0) {
@@ -497,7 +567,7 @@ const Interviews = () => {
             Gestion des entretiens
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {filteredInterviews.length} entretien(s) trouve(s)
+            {filteredInterviews.length} entretien(s) trouvé(s)
             {statusFilter !== "all" &&
               ` • Filtre par : ${getStatusLabel(statusFilter)}`}
           </Typography>
@@ -520,9 +590,7 @@ const Interviews = () => {
         </Alert>
       )}
 
-      {/* ========================================== */}
-      {/* ✅ FILTRES - AU-DESSUS DES CARTES */}
-      {/* ========================================== */}
+      {/* ===== FILTRES ===== */}
       <FiltersContainer>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={7}>
@@ -556,9 +624,9 @@ const Interviews = () => {
               size="small"
               fullWidth
               sx={{
-                "& .MuiOutlinedInput-root": { 
-                  borderRadius: "10px", 
-                  backgroundColor: "#fff" 
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "10px",
+                  backgroundColor: "#fff",
                 },
               }}
             >
@@ -572,7 +640,7 @@ const Interviews = () => {
         </Grid>
       </FiltersContainer>
 
-      {/* ===== STATS RAPIDES AVEC ETAT ACTIF ===== */}
+      {/* ===== STATS ===== */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={3}>
           <StatCard
@@ -598,7 +666,7 @@ const Interviews = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#1d4ed8">
-                Planifies
+                Planifiés
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#1d4ed8">
                 {stats.planifies}
@@ -614,7 +682,7 @@ const Interviews = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#065f46">
-                Realises
+                Réalisés
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#065f46">
                 {stats.realises}
@@ -630,7 +698,7 @@ const Interviews = () => {
           >
             <CardContent sx={{ py: 1.5, px: 2 }}>
               <Typography variant="caption" color="#991b1b">
-                Annules
+                Annulés
               </Typography>
               <Typography variant="h6" fontWeight={700} color="#991b1b">
                 {stats.annules}
@@ -664,7 +732,7 @@ const Interviews = () => {
                   <Typography variant="body1" color="text.secondary">
                     {statusFilter !== "all"
                       ? `Aucun entretien avec le statut "${getStatusLabel(statusFilter)}"`
-                      : "Aucun entretien trouve"}
+                      : "Aucun entretien trouvé"}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -672,33 +740,13 @@ const Interviews = () => {
               paginatedData.map((interview) => (
                 <TableRow key={interview._id || interview.id} hover>
                   <TableCell>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Avatar
-                        sx={{
-                          backgroundColor: "#2d3748",
-                          width: 36,
-                          height: 36,
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: "#fff",
-                        }}
-                      >
-                        {getInitials(
-                          interview.candidat?.nom || interview.nom,
-                          interview.candidat?.prenom || interview.prenom
-                        )}
-                      </Avatar>
-                      <Box>
-                        <Typography variant="body2" fontWeight={600}>
-                          {interview.candidat?.prenom || interview.prenom || ""}
-                          {interview.candidat?.nom || interview.nom || ""}
-                        </Typography>
-                      </Box>
-                    </Box>
+                    <Typography variant="body2" fontWeight={600}>
+                      {getCandidateName(interview)}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2">
-                      {interview.offre?.titre || interview.offre || "-"}
+                      {getOfferTitle(interview)}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -719,7 +767,7 @@ const Interviews = () => {
                   </TableCell>
                   <TableCell>
                     {interview.type === "visio" ? (
-                      <Tooltip title={interview.lienVisio}>
+                      <Tooltip title={safeString(interview.lienVisio)}>
                         <Typography
                           variant="caption"
                           color="primary"
@@ -730,7 +778,7 @@ const Interviews = () => {
                       </Tooltip>
                     ) : (
                       <Typography variant="body2">
-                        {interview.lieu || "-"}
+                        {safeString(interview.lieu) || "-"}
                       </Typography>
                     )}
                   </TableCell>
@@ -798,10 +846,7 @@ const Interviews = () => {
         </Box>
       )}
 
-      {/* ========================================== */}
-      {/* DIALOG VISUALISATION */}
-      {/* ========================================== */}
-
+      {/* ===== DIALOG VISUALISATION ===== */}
       <Dialog
         open={openViewDialog}
         onClose={handleCloseView}
@@ -813,7 +858,7 @@ const Interviews = () => {
       >
         <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Event sx={{ color: "#2d3748" }} />
-          Details de l'entretien
+          Détails de l'entretien
         </DialogTitle>
         <DialogContent>
           {selectedInterview && (
@@ -824,8 +869,7 @@ const Interviews = () => {
                     Candidat
                   </Typography>
                   <Typography variant="body1" fontWeight={600}>
-                    {selectedInterview.candidat?.prenom || ""}{" "}
-                    {selectedInterview.candidat?.nom || ""}
+                    {getCandidateName(selectedInterview)}
                   </Typography>
                 </Grid>
                 <Grid item xs={12}>
@@ -833,7 +877,7 @@ const Interviews = () => {
                     Offre
                   </Typography>
                   <Typography variant="body1">
-                    {selectedInterview.offre?.titre || "-"}
+                    {getOfferTitle(selectedInterview)}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -849,15 +893,15 @@ const Interviews = () => {
                     Heure
                   </Typography>
                   <Typography variant="body1">
-                    {selectedInterview.heure}
+                    {safeString(selectedInterview.heure)}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary">
-                    Duree
+                    Durée
                   </Typography>
                   <Typography variant="body1">
-                    {selectedInterview.duree} minutes
+                    {safeString(selectedInterview.duree)} minutes
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -874,8 +918,8 @@ const Interviews = () => {
                   </Typography>
                   <Typography variant="body1">
                     {selectedInterview.type === "visio"
-                      ? selectedInterview.lienVisio
-                      : selectedInterview.lieu || "-"}
+                      ? safeString(selectedInterview.lienVisio)
+                      : safeString(selectedInterview.lieu) || "-"}
                   </Typography>
                 </Grid>
                 {selectedInterview.commentaires && (
@@ -884,7 +928,7 @@ const Interviews = () => {
                       Commentaires
                     </Typography>
                     <Typography variant="body2">
-                      {selectedInterview.commentaires}
+                      {safeString(selectedInterview.commentaires)}
                     </Typography>
                   </Grid>
                 )}
@@ -913,10 +957,7 @@ const Interviews = () => {
         </DialogActions>
       </Dialog>
 
-      {/* ========================================== */}
-      {/* DIALOG MODIFICATION */}
-      {/* ========================================== */}
-
+      {/* ===== DIALOG MODIFICATION ===== */}
       <Dialog
         open={openEditDialog}
         onClose={handleCloseEdit}
@@ -958,7 +999,7 @@ const Interviews = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Duree (minutes)"
+                label="Durée (minutes)"
                 type="number"
                 name="duree"
                 value={formData.duree}
@@ -1023,12 +1064,12 @@ const Interviews = () => {
             </Grid>
             <Grid item xs={12}>
               <FormControl fullWidth>
-                <InputLabel>Resultat</InputLabel>
+                <InputLabel>Résultat</InputLabel>
                 <Select
                   name="resultat"
                   value={formData.resultat}
                   onChange={handleFormChange}
-                  label="Resultat"
+                  label="Résultat"
                   sx={{ borderRadius: "10px" }}
                 >
                   {resultatOptions.map((option) => (

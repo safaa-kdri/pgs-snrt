@@ -1,6 +1,7 @@
 // src/controllers/documentController.js
 // ✅ CORRECTION : Ajouter la logique de changement de statut de l'application
 
+const mongoose = require('mongoose');
 const Document = require('../models/Document');
 const Application = require('../models/Application');
 const Notification = require('../models/Notification');
@@ -9,6 +10,35 @@ const UtilisateurExterne = require('../models/UtilisateurExterne');
 const gridfsService = require('../services/gridfsService');
 const { ROLES, APPLICATION_STATUS } = require('../config/constants');
 const logger = require('../utils/logger');
+
+async function resolveGridFsFileMetadata(fileId) {
+    if (!fileId) return null;
+
+    try {
+        const db = mongoose.connection.db;
+        if (!db) return null;
+
+        const objectId = new mongoose.Types.ObjectId(fileId);
+        return await db.collection('documents.files').findOne({ _id: objectId });
+    } catch (error) {
+        logger.warn(`GridFS metadata lookup failed for ${fileId}: ${error.message}`);
+        return null;
+    }
+}
+
+function setPdfResponseHeaders(res, fileName, mimeType) {
+    const normalizedName = String(fileName || 'document.pdf');
+    const normalizedMime = (mimeType || 'application/pdf').toLowerCase();
+
+    if (normalizedMime.includes('pdf') || normalizedName.toLowerCase().endsWith('.pdf')) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${normalizedName}"`);
+        return;
+    }
+
+    res.setHeader('Content-Type', normalizedMime || 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${normalizedName}"`);
+}
 
 // ============================================
 // HELPERS
@@ -107,10 +137,13 @@ exports.downloadDocument = async (req, res) => {
 
         const document = await Document.findOne({ gridFsId: fileId });
         if (!document) {
-            return res.status(404).json({
-                success: false,
-                message: 'Document non trouvé'
-            });
+            const gridFile = await resolveGridFsFileMetadata(fileId);
+            const mimeType = gridFile?.contentType || 'application/pdf';
+            const fileName = gridFile?.filename || `document_${fileId}.pdf`;
+
+            const downloadStream = gridfsService.downloadFile(fileId);
+            setPdfResponseHeaders(res, fileName, mimeType);
+            return downloadStream.pipe(res);
         }
 
         if (req.user?.role === ROLES.ETUDIANT) {
@@ -124,10 +157,9 @@ exports.downloadDocument = async (req, res) => {
 
         const downloadStream = gridfsService.downloadFile(fileId);
 
-        res.setHeader('Content-Type', document.mimeType);
-        res.setHeader('Content-Disposition', `inline; filename="${document.nomOriginal}"`);
+        setPdfResponseHeaders(res, document.nomOriginal || `document_${fileId}.pdf`, document.mimeType || 'application/pdf');
 
-        downloadStream.pipe(res);
+        return downloadStream.pipe(res);
     } catch (error) {
         logger.error(`Erreur downloadDocument: ${error.message}`);
         return res.status(500).json({
@@ -146,9 +178,15 @@ exports.previewDocument = async (req, res) => {
 
         const document = await Document.findOne({ gridFsId: fileId });
         if (!document) {
-            return res.status(404).json({
-                success: false,
-                message: 'Document non trouvé'
+            const gridFile = await resolveGridFsFileMetadata(fileId);
+            const base64 = await gridfsService.getFileAsBase64(fileId);
+            return res.status(200).json({
+                success: true,
+                data: {
+                    base64,
+                    mimeType: gridFile?.contentType || 'application/pdf',
+                    nomOriginal: gridFile?.filename || `document_${fileId}.pdf`
+                }
             });
         }
 

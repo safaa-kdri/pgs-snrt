@@ -1,5 +1,5 @@
 // src/utils/validators.js
-// ✅ CORRECTION : Utiliser les mêmes valeurs que le modèle MongoDB (sans accents)
+// CORRECTION : Utiliser les mêmes valeurs que le modèle MongoDB (sans accents)
 
 const Joi = require('joi');
 const ApiError = require('./ApiError');
@@ -109,7 +109,7 @@ const changePasswordSchema = Joi.object({
   }),
 });
 
-// ✅ CORRECTION : Utiliser les valeurs sans accents pour correspondre au modèle MongoDB
+// CORRECTION : Utiliser les valeurs sans accents pour correspondre au modèle MongoDB
 const subjectSchema = Joi.object({
   titre: Joi.string().trim().min(2).max(150).required(),
   description: Joi.string().trim().min(10).max(3000).required(),
@@ -161,28 +161,46 @@ const validateOfferSchema = Joi.object({
 });
 
 
+// MODIFICATION : createInterviewSchema (avec offreId et cins)
 const createInterviewSchema = Joi.object({
-  applicationId: Joi.string().hex().length(24).required(),
-  date: Joi.date().greater('now').required(),
-  heure: Joi.string()
-    .pattern(/^([01]\d|2[0-3]):[0-5]\d$/)
+  offreId: Joi.string().required().messages({
+    'any.required': 'Veuillez sélectionner une offre'
+  }),
+  cins: Joi.array()
+    .items(Joi.string().pattern(/^[A-Z]{1,2}[0-9]{5,8}$/))
+    .min(1)
+    .max(20)
     .required()
-    .messages({ 'string.pattern.base': "Heure invalide (format attendu HH:mm)." }),
-  duree: Joi.number().integer().min(10).max(240).default(30),
-  lieu: Joi.string().trim().max(200).allow('', null),
-  lienVisio: Joi.string().uri().allow('', null),
-  type: Joi.string()
-    .valid(...INTERVIEW_TYPES)
-    .required(),
-}).custom((value, helpers) => {
-  if (value.type === 'Visio' && !value.lienVisio) {
-    return helpers.message('Un lien de visioconference est requis pour un entretien de type Visio.');
-  }
-  if (value.type === 'Presentiel' && !value.lieu) {
-    return helpers.message('Un lieu est requis pour un entretien presentiel.');
-  }
-  return value;
-}, 'Coherence type/lieu-lien');
+    .messages({
+      'array.min': 'Veuillez fournir au moins un CIN',
+      'array.max': 'Vous ne pouvez pas sélectionner plus de 20 candidats',
+      'string.pattern.base': 'Format de CIN invalide (ex: AB123456)'
+    }),
+  date: Joi.date().min('now').required().messages({
+    'date.min': 'La date doit être dans le futur'
+  }),
+  heure: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required().messages({
+    'string.pattern.base': 'Format d\'heure invalide (HH:mm)'
+  }),
+  duree: Joi.number().min(15).max(180).default(30),
+  type: Joi.string().valid('presentiel', 'visio', 'telephonique').required(),
+  lieu: Joi.when('type', {
+    is: 'presentiel',
+    then: Joi.string().required().messages({
+      'any.required': 'Le lieu est requis pour un entretien présentiel'
+    }),
+    otherwise: Joi.string().allow('', null)
+  }),
+  lienVisio: Joi.when('type', {
+    is: 'visio',
+    then: Joi.string().uri().required().messages({
+      'any.required': 'Le lien visio est requis',
+      'string.uri': 'URL invalide'
+    }),
+    otherwise: Joi.string().allow('', null)
+  }),
+  commentaires: Joi.string().allow('', null).max(1000)
+});
 
 const updateInterviewSchema = Joi.object({
   date: Joi.date(),
@@ -238,7 +256,7 @@ const departmentMemberSchema = Joi.object({
 });
 
 
-// ✅ NOUVEAU SCHEMA : Accepte role (nom) ET departementNom
+// NOUVEAU SCHEMA : Accepte role (nom) ET departementNom
 const createInternalUserSchema = Joi.object({
   nom: Joi.string().trim().min(2).max(60).required(),
   prenom: Joi.string().trim().min(2).max(60).required(),
@@ -250,15 +268,12 @@ const createInternalUserSchema = Joi.object({
     .pattern(PHONE_RE)
     .allow(null, '')
     .messages({ 'string.pattern.base': PHONE_MESSAGE }),
-  // ✅ Accepter role (nom) au lieu de roleId
   role: Joi.string().trim().optional(),
   roleId: Joi.string().hex().length(24).optional(),
-  // ✅ Accepter departementNom (nom) au lieu de departementId
   departementNom: Joi.string().trim().optional().allow(null, ''),
   departementId: Joi.string().hex().length(24).allow(null).optional(),
   actif: Joi.boolean().default(true),
 }).custom((value, helpers) => {
-  // ✅ Vérifier qu'au moins role OU roleId est fourni
   if (!value.role && !value.roleId) {
     return helpers.message('Le champ "role" est requis (ex: "Encadrant")');
   }

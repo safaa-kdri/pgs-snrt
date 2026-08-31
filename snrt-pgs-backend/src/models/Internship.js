@@ -1,14 +1,15 @@
 // src/models/Internship.js
-// ✅ CORRECTION : Ajout du champ convention pour la gestion des conventions
-// ✅ CORRECTION : encadrantId devient optionnel
-// ✅ AJOUT : Statuts supplémentaires pour le workflow (EngagementValide, EngagementRejete)
-// ✅ AJOUT : Sous-document convention avec tous les champs nécessaires
+// CORRECTION : Ajout du champ convention pour la gestion des conventions
+// CORRECTION : encadrantId devient optionnel
+// AJOUT : Statuts supplémentaires pour le workflow (EngagementValide, EngagementRejete)
+// AJOUT : Sous-document convention avec tous les champs nécessaires
+// AJOUT : gridFsId dans le schéma livrables
 
 const mongoose = require('mongoose');
 const BaseSchema = require('./BaseModel');
 
 // ============================================
-// ✅ SCHEMA DE LA CONVENTION
+// SCHEMA DE LA CONVENTION
 // ============================================
 const ConventionSchema = new mongoose.Schema({
     nomOriginal: {
@@ -33,6 +34,22 @@ const ConventionSchema = new mongoose.Schema({
     },
     taille: {
         type: Number
+    },
+    gridFsId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null
+    },
+    cheminSignee: {
+        type: String,
+        default: null
+    },
+    urlSignee: {
+        type: String,
+        default: null
+    },
+    url: {
+        type: String,
+        default: null
     },
     dateDepot: {
         type: Date,
@@ -67,6 +84,13 @@ const ConventionSchema = new mongoose.Schema({
         },
         signatureData: {
             type: String
+        },
+        position: {
+            x: { type: Number, default: 50 },
+            y: { type: Number, default: 280 },
+            width: { type: Number, default: 150 },
+            height: { type: Number, default: 60 },
+            page: { type: Number, default: 0 }
         }
     }
 }, {
@@ -74,7 +98,7 @@ const ConventionSchema = new mongoose.Schema({
 });
 
 // ============================================
-// ✅ SCHEMA PRINCIPAL INTERNSHIP
+// SCHEMA PRINCIPAL INTERNSHIP
 // ============================================
 const InternshipSchema = new mongoose.Schema({
     dateDebut: {
@@ -152,17 +176,35 @@ const InternshipSchema = new mongoose.Schema({
         default: null
     },
     
-    // Livrables
+    // Livrables avec gridFsId
     livrables: [{
-        nom: String,
+        _id: {
+            type: mongoose.Schema.Types.ObjectId,
+            auto: true
+        },
+        nom: {
+            type: String
+        },
         type: {
             type: String,
             enum: ['Rapport', 'Presentation', 'Autre']
         },
-        chemin: String,
-        dateDepot: Date,
-        valide: { type: Boolean, default: false },
-        commentaire: String
+        chemin: {
+            type: String
+        },
+        gridFsId: {
+            type: mongoose.Schema.Types.ObjectId
+        },
+        dateDepot: {
+            type: Date
+        },
+        valide: {
+            type: Boolean,
+            default: false
+        },
+        commentaire: {
+            type: String
+        }
     }],
     
     remarquesEncadrant: [{
@@ -188,7 +230,7 @@ const InternshipSchema = new mongoose.Schema({
         }]
     },
 
-    // ✅ AJOUT : CHAMP CONVENTION
+    // AJOUT : CHAMP CONVENTION
     convention: {
         type: ConventionSchema,
         default: null
@@ -198,14 +240,13 @@ const InternshipSchema = new mongoose.Schema({
 });
 
 // ============================================
-// ✅ INDEX POUR LES RECHERCHES
+// INDEX POUR LES RECHERCHES
 // ============================================
 InternshipSchema.add(BaseSchema);
 
 InternshipSchema.index({ etudiantId: 1 });
 InternshipSchema.index({ encadrantId: 1 });
 InternshipSchema.index({ statut: 1 });
-// ✅ INDEX POUR LA RECHERCHE DES CONVENTIONS
 InternshipSchema.index({ 'convention.statut': 1 });
 InternshipSchema.index({ 'convention.dateDepot': -1 });
 

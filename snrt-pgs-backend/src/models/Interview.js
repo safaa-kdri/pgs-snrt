@@ -1,10 +1,15 @@
 const mongoose = require('mongoose');
 const { INTERVIEW_TYPES, INTERVIEW_RESULTS } = require('../config/constants');
 
-
 const interviewSchema = new mongoose.Schema(
   {
-    applicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Application', required: true },
+    // Tableau de candidatures (remplace applicationId)
+    applicationIds: [{ 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Application', 
+      required: true 
+    }],
+    
     planificateurId: { type: mongoose.Schema.Types.ObjectId, ref: 'UtilisateurInterne', required: true },
 
     date: { type: Date, required: true },
@@ -14,7 +19,6 @@ const interviewSchema = new mongoose.Schema(
     lienVisio: { type: String, default: null },
     type: { type: String, enum: INTERVIEW_TYPES, required: true },
 
-   
     commentaires: { type: String, default: null },
     resultat: { type: String, enum: INTERVIEW_RESULTS, default: 'EnAttente' },
 
@@ -27,7 +31,8 @@ const interviewSchema = new mongoose.Schema(
   { timestamps: true, collection: 'interviews' }
 );
 
-interviewSchema.index({ applicationId: 1 });
+interviewSchema.index({ applicationIds: 1 });
+
 interviewSchema.index({ date: 1 });
 
 module.exports = mongoose.model('Interview', interviewSchema);

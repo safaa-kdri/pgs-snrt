@@ -1,5 +1,5 @@
 // src/middlewares/auth.js
-// ✅ CORRECTION : Accepter le token depuis le cookie OU le header Authorization
+//  CORRECTION : Accepter le token depuis le cookie OU le header Authorization
 
 const rateLimit = require('express-rate-limit');
 const ApiError = require('../utils/ApiError');
@@ -13,44 +13,29 @@ const { ROLES } = require('../config/constants');
 function authenticate() {
   return async (req, res, next) => {
     try {
-      // ✅ 1. Essayer depuis le cookie
+      //  1. Essayer depuis le cookie
       let token = req.cookies?.accessToken;
       
-      // ✅ 2. Si pas dans le cookie, essayer depuis le header Authorization
+      //  2. Si pas dans le cookie, essayer depuis le header Authorization
       if (!token) {
         const authHeader = req.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
           token = authHeader.substring(7);
-          console.log('🔍 [authenticate] Token trouvé dans le header Authorization');
         }
       }
       
-      console.log('🔍 [authenticate] Token présent:', !!token);
-      
       if (!token) {
-        console.log('❌ [authenticate] Token manquant');
         throw ApiError.unauthorized('Authentification requise.');
       }
 
       const payload = verifyAccessToken(token);
       if (!payload) {
-        console.log('❌ [authenticate] Payload invalide');
         throw ApiError.unauthorized('Session invalide ou expiree.');
       }
 
-      console.log('🔍 [authenticate] Payload:', {
-        sub: payload.sub,
-        userType: payload.userType,
-        role: payload.role,
-        departementId: payload.departementId
-      });
-
       const user = await userLookup.findById(payload.sub, payload.userType);
       
-      console.log('🔍 [authenticate] Utilisateur trouvé:', !!user);
-      
       if (!user || !user.actif) {
-        console.log('❌ [authenticate] Utilisateur introuvable ou désactivé');
         throw ApiError.unauthorized('Compte introuvable ou desactive.');
       }
 
@@ -65,15 +50,8 @@ function authenticate() {
         email: user.email,
       };
 
-      console.log('✅ [authenticate] Utilisateur authentifié:', {
-        id: req.user.id,
-        role: req.user.role,
-        departementId: req.user.departementId
-      });
-
       return next();
     } catch (err) {
-      console.log('❌ [authenticate] Erreur:', err.message);
       return next(err);
     }
   };
@@ -85,10 +63,10 @@ function authenticate() {
 function optionalAuthenticate() {
   return async (req, res, next) => {
     try {
-      // ✅ 1. Essayer depuis le cookie
+      //  1. Essayer depuis le cookie
       let token = req.cookies?.accessToken;
       
-      // ✅ 2. Si pas dans le cookie, essayer depuis le header Authorization
+      //  2. Si pas dans le cookie, essayer depuis le header Authorization
       if (!token) {
         const authHeader = req.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -115,11 +93,6 @@ function optionalAuthenticate() {
         email: user.email,
       };
 
-      console.log('✅ [optionalAuthenticate] Utilisateur authentifié optionnellement:', {
-        id: req.user.id,
-        role: req.user.role
-      });
-
       return next();
     } catch (err) {
       return next();
@@ -133,37 +106,28 @@ function optionalAuthenticate() {
 function authorize(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) {
-      console.log('❌ [authorize] Utilisateur non authentifié');
       return next(ApiError.unauthorized());
     }
 
     const userRole = req.user.role;
-    
-    console.log('🔍 [authorize] Rôle utilisateur:', userRole);
-    console.log('🔍 [authorize] Rôles autorisés:', allowedRoles);
-    console.log('🔍 [authorize] Rôle utilisateur exact:', JSON.stringify(userRole));
 
-    // ✅ Si aucun rôle n'est spécifié, autoriser tout le monde
+    //  Si aucun rôle n'est spécifié, autoriser tout le monde
     if (allowedRoles.length === 0) {
-      console.log('✅ [authorize] Aucun rôle requis, accès autorisé');
       return next();
     }
 
-    // ✅ Vérifier si l'utilisateur a un rôle
+    //  Vérifier si l'utilisateur a un rôle
     if (!userRole) {
-      console.log('❌ [authorize] Utilisateur sans rôle');
       return next(ApiError.forbidden('Aucun rôle associé à cet utilisateur'));
     }
 
-    // ✅ Vérifier si le rôle de l'utilisateur est dans la liste autorisée
+    //  Vérifier si le rôle de l'utilisateur est dans la liste autorisée
     const hasRole = allowedRoles.some(role => role === userRole);
     
     if (!hasRole) {
-      console.log(`❌ [authorize] Rôle ${userRole} non autorisé. Rôles acceptés: ${allowedRoles.join(', ')}`);
       return next(ApiError.forbidden(`Vous n'avez pas les droits necessaires pour cette action. Rôle requis: ${allowedRoles.join(', ')}`));
     }
 
-    console.log(`✅ [authorize] Rôle ${userRole} autorisé`);
     return next();
   };
 }
@@ -174,7 +138,7 @@ function authorize(...allowedRoles) {
 function isOwner(req, resourceUserId) {
   if (!req.user) return false;
   
-  // ✅ Les admins, RH et départements ont accès à tout
+  //  Les admins, RH et départements ont accès à tout
   const adminRoles = [ROLES.ADMIN, ROLES.RH, ROLES.DEPARTEMENT];
   if (adminRoles.includes(req.user.role)) return true;
   
@@ -231,7 +195,7 @@ module.exports = {
   authorize,
   requireAuth,
   requireRole,
-  isOwner, // ✅ EXPORTÉ
+  isOwner,
   loginLimiter,
   registerLimiter,
   twoFactorLimiter,

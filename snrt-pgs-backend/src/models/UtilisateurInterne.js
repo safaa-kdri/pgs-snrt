@@ -67,6 +67,7 @@ const utilisateurInterneSchema = new mongoose.Schema(
     },
 
     derniereConnexion: { type: Date, default: null },
+    signature: { type: String, default: null },
   },
   { timestamps: true, collection: 'utilisateurs_internes' }
 );

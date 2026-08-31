@@ -88,7 +88,9 @@ api.interceptors.response.use(
 // ============================================
 api.interceptors.request.use(
     (config) => {
-        console.log(`📤 [API] ${config.method?.toUpperCase() || 'GET'} ${config.baseURL}${config.url}`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`📤 [API] ${config.method?.toUpperCase() || 'GET'} ${config.baseURL}${config.url}`);
+        }
         return config;
     },
     (error) => {

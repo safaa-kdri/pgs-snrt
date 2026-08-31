@@ -9,24 +9,24 @@ const connectDB = async () => {
             socketTimeoutMS: 45000,
         });
 
-        logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);
-        logger.info(`📚 Database: ${conn.connection.name}`);
+        logger.info(`MongoDB Connected: ${conn.connection.host}`);
+        logger.info(`Database: ${conn.connection.name}`);
 
         mongoose.connection.on('connected', () => {
-            logger.info('✅ MongoDB connection established');
+            logger.info('MongoDB connection established');
         });
 
         mongoose.connection.on('disconnected', () => {
-            logger.warn('⚠️ MongoDB connection lost');
+            logger.warn('MongoDB connection lost');
         });
 
         mongoose.connection.on('error', (err) => {
-            logger.error(`❌ MongoDB connection error: ${err}`);
+            logger.error(`MongoDB connection error: ${err}`);
         });
 
         return conn;
     } catch (error) {
-        logger.error(`❌ MongoDB Connection Error: ${error.message}`);
+        logger.error(`MongoDB Connection Error: ${error.message}`);
         process.exit(1);
     }
 };

@@ -241,22 +241,13 @@ const RhDashboard = () => {
         setError('');
         try {
             const response = await api.get('/dashboard/rh');
-            
-            console.log('📥 Dashboard RH - Réponse brute:', response.data);
-            
             const data = response.data?.data || response.data || {};
-            
             const offres = data.offres || {};
             const candidatures = data.candidatures || {};
             const stages = data.stages || {};
-            
+
             // ✅ Calcul correct de "enAttente" = soumises + enAnalyse
             const enAttente = (candidatures.soumises || 0) + (candidatures.enAnalyse || 0);
-            
-            console.log('📥 enAttente calculé:', enAttente);
-            console.log('📥 soumises:', candidatures.soumises);
-            console.log('📥 enAnalyse:', candidatures.enAnalyse);
-            
             const totalCandidatures = candidatures.total || 0;
             const acceptees = candidatures.acceptees || 0;
             const refusees = candidatures.refusees || 0;

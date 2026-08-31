@@ -57,15 +57,11 @@ const listOffers = asyncHandler(async (req, res) => {
   const { statut, typeStage, departementId, periodeId, search, date, page = 1, limit = 20 } = req.query;
   const filter = {};
 
-  console.log('[listOffers] Parametres recus:', { statut, typeStage, departementId, periodeId, search, date, page, limit });
-
   // Si l'utilisateur est un etudiant ou non connecte, exclure les offres avec resultats
   if (!req.user || req.user.role === ROLES.ETUDIANT) {
     filter.statut = OFFER_STATUS.PUBLIEE;
-    // Ne pas afficher les offres avec resultats publies dans l'onglet Offres
     filter.resultatsPublies = { $ne: true };
   } else if (statut) {
-    // Pour le RH, si statut specifique, inclure ResultatsPublies
     if (statut === 'ResultatsPublies') {
       filter.resultatsPublies = true;
     } else {
@@ -79,7 +75,6 @@ const listOffers = asyncHandler(async (req, res) => {
   
   if (search) {
     filter.$text = { $search: search };
-    console.log('[listOffers] Recherche textuelle:', search);
   }
 
   if (date) {
@@ -88,10 +83,7 @@ const listOffers = asyncHandler(async (req, res) => {
       { dateLimiteCandidature: { $lte: searchDate } },
       { dateDebut: { $lte: searchDate }, dateFin: { $gte: searchDate } }
     ];
-    console.log('[listOffers] Recherche par date:', date);
   }
-
-  console.log('[listOffers] Filter final:', JSON.stringify(filter, null, 2));
 
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
@@ -153,9 +145,6 @@ const listOffers = asyncHandler(async (req, res) => {
     return 0;
   });
 
-  console.log(`[listOffers] ${sortedOffers.length} offres trouvees sur ${total}`);
-  console.log('[listOffers] Tri : Publiees > Disponibles > Recentes');
-
   return res.status(200).json({
     success: true,
     offers: sortedOffers,
@@ -175,7 +164,6 @@ const getOfferById = asyncHandler(async (req, res) => {
     
   if (!offer) throw ApiError.notFound('Offre introuvable.');
 
-  // Verifier que l'etudiant ne voit que les offres publiees sans resultats
   if ((!req.user || req.user.role === ROLES.ETUDIANT)) {
     if (offer.statut !== OFFER_STATUS.PUBLIEE || offer.resultatsPublies === true) {
       throw ApiError.notFound('Offre introuvable.');
@@ -341,7 +329,7 @@ const uploadConcoursDocument = asyncHandler(async (req, res) => {
     await Promise.all(
       replacedDocs.map((doc) =>
         storageService.deletePhysicalFile(doc).catch((err) => {
-          logger.warn(`[Offer] Fichier de concours remplace non supprime du disque (${doc.chemin}): ${err.message}`);
+          logger.warn(`Fichier de concours remplace non supprime du disque (${doc.chemin}): ${err.message}`);
         })
       )
     );
@@ -376,7 +364,7 @@ const deleteConcoursDocument = asyncHandler(async (req, res) => {
   await offer.save();
 
   await storageService.deletePhysicalFile(docToDelete).catch((err) => {
-    logger.warn(`[Offer] Fichier de concours supprime non retire du disque (${docToDelete.chemin}): ${err.message}`);
+    logger.warn(`Fichier de concours supprime non retire du disque (${docToDelete.chemin}): ${err.message}`);
   });
 
   logger.audit('OFFER_CONCOURS_DOCUMENT_DELETED', {
@@ -469,10 +457,9 @@ const getOfferResults = asyncHandler(async (req, res) => {
     statut: 'Refusee'
   }).populate('etudiantId', 'nom prenom email');
 
-  // ✅ CORRECTION : Nettoyer le chemin du PDF
+  // Nettoyer le chemin du PDF
   let pdfPath = offer.resultatsPdfPath || null;
   if (pdfPath) {
-    // Nettoyer le chemin Windows si présent
     pdfPath = pdfPath.replace(/^[A-Z]:\\/i, '');
     pdfPath = pdfPath.replace(/^[A-Z]:\//i, '');
     pdfPath = pdfPath.replace(/\\/g, '/');
@@ -503,7 +490,7 @@ const getOfferResults = asyncHandler(async (req, res) => {
         dateCloture: offer.dateCloture,
         nbAcceptes: offer.nbAcceptes || acceptees.length,
         nbRefuses: offer.nbRefuses || refusees.length,
-        resultatsPdfPath: pdfPath,  // Chemin nettoyé
+        resultatsPdfPath: pdfPath,
         resultatsDescription: offer.resultatsDescription || '',
       },
       acceptees: acceptees.map(a => ({
@@ -548,7 +535,6 @@ const updateOfferResults = asyncHandler(async (req, res) => {
 
     // Si le PDF n'a pas encore ete genere, le generer
     if (!offer.resultatsPdfPath) {
-        // Recuperer les candidats acceptes
         const acceptees = await Application.find({
             offreId: offer._id,
             statut: 'Acceptee'
@@ -566,14 +552,10 @@ const updateOfferResults = asyncHandler(async (req, res) => {
 
         const pdfPath = await pdfService.generateResultatsStage(resultatData);
         
-        // Stocker le chemin relatif (pas le chemin absolu)
         const relativePath = path.relative(path.join(__dirname, '../../uploads'), pdfPath);
-        // ✅ Normaliser les backslashes pour Windows
         const normalizedPath = relativePath.replace(/\\/g, '/');
         offer.resultatsPdfPath = `/uploads/${normalizedPath}`;
         await offer.save();
-        
-        console.log('[updateOfferResults] PDF genere:', offer.resultatsPdfPath);
     }
 
     logger.audit('OFFER_RESULTS_UPDATED', { 
@@ -619,7 +601,6 @@ const regenerateResultsPdf = asyncHandler(async (req, res) => {
 
     const pdfPath = await pdfService.generateResultatsStage(resultatData);
     
-    // ✅ Normaliser les backslashes pour Windows
     const relativePath = path.relative(path.join(__dirname, '../../uploads'), pdfPath);
     const normalizedPath = relativePath.replace(/\\/g, '/');
     offer.resultatsPdfPath = `/uploads/${normalizedPath}`;

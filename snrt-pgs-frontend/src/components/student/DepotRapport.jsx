@@ -1,6 +1,6 @@
 // src/components/student/DepotRapport.jsx
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
     Box, Container, Paper, Typography, Button, Alert, CircularProgress, Card, Grid
 } from '@mui/material';
@@ -18,12 +18,19 @@ const DepotContainer = styled(Box)({
 const DepotRapport = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { internshipId: routeInternshipId } = useParams();
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [internshipId, setInternshipId] = useState(null);
+    const [internshipId, setInternshipId] = useState(routeInternshipId || null);
+
+    useEffect(() => {
+        if (routeInternshipId) {
+            setInternshipId(routeInternshipId);
+        }
+    }, [routeInternshipId]);
 
     const handleFileChange = (e) => {
         const selected = e.target.files[0];
@@ -45,17 +52,23 @@ const DepotRapport = () => {
         setError('');
         
         try {
-            const formData = new FormData();
-            formData.append('document', file);
+            if (!internshipId) {
+                throw new Error('Identifiant du stage introuvable');
+            }
 
-            const response = await api.post('/internships/upload-rapport', formData, {
+            const formData = new FormData();
+            formData.append('livrable', file);
+            formData.append('type', 'Rapport');
+            formData.append('nom', 'Rapport de stage');
+
+            const response = await api.post(`/internships/${internshipId}/livrables`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             setSuccess('Rapport de stage déposé avec succès');
             setSubmitted(true);
             if (response.data?.data?._id) {
-                setInternshipId(response.data.data._id);
+                setInternshipId(internshipId);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Erreur lors du dépôt du rapport');

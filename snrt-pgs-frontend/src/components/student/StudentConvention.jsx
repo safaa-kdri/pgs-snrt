@@ -1,7 +1,5 @@
 // src/components/student/StudentConvention.jsx
-// ✅ Composant : Gestion de la convention (dépôt, suivi, téléchargement)
-// ✅ CORRIGÉ : Gestion du statut "NonGeneree" comme "pas de convention"
-// ✅ CORRIGÉ : Bouton de dépôt visible quand aucune convention n'existe
+// ✅ VERSION SANS REDONDANCE - UN SEUL MESSAGE DE STATUT
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,71 +9,92 @@ import {
     Alert,
     CircularProgress,
     Divider,
-    Chip,
-    Stepper,
-    Step,
-    StepLabel,
     Paper,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
     CloudUpload,
-    CheckCircle,
     Download,
-    Pending,
-    Check,
+    Visibility,
     PictureAsPdf,
 } from '@mui/icons-material';
 import api from '../../services/api';
 
 // ============================================
-// STYLES
+// STYLES MINIMALISTES
 // ============================================
 
-const DropZone = styled(Box)({
-    border: '2px dashed #d1d5db',
-    borderRadius: '12px',
-    padding: '32px',
-    textAlign: 'center',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    backgroundColor: '#fafafa',
-    '&:hover': {
-        borderColor: '#148aa0',
-        backgroundColor: '#f0f7fa',
-    },
+const Container = styled(Box)({
+    maxWidth: '100%',
 });
 
-const FileInfo = styled(Paper)({
+const SectionTitle = styled(Typography)({
+    fontWeight: 600,
+    fontSize: '16px',
+    color: '#0f172a',
+    marginBottom: '16px',
+});
+
+const StatusMessage = styled(Typography)({
+    fontSize: '14px',
+    color: '#0f172a',
+    fontWeight: 500,
+    marginBottom: '4px',
+});
+
+const StatusDescription = styled(Typography)({
+    fontSize: '13px',
+    color: '#64748b',
+    marginBottom: '16px',
+});
+
+const FileCard = styled(Paper)({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    boxShadow: 'none',
+    backgroundColor: '#fafbfc',
+    marginTop: '12px',
+    flexWrap: 'wrap',
+    gap: '12px',
+});
+
+const FileInfo = styled(Box)({
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    padding: '12px 16px',
-    backgroundColor: '#f7f7f7',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
-    boxShadow: 'none',
 });
 
-const StatusChip = styled(Chip)(({ status }) => {
-    const colors = {
-        'DeposeeEtudiant': { bg: '#fef3c7', text: '#d97706' },
-        'SigneeRH': { bg: '#dbeafe', text: '#1d4ed8' },
-        'EnvoyeeEtudiant': { bg: '#d1fae5', text: '#065f46' },
-        'Cloturee': { bg: '#d1fae5', text: '#065f46' },
-    };
-    const color = colors[status] || colors['DeposeeEtudiant'];
-    return {
-        backgroundColor: color.bg,
-        color: color.text,
-        fontWeight: 500,
-        fontSize: '12px',
-        height: '28px',
-    };
+const FileName = styled(Typography)({
+    fontSize: '14px',
+    fontWeight: 500,
+    color: '#0f172a',
+});
+
+const FileSize = styled(Typography)({
+    fontSize: '12px',
+    color: '#94a3b8',
+});
+
+const ActionGroup = styled(Box)({
+    display: 'flex',
+    gap: '8px',
+});
+
+const ActionButton = styled(Button)({
+    textTransform: 'none',
+    borderRadius: '8px',
+    fontWeight: 500,
+    fontSize: '13px',
+    padding: '6px 16px',
+    minWidth: 'unset',
 });
 
 // ============================================
-// COMPOSANT
+// COMPOSANT PRINCIPAL
 // ============================================
 
 const StudentConvention = ({ internshipId }) => {
@@ -87,26 +106,20 @@ const StudentConvention = ({ internshipId }) => {
     const [file, setFile] = useState(null);
     const [status, setStatus] = useState('');
 
-    const steps = ['Déposer la convention', 'Signée par RH', 'Convention finalisée'];
-
     useEffect(() => {
         if (internshipId) {
             fetchConventionStatus();
         }
     }, [internshipId]);
 
-    // ✅ Récupérer le statut de la convention pour CE stage spécifique
     const fetchConventionStatus = async () => {
         setLoading(true);
         setError('');
         try {
             const response = await api.get(`/internships/${internshipId}/convention`);
-            console.log('🔍 [fetchConventionStatus] Réponse:', response.data);
-            
             const data = response.data?.data;
             if (data) {
                 setConvention(data);
-                // ✅ Si le statut est "NonGeneree" ou vide, on considère qu'il n'y a pas de convention
                 const statut = data.statut || '';
                 if (statut === 'NonGeneree' || statut === '') {
                     setStatus('');
@@ -126,8 +139,7 @@ const StudentConvention = ({ internshipId }) => {
                 setFile(null);
             }
         } catch (error) {
-            console.error('❌ Erreur chargement statut convention:', error);
-            // Si 404, c'est normal (pas encore de convention)
+            console.error('Erreur chargement statut convention:', error);
             if (error.response?.status === 404) {
                 setStatus('');
                 setConvention(null);
@@ -142,7 +154,7 @@ const StudentConvention = ({ internshipId }) => {
 
     const handleFileSelect = (selectedFile) => {
         if (!selectedFile) return;
-        
+
         if (selectedFile.type !== 'application/pdf') {
             setError('Seuls les fichiers PDF sont acceptés');
             return;
@@ -157,25 +169,6 @@ const StudentConvention = ({ internshipId }) => {
         setError('');
     };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        e.currentTarget.classList.remove('dragging');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFileSelect(files[0]);
-        }
-    };
-
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        e.currentTarget.classList.add('dragging');
-    };
-
-    const handleDragLeave = (e) => {
-        e.currentTarget.classList.remove('dragging');
-    };
-
-    // ✅ Déposer la convention pour CE stage spécifique
     const handleUpload = async () => {
         if (!file) {
             setError('Veuillez sélectionner un fichier');
@@ -185,7 +178,7 @@ const StudentConvention = ({ internshipId }) => {
         setUploading(true);
         setError('');
         setSuccess('');
-        
+
         try {
             const formData = new FormData();
             formData.append('convention', file);
@@ -194,33 +187,47 @@ const StudentConvention = ({ internshipId }) => {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            console.log('✅ [handleUpload] Réponse:', response.data);
-
-            setSuccess('✅ Convention déposée avec succès ! En attente de signature RH.');
+            setSuccess('Convention déposée avec succès.');
             setStatus('DeposeeEtudiant');
             setConvention(response.data?.data);
             setFile(null);
-            
-            // Recharger le statut
             await fetchConventionStatus();
-            
             setTimeout(() => setSuccess(''), 5000);
         } catch (error) {
-            console.error('❌ Erreur dépôt convention:', error);
+            console.error('Erreur dépôt convention:', error);
             setError(error.response?.data?.message || 'Erreur lors du dépôt');
         } finally {
             setUploading(false);
         }
     };
 
-    // ✅ Télécharger la convention signée pour CE stage
+    const openConventionPdf = async () => {
+        try {
+            const response = await api.get(`/internships/${internshipId}/convention/download`, { responseType: 'blob' });
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
+            const type = blob.type || response.headers?.['content-type'] || '';
+            if (!type.includes('pdf')) {
+                throw new Error('La réponse serveur n’est pas un PDF valide');
+            }
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank', 'noopener,noreferrer');
+            setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+            setError('');
+        } catch (error) {
+            console.error('Erreur consultation:', error);
+            setError(error.response?.data?.message || 'Erreur lors de l’ouverture du PDF');
+        }
+    };
+
     const handleDownloadConvention = async () => {
         try {
-            const response = await api.get(`/internships/${internshipId}/convention/download`, {
-                responseType: 'blob',
-            });
-            
-            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const response = await api.get(`/internships/${internshipId}/convention/download`, { responseType: 'blob' });
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
+            const type = blob.type || response.headers?.['content-type'] || '';
+            if (!type.includes('pdf')) {
+                throw new Error('La réponse serveur n’est pas un PDF valide');
+            }
+            const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.setAttribute('download', `Convention_Stage_${internshipId}.pdf`);
@@ -228,90 +235,52 @@ const StudentConvention = ({ internshipId }) => {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
+            setError('');
         } catch (error) {
-            console.error('❌ Erreur téléchargement:', error);
-            setError('Erreur lors du téléchargement');
+            console.error('Erreur téléchargement:', error);
+            setError(error.response?.data?.message || 'Erreur lors du téléchargement');
         }
     };
 
-    const getActiveStep = () => {
-        if (!status) return 0;
-        switch (status) {
-            case 'DeposeeEtudiant': return 0;
-            case 'SigneeRH': return 1;
-            case 'EnvoyeeEtudiant': return 1;
-            case 'Cloturee': return 2;
-            default: return 0;
-        }
-    };
-
-    const getStatusMessage = () => {
-        switch (status) {
-            case 'DeposeeEtudiant':
-                return {
-                    icon: <Pending sx={{ color: '#d97706', fontSize: 32 }} />,
-                    title: 'En attente de signature RH',
-                    description: 'Votre convention a été déposée. Le RH va la signer prochainement.',
-                };
-            case 'SigneeRH':
-                return {
-                    icon: <Pending sx={{ color: '#1d4ed8', fontSize: 32 }} />,
-                    title: 'Convention signée par RH',
-                    description: 'La convention a été signée par le RH. Elle va vous être envoyée.',
-                };
-            case 'EnvoyeeEtudiant':
-                return {
-                    icon: <Check sx={{ color: '#065f46', fontSize: 32 }} />,
-                    title: 'Convention envoyée',
-                    description: 'La convention signée vous a été envoyée. Vous pouvez la télécharger ci-dessous.',
-                };
-            case 'Cloturee':
-                return {
-                    icon: <CheckCircle sx={{ color: '#22c55e', fontSize: 32 }} />,
-                    title: 'Convention clôturée',
-                    description: 'Le processus de convention est terminé.',
-                };
-            default:
-                return {
-                    icon: <Pending sx={{ color: '#6b7280', fontSize: 32 }} />,
-                    title: 'En attente de dépôt',
-                    description: 'Déposez votre convention signée par votre établissement.',
-                };
-        }
+    // ✅ Messages uniques et clairs (sans redondance)
+    const getStatusDisplay = (s) => {
+        const statusMap = {
+            'DeposeeEtudiant': {
+                message: 'Votre convention a été déposée. Le service RH va la vérifier et la signer.'
+            },
+            'SigneeRH': {
+                message: 'La convention a été signée par le service RH.'
+            },
+            'EnvoyeeEtudiant': {
+                message: 'La convention signée vous a été envoyée. Vous pouvez la consulter ci-dessous.'
+            },
+            'Cloturee': {
+                message: 'Le processus de convention est terminé.'
+            },
+        };
+        return statusMap[s] || { 
+            message: 'Déposez votre convention signée par votre établissement.'
+        };
     };
 
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress size={32} sx={{ color: '#148aa0' }} />
+                <CircularProgress size={28} sx={{ color: '#0f766e' }} />
             </Box>
         );
     }
 
-    const statusInfo = getStatusMessage();
-    // ✅ Une convention peut être déposée si :
-    // - Pas de statut (pas de convention)
-    // - Statut "NonGeneree" (pas de convention)
-    // - Statut vide
     const hasValidConvention = status && status !== '' && status !== 'NonGeneree';
     const isDeposable = !hasValidConvention;
-    const canDownload = status === 'EnvoyeeEtudiant' || status === 'Cloturee';
+    const statusDisplay = getStatusDisplay(status);
 
     return (
-        <Box>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#1a2332' }}>
-                📄 Convention de stage
-            </Typography>
+        <Container>
+            {/* ===== TITRE ===== */}
+            <SectionTitle>Convention de stage</SectionTitle>
 
-            {/* Stepper */}
-            <Stepper activeStep={getActiveStep()} sx={{ mb: 4 }}>
-                {steps.map((label) => (
-                    <Step key={label}>
-                        <StepLabel>{label}</StepLabel>
-                    </Step>
-                ))}
-            </Stepper>
-
+            {/* ===== ALERTS ===== */}
             {error && (
                 <Alert severity="error" sx={{ mb: 2, borderRadius: '8px' }} onClose={() => setError('')}>
                     {error}
@@ -323,51 +292,57 @@ const StudentConvention = ({ internshipId }) => {
                 </Alert>
             )}
 
-            {/* Statut */}
-            <Box sx={{ mb: 3, p: 3, backgroundColor: '#f7f7f7', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box>{statusInfo.icon}</Box>
-                <Box>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                        {statusInfo.title}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        {statusInfo.description}
-                    </Typography>
-                    {hasValidConvention && (
-                        <Box sx={{ mt: 1 }}>
-                            <StatusChip label={status} status={status} size="small" />
-                        </Box>
-                    )}
-                </Box>
-            </Box>
+            {/* ===== UN SEUL MESSAGE DE STATUT ===== */}
+            <StatusMessage>{statusDisplay.message}</StatusMessage>
 
-            <Divider sx={{ my: 3 }} />
+            <Divider sx={{ mb: 3 }} />
 
-            {/* ✅ ZONE DE DÉPÔT - Affichée si aucune convention valide n'existe */}
+            {/* ===== DÉPÔT ===== */}
             {isDeposable ? (
-                <>
-                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                        📤 Déposer votre convention
+                <Box>
+                    <Typography variant="body2" color="#64748b" sx={{ mb: 2 }}>
+                        PDF uniquement · 5 Mo maximum
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Sélectionnez le fichier PDF de votre convention signée par votre établissement.
-                    </Typography>
-                    
-                    <DropZone
-                        onDrop={handleDrop}
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onClick={() => document.getElementById('convention-file-input')?.click()}
-                    >
-                        <CloudUpload sx={{ fontSize: 48, color: '#148aa0', mb: 2 }} />
-                        <Typography variant="h6" sx={{ color: '#1a2332' }}>
-                            {file ? 'Fichier sélectionné' : 'Déposez votre convention ici'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {file
-                                ? `📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} Mo)`
-                                : 'Glissez-déposez ou cliquez pour sélectionner un fichier PDF'}
-                        </Typography>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<CloudUpload />}
+                            onClick={() => document.getElementById('convention-file-input')?.click()}
+                            sx={{
+                                borderRadius: '8px',
+                                textTransform: 'none',
+                                borderColor: '#cbd5e1',
+                                color: '#0f172a',
+                                fontWeight: 500,
+                                '&:hover': { borderColor: '#0f766e', backgroundColor: '#f0fdfa' },
+                            }}
+                        >
+                            {file ? 'Changer le fichier' : 'Sélectionner un fichier'}
+                        </Button>
+
+                        {file && (
+                            <>
+                                <Typography variant="body2" color="#0f172a" sx={{ fontWeight: 500 }}>
+                                    {file.name} ({(file.size / 1024 / 1024).toFixed(2)} Mo)
+                                </Typography>
+                                <Button
+                                    variant="contained"
+                                    onClick={handleUpload}
+                                    disabled={uploading}
+                                    sx={{
+                                        backgroundColor: '#0f766e',
+                                        borderRadius: '8px',
+                                        textTransform: 'none',
+                                        fontWeight: 500,
+                                        '&:hover': { backgroundColor: '#115e59' },
+                                    }}
+                                >
+                                    {uploading ? <CircularProgress size={20} color="inherit" /> : 'Déposer'}
+                                </Button>
+                            </>
+                        )}
+
                         <input
                             id="convention-file-input"
                             type="file"
@@ -375,77 +350,46 @@ const StudentConvention = ({ internshipId }) => {
                             hidden
                             onChange={(e) => handleFileSelect(e.target.files?.[0])}
                         />
-                    </DropZone>
-
-                    {file && (
-                        <FileInfo sx={{ mt: 2 }}>
-                            <Box sx={{ flex: 1 }}>
-                                <Typography variant="body2" fontWeight={500}>
-                                    {file.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {(file.size / 1024 / 1024).toFixed(2)} Mo • Prêt à déposer
-                                </Typography>
-                            </Box>
-                            <Button
-                                variant="contained"
-                                onClick={handleUpload}
-                                disabled={uploading}
-                                sx={{
-                                    backgroundColor: '#148aa0',
-                                    borderRadius: '8px',
-                                    textTransform: 'none',
-                                    '&:hover': { backgroundColor: '#0b7890' },
-                                }}
-                            >
-                                {uploading ? <CircularProgress size={20} color="inherit" /> : 'Déposer'}
-                            </Button>
-                        </FileInfo>
-                    )}
-                </>
+                    </Box>
+                </Box>
             ) : (
-                <Box sx={{ p: 3, backgroundColor: '#f0fdf4', borderRadius: '12px', textAlign: 'center' }}>
-                    <CheckCircle sx={{ fontSize: 40, color: '#22c55e', mb: 1 }} />
-                    <Typography variant="subtitle1" fontWeight={600} color="#065f46">
-                        Convention déjà déposée
-                    </Typography>
-                    <Typography variant="body2" color="#065f46">
-                        Vous avez déjà déposé votre convention pour ce stage. Elle est en cours de traitement.
-                    </Typography>
+                /* ===== CONVENTION DÉPOSÉE ===== */
+                <Box>
+                    <FileCard>
+                        <FileInfo>
+                            <PictureAsPdf sx={{ color: '#ef4444', fontSize: 20 }} />
+                            <Box>
+                                <FileName>Convention_Stage.pdf</FileName>
+                                <FileSize>
+                                    {convention?.taille 
+                                        ? `${(convention.taille / 1024 / 1024).toFixed(2)} Mo` 
+                                        : 'Document PDF'}
+                                </FileSize>
+                            </Box>
+                        </FileInfo>
+
+                        <ActionGroup>
+                            <ActionButton
+                                variant="outlined"
+                                startIcon={<Visibility />}
+                                onClick={openConventionPdf}
+                                sx={{ borderColor: '#cbd5e1', color: '#475569' }}
+                            >
+                                Consulter
+                            </ActionButton>
+                            <ActionButton
+                                variant="contained"
+                                startIcon={<Download />}
+                                onClick={handleDownloadConvention}
+                                sx={{ backgroundColor: '#0f766e', '&:hover': { backgroundColor: '#115e59' } }}
+                            >
+                                Télécharger
+                            </ActionButton>
+                        </ActionGroup>
+                    </FileCard>
                 </Box>
             )}
-
-            {/* Téléchargement */}
-            {canDownload && (
-                <Box sx={{ mt: 3, p: 3, backgroundColor: '#f0f7fa', borderRadius: '12px' }}>
-                    <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, color: '#1a2332' }}>
-                        📎 Convention signée disponible
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        La convention a été signée par le RH. Vous pouvez la télécharger.
-                    </Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<Download />}
-                        onClick={handleDownloadConvention}
-                        sx={{
-                            backgroundColor: '#148aa0',
-                            borderRadius: '8px',
-                            textTransform: 'none',
-                            '&:hover': { backgroundColor: '#0b7890' },
-                        }}
-                    >
-                        Télécharger la convention signée
-                    </Button>
-                </Box>
-            )}
-
-            <Divider sx={{ my: 3 }} />
-
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                <strong>📌 Format accepté :</strong> PDF uniquement • <strong>Taille max :</strong> 5 Mo
-            </Typography>
-        </Box>
+        </Container>
     );
 };
 

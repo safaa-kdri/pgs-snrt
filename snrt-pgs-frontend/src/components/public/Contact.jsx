@@ -3,8 +3,6 @@ import React from 'react';
 import {
     Typography,
     Box,
-    Container,
-    Grid,
     Button,
     Card,
     TextField,
@@ -13,64 +11,133 @@ import {
 import { styled } from '@mui/material/styles';
 
 // ============================================
-// STYLES CONTACT
+// STYLES CONTACT - Aligné avec Terms (titre centré)
 // ============================================
 
 const PageTitle = styled(Typography)({
     textAlign: 'center',
-    fontSize: '32px',
+    fontSize: '42px',
     fontWeight: 700,
     color: '#252930',
-    margin: '0 auto 10px',
-    maxWidth: '600px',
+    margin: '0 0 16px 0',
+    maxWidth: 'none',
     lineHeight: 1.2,
     fontFamily: '"Inria Sans", sans-serif',
+    '@media (max-width: 768px)': {
+        fontSize: '32px',
+        margin: '0 0 12px 0',
+    },
+    '@media (max-width: 480px)': {
+        fontSize: '24px',
+        margin: '0 0 10px 0',
+    },
 });
 
 const TitleLine = styled(Box)({
-    height: '2px',
+    height: '1px',
     background: '#0b7890',
-    width: '100%',
-    maxWidth: '500px',
-    margin: '0 auto 10px',
+    width: 'calc(100% - 10px)',
+    margin: '0 5px 0',
+    '@media (max-width: 768px)': {
+        width: 'calc(100% - 24px)',
+        margin: '0 12px 0',
+    },
+    '@media (max-width: 480px)': {
+        width: 'calc(100% - 20px)',
+        margin: '0 10px 0',
+    },
 });
 
 const ContactIntro = styled(Box)({
+    width: 'calc(100% - 10px)',
+    margin: '15px 5px 0 5px',
     textAlign: 'center',
+    '@media (max-width: 768px)': {
+        width: 'calc(100% - 24px)',
+        margin: '15px 12px 0 12px',
+    },
+    '@media (max-width: 480px)': {
+        width: 'calc(100% - 20px)',
+        margin: '15px 10px 0 10px',
+    },
 });
 
 const AgencyName = styled(Typography)({
-    margin: '8px auto 25px',
-    maxWidth: '500px',
+    margin: '0 0 4px 0',
     color: '#148aa0',
-    fontSize: '26px',
+    fontSize: '27px',
     lineHeight: 1.3,
-    fontWeight: 500,
+    fontWeight: 400,
     fontFamily: '"Inria Sans", sans-serif',
+    width: '100%',
+    textAlign: 'center',
+    display: 'block',
+    wordBreak: 'break-word',
+    overflowWrap: 'break-word',
+    '@media (max-width: 768px)': {
+        fontSize: '18px',
+        width: '100%',
+    },
+    '@media (max-width: 480px)': {
+        fontSize: '16px',
+        width: '100%',
+    },
 });
 
+
 const Address = styled(Typography)({
-    margin: '0 0 25px',
-    color: '#000',
-    fontSize: '18px',
+    margin: '48px 0 55px 0',
+    color: '#333333',
+    fontSize: '16px',
     fontFamily: '"Inria Sans", sans-serif',
+    '@media (max-width: 480px)': {
+        fontSize: '14px',
+    },
 });
 
 const ContactCard = styled(Card)({
-    maxWidth: '600px',
-    margin: '0 auto',
+    width: 'calc(100% - 10px)',
+    margin: '0 5px 0 5px',
     padding: '28px 28px 24px',
     backgroundColor: '#fbf9f9',
     borderRadius: '22px',
-    textAlign: 'center',
+    textAlign: 'left',
     boxShadow: 'none',
+    '@media (max-width: 768px)': {
+        width: 'calc(100% - 24px)',
+        margin: '0 12px 0 12px',
+    },
+    '@media (max-width: 480px)': {
+        width: 'calc(100% - 20px)',
+        margin: '0 10px 0 10px',
+        padding: '20px 16px',
+    },
+});
+
+const ContactDescription = styled(Typography)({
+    textAlign: 'center',
+    maxWidth: '100%',
+    margin: '16px 0 50px 15px',
+    color: '#333333',
+    fontSize: '15.2px',
+    lineHeight: 1.5,
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    fontWeight: 400,
+    '& strong': {
+        fontWeight: 700,
+        color: '#333333',
+    },
+    '@media (max-width: 480px)': {
+        fontSize: '14px',
+        lineHeight: 1.6,
+    },
 });
 
 const ContactField = styled(TextField)({
-    width: '100%',
-    marginBottom: '8px',
+    width: '90%',
+    marginBottom: '10px',
     '& .MuiOutlinedInput-root': {
-        height: '38px',
+        height: '48px',
         borderRadius: '10px',
         backgroundColor: '#fff',
         '& fieldset': { borderColor: '#dfe5ea' },
@@ -78,17 +145,21 @@ const ContactField = styled(TextField)({
         '&.Mui-focused fieldset': { borderColor: '#148aa0' },
     },
     '& .MuiInputBase-input': {
-        padding: '0 20px',
-        fontSize: '14px',
-        color: '#707b86',
+        padding: '0 28px',
+        fontSize: '15px',
+        color: '#6d7884',
+        '&::placeholder': {
+            color: '#888888',
+            opacity: 1,
+        },
     },
 });
 
 const ContactSelect = styled(TextField)({
-    width: '100%',
-    marginBottom: '8px',
+    width: '90%',
+    marginBottom: '18px',
     '& .MuiOutlinedInput-root': {
-        height: '38px',
+        height: '48px',
         borderRadius: '10px',
         backgroundColor: '#fff',
         '& fieldset': { borderColor: '#dfe5ea' },
@@ -104,7 +175,7 @@ const ContactSelect = styled(TextField)({
 
 const ContactTextarea = styled(TextField)({
     width: '100%',
-    marginBottom: '8px',
+    marginBottom: '18px',
     '& .MuiOutlinedInput-root': {
         borderRadius: '10px',
         backgroundColor: '#fff',
@@ -113,18 +184,18 @@ const ContactTextarea = styled(TextField)({
         '&.Mui-focused fieldset': { borderColor: '#148aa0' },
     },
     '& .MuiInputBase-input': {
-        padding: '10px 20px',
+        padding: '14px 20px',
         fontSize: '14px',
         color: '#707b86',
-        minHeight: '55px',
+        minHeight: '60px',
     },
 });
 
 const SendButton = styled(Button)({
-    width: '150px',
-    height: '38px',
-    borderRadius: '5px',
-    backgroundColor: '#148aa0',
+    width: '160px',
+    height: '46px',
+    borderRadius: '8px',
+    backgroundColor: '#17a2b8',
     color: '#fff',
     fontWeight: 700,
     fontSize: '14px',
@@ -132,7 +203,7 @@ const SendButton = styled(Button)({
     marginLeft: 'auto',
     display: 'block',
     '&:hover': {
-        background: '#0b7890',
+        background: '#148aa0',
     },
 });
 
@@ -142,19 +213,27 @@ const SendButton = styled(Button)({
 
 const Contact = () => {
     return (
-        <Box sx={{ width: '100%', px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
-            <PageTitle>Contactez-nous</PageTitle>
+        <Box sx={{ width: '100%', py: { xs: 0, md: 0 } }}>
+
+            <PageTitle>
+                Contactez-nous
+            </PageTitle>
+
             <TitleLine />
 
             <ContactIntro>
-                <AgencyName>Société Nationale de Radiodiffusion et de Télévision</AgencyName>
-                <Address>1 Rue El Brihi Avenue Moulay Abdelaziz -hassan -Rabat</Address>
+                <AgencyName>
+                    Société Nationale de Radiodiffusion et de Télévision
+                </AgencyName>
+                <Address>
+                    1 Rue El Brihi Avenue Moulay Abdelaziz -hassan -Rabat
+                </Address>
             </ContactIntro>
 
             <ContactCard>
-                <Typography sx={{ maxWidth: '500px', margin: '0 auto 24px', color: '#000', fontSize: '14px', lineHeight: 1.5 }}>
+                <ContactDescription>
                     Pour toute question ou problème, vous pouvez nous contacter via ce formulaire ou envoyer un email directement à <strong>stages@snrt.ma.</strong>
-                </Typography>
+                </ContactDescription>
 
                 <ContactField placeholder="* Nom" variant="outlined" />
                 <ContactField placeholder="* Prénom" variant="outlined" />
@@ -173,6 +252,7 @@ const Contact = () => {
 
                 <SendButton>envoyer</SendButton>
             </ContactCard>
+
         </Box>
     );
 };

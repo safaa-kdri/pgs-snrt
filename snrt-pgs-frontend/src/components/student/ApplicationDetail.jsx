@@ -189,7 +189,7 @@ const ApplicationDetailStudent = () => {
   const [uploadType, setUploadType] = useState("engagement");
   const [demandeStagePath, setDemandeStagePath] = useState(null);
 
-  // ✅ Vérifier si l'engagement doit être affiché
+  // Vérifier si l'engagement doit être affiché
   const isEngagementVisible =
     internship?.statut === "EngagementEnvoye" ||
     internship?.statut === "EngagementRecu" ||
@@ -201,7 +201,7 @@ const ApplicationDetailStudent = () => {
     internship?.statut === "Termine" ||
     internship?.statut === "EnCours";
 
-  // ✅ Vérifier si la demande de stage est disponible
+  // Vérifier si la demande de stage est disponible
   const isDemandeStageVisible =
     internship?.statut === "DemandeEnvoyee" ||
     internship?.statut === "ValideParDirecteur" ||
@@ -213,7 +213,7 @@ const ApplicationDetailStudent = () => {
   }, [id]);
 
   // ============================================
-  // ✅ FETCH APPLICATION DETAIL
+  // FETCH APPLICATION DETAIL
   // ============================================
   const fetchApplicationDetail = async () => {
     setLoading(true);
@@ -258,7 +258,7 @@ const ApplicationDetailStudent = () => {
             }
           }
         } catch (e) {
-          console.warn("⚠️ Erreur récupération stage:", e.message);
+          console.warn("Erreur récupération stage:", e.message);
         }
       }
 
@@ -278,7 +278,7 @@ const ApplicationDetailStudent = () => {
 
       setApplication(data);
     } catch (error) {
-      console.error("❌ Erreur chargement:", error);
+      console.error("Erreur chargement:", error);
       setError(error.response?.data?.message || "Erreur lors du chargement");
     } finally {
       setLoading(false);
@@ -286,7 +286,7 @@ const ApplicationDetailStudent = () => {
   };
 
   // ============================================
-  // ✅ FONCTIONS DEMANDE DE STAGE
+  // FONCTIONS DEMANDE DE STAGE
   // ============================================
   const handleViewDemandeStage = async () => {
     try {
@@ -306,7 +306,7 @@ const ApplicationDetailStudent = () => {
       window.open(url, "_blank");
       setTimeout(() => window.URL.revokeObjectURL(url), 10000);
     } catch (error) {
-      console.error("❌ Erreur visualisation demande:", error);
+      console.error("Erreur visualisation demande:", error);
       setError(
         error.response?.data?.message ||
           "Erreur lors de la visualisation de la demande",
@@ -340,7 +340,7 @@ const ApplicationDetailStudent = () => {
       setSuccess("Demande de stage téléchargée avec succès");
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error("❌ Erreur téléchargement demande:", error);
+      console.error("Erreur téléchargement demande:", error);
       setError(
         error.response?.data?.message ||
           "Erreur lors du téléchargement de la demande",
@@ -349,7 +349,7 @@ const ApplicationDetailStudent = () => {
   };
 
   // ============================================
-  // ✅ FONCTIONS ENGAGEMENT
+  // FONCTIONS ENGAGEMENT
   // ============================================
   const handleDownloadEngagement = async () => {
     try {
@@ -388,7 +388,8 @@ const ApplicationDetailStudent = () => {
 
     try {
       const formData = new FormData();
-      formData.append("document", selectedFile);
+      // ✅ CORRECTION : S'assurer que le fichier est bien ajouté
+      formData.append("document", selectedFile, selectedFile.name);
 
       const stageId = internship?._id;
       if (!stageId) {
@@ -397,11 +398,15 @@ const ApplicationDetailStudent = () => {
         return;
       }
 
+      console.log("📤 Fichier uploadé:", selectedFile.name, selectedFile.size);
+
       const response = await api.post(
         `/internships/${stageId}/upload-engagement`,
         formData,
         {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         },
       );
 
@@ -419,7 +424,7 @@ const ApplicationDetailStudent = () => {
         setTimeout(() => setSuccess(""), 3000);
       }
     } catch (error) {
-      console.error("❌ Erreur upload engagement:", error);
+      console.error("Erreur upload engagement:", error);
       setError(
         error.response?.data?.message || "Erreur lors du dépôt de l'engagement",
       );
@@ -430,12 +435,16 @@ const ApplicationDetailStudent = () => {
 
   const handleFileSelect = (event, type) => {
     const file = event.target.files[0];
-    if (file && file.type === 'application/pdf') {
+    console.log("📄 Fichier sélectionné:", file?.name, file?.size, file?.type);
+
+    if (file && file.type === "application/pdf") {
       setSelectedFile(file);
-      setUploadType(type || 'engagement');
+      setUploadType(type || "engagement");
       setOpenDialog(true);
+      // ✅ Réinitialiser l'input
+      event.target.value = null;
     } else {
-      setError('Veuillez sélectionner un fichier PDF');
+      setError("Veuillez sélectionner un fichier PDF");
     }
   };
 
@@ -497,26 +506,50 @@ const ApplicationDetailStudent = () => {
 
   const buildFileHref = (doc) => {
     if (!doc) return null;
+
     const apiRoot = (
       process.env.REACT_APP_API_URL || "http://localhost:5000/api/v1"
     ).replace(/\/api\/v1\/?$/, "");
-    if (doc.gridFsId) return `${apiRoot}/api/v1/documents/file/${doc.gridFsId}`;
-    if (doc.url) return doc.url.startsWith("/") ? `${apiRoot}${doc.url}` : doc.url;
+
+    // ✅ PRIORITÉ : gridFsId (pour les fichiers stockés dans GridFS)
+    if (doc.gridFsId) {
+      return `${apiRoot}/api/v1/documents/file/${doc.gridFsId}`;
+    }
+
+    // ✅ Si le document a un chemin (stockage disque)
     if (doc.chemin) {
-      let cleanPath = doc.chemin.replace(/^\.\//, '').replace(/^\//, '');
+      let cleanPath = doc.chemin.replace(/^\.\//, "").replace(/^\//, "");
       return `${apiRoot}/${cleanPath}`;
     }
+
+    // ✅ Si le document a une URL
+    if (doc.url) {
+      return doc.url.startsWith("/") ? `${apiRoot}${doc.url}` : doc.url;
+    }
+
+    // ✅ Si le document a un _id (fallback)
+    if (doc._id) {
+      return `${apiRoot}/api/v1/documents/file/${doc._id}`;
+    }
+
+    console.warn(
+      "⚠️ buildFileHref: Aucune information de fichier trouvée",
+      doc,
+    );
     return null;
   };
 
   const handleDownloadDocument = (doc) => {
-    if (!doc) { setError("Document non trouvé"); return; }
+    if (!doc) {
+      setError("Document non trouvé");
+      return;
+    }
     const href = buildFileHref(doc);
     if (href) window.open(href, "_blank");
     else setError("Impossible de télécharger ce document");
   };
 
-  // ✅ RENDER DOCUMENTS
+  // RENDER DOCUMENTS
   const renderDocuments = () => {
     const documents = application?.documents || [];
     const hasPopulatedDocs = documents.length > 0 && documents[0]?.nomOriginal;
@@ -551,7 +584,8 @@ const ApplicationDetailStudent = () => {
             sx={{
               px: 0,
               py: 1.5,
-              borderBottom: idx < documents.length - 1 ? "1px solid #f0f2f5" : "none",
+              borderBottom:
+                idx < documents.length - 1 ? "1px solid #f0f2f5" : "none",
               alignItems: "flex-start",
             }}
           >
@@ -565,8 +599,13 @@ const ApplicationDetailStudent = () => {
             <ListItemText
               primary={doc.nomOriginal || doc.nom || "Document"}
               secondary={
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {cleanDocumentType(doc.type)} • {doc.isVerified ? "Validé" : "En attente"}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                >
+                  {cleanDocumentType(doc.type)} •{" "}
+                  {doc.isVerified ? "Validé" : "En attente"}
                 </Typography>
               }
             />
@@ -587,7 +626,7 @@ const ApplicationDetailStudent = () => {
     );
   };
 
-  // ✅ RENDER ENGAGEMENT
+  // RENDER ENGAGEMENT
   const renderEngagement = () => {
     const isSent = isEngagementVisible;
     const hasEngagement = engagementDepose || engagementFile;
@@ -632,7 +671,8 @@ const ApplicationDetailStudent = () => {
                   }}
                 >
                   <Typography variant="body2" color="#065f46">
-                    Votre engagement de confidentialité a été déposé avec succès.
+                    Votre engagement de confidentialité a été déposé avec
+                    succès.
                   </Typography>
                 </Alert>
 
@@ -641,10 +681,17 @@ const ApplicationDetailStudent = () => {
                     <PictureAsPdf sx={{ color: "#ef4444", fontSize: 24 }} />
                     <Box>
                       <Typography variant="body2" fontWeight={500}>
-                        {engagementFile?.nomOriginal || engagementFile?.nom || "Engagement_Confidentialite_Signe.pdf"}
+                        {engagementFile?.nomOriginal ||
+                          engagementFile?.nom ||
+                          "Engagement_Confidentialite_Signe.pdf"}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Déposé le {formatDate(engagementFile?.dateDepot || engagementFile?.createdAt || new Date())}
+                        Déposé le{" "}
+                        {formatDate(
+                          engagementFile?.dateDepot ||
+                            engagementFile?.createdAt ||
+                            new Date(),
+                        )}
                       </Typography>
                     </Box>
                   </Box>
@@ -669,7 +716,10 @@ const ApplicationDetailStudent = () => {
                           if (href) {
                             const link = document.createElement("a");
                             link.href = href;
-                            link.download = engagementFile?.nomOriginal || engagementFile?.nom || "Engagement.pdf";
+                            link.download =
+                              engagementFile?.nomOriginal ||
+                              engagementFile?.nom ||
+                              "Engagement.pdf";
                             link.target = "_blank";
                             link.click();
                           } else setError("Impossible de télécharger");
@@ -685,7 +735,9 @@ const ApplicationDetailStudent = () => {
             ) : (
               <>
                 <StyledUploadZone
-                  onClick={() => document.getElementById("engagement-upload")?.click()}
+                  onClick={() =>
+                    document.getElementById("engagement-upload")?.click()
+                  }
                 >
                   <input
                     id="engagement-upload"
@@ -695,7 +747,10 @@ const ApplicationDetailStudent = () => {
                     onChange={(e) => handleFileSelect(e, "engagement")}
                   />
                   <Upload sx={{ fontSize: 32, color: "#9aa4ac" }} />
-                  <Typography variant="body1" sx={{ mt: 1, color: "#1a2332", fontWeight: 500 }}>
+                  <Typography
+                    variant="body1"
+                    sx={{ mt: 1, color: "#1a2332", fontWeight: 500 }}
+                  >
                     Cliquez pour déposer le document signé
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -705,10 +760,15 @@ const ApplicationDetailStudent = () => {
 
                 <Alert
                   severity="info"
-                  sx={{ mt: 2, borderRadius: "8px", backgroundColor: "#f0f7fa" }}
+                  sx={{
+                    mt: 2,
+                    borderRadius: "8px",
+                    backgroundColor: "#f0f7fa",
+                  }}
                 >
                   <Typography variant="body2" color="#1a2332">
-                    Assurez-vous que le document est bien signé avant de le déposer.
+                    Assurez-vous que le document est bien signé avant de le
+                    déposer.
                   </Typography>
                 </Alert>
               </>
@@ -717,9 +777,18 @@ const ApplicationDetailStudent = () => {
         )}
 
         {!isSent && (
-          <Box sx={{ p: 3, textAlign: "center", backgroundColor: "#fafafa", borderRadius: "10px", border: "1px solid #eef1f3" }}>
+          <Box
+            sx={{
+              p: 3,
+              textAlign: "center",
+              backgroundColor: "#fafafa",
+              borderRadius: "10px",
+              border: "1px solid #eef1f3",
+            }}
+          >
             <Typography variant="body2" color="#687480">
-              L'engagement de confidentialité n'a pas encore été envoyé par le service RH.
+              L'engagement de confidentialité n'a pas encore été envoyé par le
+              service RH.
             </Typography>
           </Box>
         )}
@@ -727,13 +796,21 @@ const ApplicationDetailStudent = () => {
     );
   };
 
-  // ✅ RENDER DEMANDE DE STAGE
+  // RENDER DEMANDE DE STAGE
   const renderDemandeStage = () => {
     const isAvailable = isDemandeStageVisible;
 
     if (!isAvailable) {
       return (
-        <Box sx={{ p: 3, textAlign: "center", backgroundColor: "#fafafa", borderRadius: "10px", border: "1px solid #eef1f3" }}>
+        <Box
+          sx={{
+            p: 3,
+            textAlign: "center",
+            backgroundColor: "#fafafa",
+            borderRadius: "10px",
+            border: "1px solid #eef1f3",
+          }}
+        >
           <Typography variant="body2" color="#687480">
             La demande de stage n'a pas encore été générée par le service RH.
           </Typography>
@@ -743,9 +820,25 @@ const ApplicationDetailStudent = () => {
 
     return (
       <Box>
-        <Card sx={{ p: 3, borderRadius: "12px", border: "1px solid #eef1f3", backgroundColor: "#fafbfc" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, flex: 1 }}>
+        <Card
+          sx={{
+            p: 3,
+            borderRadius: "12px",
+            border: "1px solid #eef1f3",
+            backgroundColor: "#fafbfc",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              flexWrap: "wrap",
+            }}
+          >
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 2, flex: 1 }}
+            >
               <PictureAsPdf sx={{ color: "#ef4444", fontSize: 40 }} />
               <Box>
                 <Typography variant="body1" fontWeight={600} color="#1a2332">
@@ -755,7 +848,11 @@ const ApplicationDetailStudent = () => {
                   Document PDF généré par le service RH
                 </Typography>
                 {internship?.updatedAt && (
-                  <Typography variant="caption" color="text.secondary" display="block">
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                  >
                     Généré le {formatDate(internship.updatedAt)}
                   </Typography>
                 )}
@@ -767,7 +864,12 @@ const ApplicationDetailStudent = () => {
                 variant="outlined"
                 startIcon={<Visibility />}
                 onClick={handleViewDemandeStage}
-                sx={{ borderRadius: "8px", textTransform: "none", borderColor: "#2d3748", color: "#2d3748" }}
+                sx={{
+                  borderRadius: "8px",
+                  textTransform: "none",
+                  borderColor: "#2d3748",
+                  color: "#2d3748",
+                }}
               >
                 Voir
               </Button>
@@ -775,7 +877,11 @@ const ApplicationDetailStudent = () => {
                 variant="contained"
                 startIcon={<Download />}
                 onClick={handleDownloadDemandeStage}
-                sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#148aa0" }}
+                sx={{
+                  borderRadius: "8px",
+                  textTransform: "none",
+                  backgroundColor: "#148aa0",
+                }}
               >
                 Télécharger
               </Button>
@@ -846,7 +952,14 @@ const ApplicationDetailStudent = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "60vh",
+        }}
+      >
         <CircularProgress size={44} sx={{ color: "#148aa0" }} />
       </Box>
     );
@@ -869,15 +982,15 @@ const ApplicationDetailStudent = () => {
     );
   }
 
-  const displayStatus = internship?.statut || application?.statut || "Brouillon";
+  const displayStatus =
+    internship?.statut || application?.statut || "Brouillon";
   const statusLabel = getStatusLabel(displayStatus);
   const documents = application.documents || [];
 
-  // ✅ Définir les onglets disponibles dans l'ordre demandé
-  // ❌ LA CONVENTION EST SUPPRIMÉE - Elle existe uniquement dans Suivi de stage
+  // Définir les onglets disponibles dans l'ordre demandé
   const tabs = [];
 
-  // 1️⃣ ONGLET ENGAGEMENT (si visible)
+  // 1er ONGLET ENGAGEMENT (si visible)
   if (isEngagementVisible) {
     tabs.push({
       label: "Engagement",
@@ -885,7 +998,7 @@ const ApplicationDetailStudent = () => {
     });
   }
 
-  // 2️⃣ ONGLET DEMANDE DE STAGE (si visible)
+  // 2eme ONGLET DEMANDE DE STAGE (si visible)
   if (isDemandeStageVisible) {
     tabs.push({
       label: "Demande de stage",
@@ -893,14 +1006,17 @@ const ApplicationDetailStudent = () => {
     });
   }
 
-  // ❌ ONGLET CONVENTION SUPPRIMÉ - Il n'est PLUS dans la candidature
-  // La convention est uniquement accessible depuis le détail du stage
-
-  // 3️⃣ ONGLET PIÈCES JUSTIFICATIVES (toujours en dernier)
+  // 3eme ONGLET PIECES JUSTIFICATIVES (toujours en dernier)
   tabs.push({
     label: `Pièces justificatives (${documents.length})`,
     icon: <Description sx={{ fontSize: 20 }} />,
   });
+
+  // Afficher le nom du sujet sans redondance
+  // Le titre de l'offre est déjà affiché, on affiche le sujet du stage en plus uniquement s'il est différent
+  const offreTitre =
+    application.offreId?.titre || application.offre || "Offre sans titre";
+  const sujetTitre = internship?.sujetTitre || "";
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -913,42 +1029,75 @@ const ApplicationDetailStudent = () => {
           Retour à la liste
         </Button>
 
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 2,
+          }}
+        >
           <Typography variant="h4" sx={{ fontWeight: 700, color: "#1a2332" }}>
             Suivi de candidature
           </Typography>
           <StatusChip label={statusLabel} status={displayStatus} />
         </Box>
 
+        {/* ✅ CORRECTION : Affichage du titre de l'offre ET du sujet du stage SANS redondance */}
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          {application.offreId?.titre || application.offre || "Offre sans titre"}
-          {internship && internship.sujetTitre && (
-            <Typography variant="caption" color="text.secondary" display="block">
-              Stage: {internship.sujetTitre}
-            </Typography>
-          )}
+          {offreTitre}
         </Typography>
+        {sujetTitre && sujetTitre !== offreTitre && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            sx={{ mt: 0.5 }}
+          >
+            Sujet: {sujetTitre}
+          </Typography>
+        )}
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: "10px" }} onClose={() => setError("")}>
+        <Alert
+          severity="error"
+          sx={{ mb: 3, borderRadius: "10px" }}
+          onClose={() => setError("")}
+        >
           {error}
         </Alert>
       )}
       {success && (
-        <Alert severity="success" sx={{ mb: 3, borderRadius: "10px" }} onClose={() => setSuccess("")}>
+        <Alert
+          severity="success"
+          sx={{ mb: 3, borderRadius: "10px" }}
+          onClose={() => setSuccess("")}
+        >
           {success}
         </Alert>
       )}
 
-      <Paper sx={{ borderRadius: "16px", boxShadow: "0 4px 20px rgba(0,0,0,0.05)", overflow: "hidden" }}>
+      <Paper
+        sx={{
+          borderRadius: "16px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+          overflow: "hidden",
+        }}
+      >
         <StyledTabs
           value={tabValue}
           onChange={(e, v) => setTabValue(v)}
           sx={{ borderBottom: "1px solid #e5e7eb", px: 2 }}
         >
           {tabs.map((tab, index) => (
-            <StyledTab key={index} icon={tab.icon} iconPosition="start" label={tab.label} />
+            <StyledTab
+              key={index}
+              icon={tab.icon}
+              iconPosition="start"
+              label={tab.label}
+            />
           ))}
         </StyledTabs>
 
@@ -959,10 +1108,9 @@ const ApplicationDetailStudent = () => {
           {/* Demande de stage */}
           {tabs[tabValue]?.label === "Demande de stage" && renderDemandeStage()}
 
-          {/* ❌ Convention SUPPRIMÉE */}
-
           {/* Pièces justificatives */}
-          {tabs[tabValue]?.label?.includes("Pièces justificatives") && renderDocuments()}
+          {tabs[tabValue]?.label?.includes("Pièces justificatives") &&
+            renderDocuments()}
         </Box>
       </Paper>
 

@@ -89,6 +89,7 @@ import ValidateOffers from "./components/rh/ValidateOffers";
 import Interviews from "./components/rh/Interviews";
 import InterviewAddPage from "./components/rh/InterviewAddPage";
 import GenerateConvention from "./components/rh/GenerateConvention";
+import SignConvention from "./components/rh/SignConvention";
 import OfferDetailPage from "./components/rh/OfferDetailPage";
 import CandidatureManagement from './components/rh/CandidatureManagement';
 
@@ -786,6 +787,16 @@ function App() {
             <PrivateRoute allowedRoles={["RH", "Rh"]}>
               <RhLayout>
                 <GenerateConvention />
+              </RhLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/rh/convention/:id/sign"
+          element={
+            <PrivateRoute allowedRoles={["RH", "Rh"]}>
+              <RhLayout>
+                <SignConvention />
               </RhLayout>
             </PrivateRoute>
           }

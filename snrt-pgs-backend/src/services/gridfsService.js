@@ -14,7 +14,7 @@ const initGridFS = () => {
         gridfsBucket = new GridFSBucket(db, {
             bucketName: 'documents'
         });
-        logger.info('✅ GridFS initialisé');
+        logger.info('GridFS initialisé');
     }
     return gridfsBucket;
 };
@@ -24,20 +24,27 @@ const initGridFS = () => {
 // ============================================
 const uploadFile = (buffer, filename, contentType) => {
     return new Promise((resolve, reject) => {
+        if (!buffer || (!Buffer.isBuffer(buffer) && !(buffer instanceof Uint8Array) && typeof buffer !== 'string')) {
+            const error = new Error('Le buffer du fichier est vide ou invalide');
+            logger.error(`Erreur upload GridFS: ${error.message}`);
+            reject(error);
+            return;
+        }
+
         const bucket = initGridFS();
         
-        // ✅ CORRECTION : Créer le stream et gérer les événements correctement
+        // CORRECTION : Créer le stream et gérer les événements correctement
         const uploadStream = bucket.openUploadStream(filename, {
             contentType: contentType || 'application/octet-stream',
         });
 
-        // ✅ Gestionnaire d'erreur
+        // Gestionnaire d'erreur
         uploadStream.on('error', (error) => {
             logger.error(`Erreur upload GridFS: ${error.message}`);
             reject(error);
         });
 
-        // ✅ Gestionnaire de fin - RÉCUPÉRATION DU FILE CORRECTEMENT
+        // Gestionnaire de fin - RÉCUPÉRATION DU FILE CORRECTEMENT
         uploadStream.on('finish', (file) => {
             // file est l'objet retourné par GridFS avec _id
             if (file && file._id) {

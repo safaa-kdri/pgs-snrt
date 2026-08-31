@@ -8,7 +8,9 @@ import RhSidebar from './RhSidebar';
 
 const drawerWidth = 280;
 
-const MainContent = styled(Box)(({ open, isMobile }) => ({
+const MainContent = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'open' && prop !== 'isMobile',
+})(({ open, isMobile }) => ({
     marginTop: '74px',
     padding: '24px',
     backgroundColor: '#ffffff',

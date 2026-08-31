@@ -17,7 +17,53 @@ const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
+const gridfsService = require('../services/gridfsService');
 const { PDFDocument } = require('pdf-lib');
+const { getSignedStampCoordinates } = require('../utils/conventionStamp');
+
+const resolveInternshipForConvention = async (id, userId) => {
+    let internship = await Internship.findById(id);
+
+    if (!internship && id) {
+        const application = await Application.findById(id);
+        if (application && (application.statut === 'Acceptee' || application.statut === 'Acceptée')) {
+            internship = await Internship.findOne({ applicationId: application._id });
+        }
+    }
+
+    if (!internship) {
+        return null;
+    }
+
+    if (userId && internship.etudiantId?.toString() !== userId.toString()) {
+        return null;
+    }
+
+    return internship;
+};
+
+const getConventionPdfBytes = async (convention) => {
+    if (convention.gridFsId) {
+        const base64 = await gridfsService.getFileAsBase64(convention.gridFsId.toString());
+        return Buffer.from(base64, 'base64');
+    }
+
+    const filePath = convention.chemin;
+    if (!filePath || !fs.existsSync(filePath)) {
+        throw ApiError.notFound('Le fichier PDF original n\'existe plus');
+    }
+
+    return fs.readFileSync(filePath);
+};
+
+const getOfficialStampBytes = () => {
+    const stampPath = path.join(__dirname, '../../uploads/images/Signature-et-cachet-1.png');
+    if (!fs.existsSync(stampPath)) {
+        throw ApiError.notFound('Le fichier du cachet officiel est introuvable');
+    }
+
+    return fs.readFileSync(stampPath);
+};
 
 // ============================================
 // ✅ LISTE COMPLÈTE DES STATUTS AUTORISÉS POUR LA CONVENTION
@@ -41,6 +87,16 @@ const CONVENTION_ALLOWED_STATUSES = [
     'EnCoursCreation',
     'Soumise'
 ];
+
+const SIGNED_CONVENTION_STATUSES = ['SigneeRH', 'EnvoyeeEtudiant', 'Cloturee'];
+
+const canGenerateSignedPdf = (status) => SIGNED_CONVENTION_STATUSES.includes(status);
+const canResendConventionToStudent = (status) => SIGNED_CONVENTION_STATUSES.includes(status);
+const canApplyNewSignature = (status) => ['DeposeeEtudiant', 'SigneeRH', 'EnvoyeeEtudiant', 'Cloturee', 'NonGeneree'].includes(status);
+
+exports.canGenerateSignedPdf = canGenerateSignedPdf;
+exports.canResendConventionToStudent = canResendConventionToStudent;
+exports.canApplyNewSignature = canApplyNewSignature;
 
 // ============================================
 // ÉTUDIANT - DÉPOSER LA CONVENTION
@@ -153,13 +209,22 @@ exports.deposerConvention = asyncHandler(async (req, res) => {
 // ============================================
 exports.getConventionStatus = asyncHandler(async (req, res) => {
     const studentId = req.user.id;
+    const { id } = req.params;
 
-    console.log('🔍 [getConventionStatus] studentId:', studentId);
+    console.log('🔍 [getConventionStatus] studentId:', studentId, 'routeId:', id);
 
-    const internship = await Internship.findOne({
-        etudiantId: studentId,
-        statut: { $in: CONVENTION_ALLOWED_STATUSES }
-    });
+    let internship = null;
+
+    if (id) {
+        internship = await resolveInternshipForConvention(id, studentId);
+    }
+
+    if (!internship) {
+        internship = await Internship.findOne({
+            etudiantId: studentId,
+            statut: { $in: CONVENTION_ALLOWED_STATUSES }
+        });
+    }
 
     if (!internship) {
         console.log('🔍 [getConventionStatus] Aucun stage trouvé');
@@ -187,13 +252,22 @@ exports.getConventionStatus = asyncHandler(async (req, res) => {
 // ============================================
 exports.downloadConvention = asyncHandler(async (req, res) => {
     const studentId = req.user.id;
+    const { id } = req.params;
 
-    console.log('🔍 [downloadConvention] studentId:', studentId);
+    console.log('🔍 [downloadConvention] studentId:', studentId, 'routeId:', id);
 
-    const internship = await Internship.findOne({
-        etudiantId: studentId,
-        statut: { $in: CONVENTION_ALLOWED_STATUSES }
-    });
+    let internship = null;
+
+    if (id) {
+        internship = await resolveInternshipForConvention(id, studentId);
+    }
+
+    if (!internship) {
+        internship = await Internship.findOne({
+            etudiantId: studentId,
+            statut: { $in: CONVENTION_ALLOWED_STATUSES }
+        });
+    }
 
     if (!internship || !internship.convention) {
         throw ApiError.notFound('Aucune convention trouvée');
@@ -204,14 +278,30 @@ exports.downloadConvention = asyncHandler(async (req, res) => {
         throw ApiError.badRequest('La convention n\'est pas encore disponible');
     }
 
-    const filePath = internship.convention.cheminSignee || internship.convention.chemin;
-    if (!fs.existsSync(filePath)) {
+    const signedFilePath = internship.convention.cheminSignee;
+    if (signedFilePath && fs.existsSync(signedFilePath)) {
+        console.log('✅ [downloadConventionRH] PDF signé trouvé:', signedFilePath);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="Convention_Signee_${internship.convention.nomOriginal || 'convention'}.pdf"`);
+        return res.sendFile(signedFilePath);
+    }
+
+    if (internship.convention.gridFsId) {
+        const fileId = internship.convention.gridFsId.toString();
+        const downloadStream = gridfsService.downloadFile(fileId);
+        res.setHeader('Content-Type', internship.convention.mimeType || 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${internship.convention.nomOriginal || 'convention.pdf'}"`);
+        return downloadStream.pipe(res);
+    }
+
+    const filePath = internship.convention.chemin;
+    if (!filePath || !fs.existsSync(filePath)) {
         throw ApiError.notFound('Le fichier n\'existe plus');
     }
 
     console.log('✅ [downloadConvention] Fichier trouvé:', filePath);
 
-    res.download(filePath, `Convention_Stage_${internship.convention.nomOriginal}`);
+    return res.download(filePath, `Convention_Stage_${internship.convention.nomOriginal}`);
 });
 
 // ============================================
@@ -258,12 +348,12 @@ exports.getConventionsDeposees = asyncHandler(async (req, res) => {
 // ============================================
 exports.signerConvention = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { signature } = req.body;
+    const { position } = req.body;
 
     console.log('🔍 [signerConvention] ===== DEBUT ====');
     console.log('🔍 [signerConvention] conventionId:', id);
     console.log('🔍 [signerConvention] rhId:', req.user?.id);
-    console.log('🔍 [signerConvention] signature reçue:', !!signature);
+    console.log('🔍 [signerConvention] position reçue:', !!position);
 
     const internship = await Internship.findById(id);
 
@@ -271,9 +361,8 @@ exports.signerConvention = asyncHandler(async (req, res) => {
         throw ApiError.notFound('Convention non trouvée');
     }
 
-    if (internship.convention.statut !== 'DeposeeEtudiant' && 
-        internship.convention.statut !== 'NonGeneree') {
-        throw ApiError.badRequest('Cette convention ne peut pas être signée');
+    if (!canApplyNewSignature(internship.convention.statut)) {
+        throw ApiError.badRequest(`Cette convention ne peut pas être signée. Statut actuel: ${internship.convention.statut}`);
     }
 
     internship.convention.statut = 'SigneeRH';
@@ -283,7 +372,14 @@ exports.signerConvention = asyncHandler(async (req, res) => {
         date: new Date(),
         rhId: req.user.id,
         rhNom: `${req.user.prenom || ''} ${req.user.nom || ''}`.trim(),
-        signatureData: signature || null
+        signatureData: null,
+        position: {
+            x: Number(position?.x ?? internship.convention.signatureRH?.position?.x ?? 50),
+            y: Number(position?.y ?? internship.convention.signatureRH?.position?.y ?? 280),
+            width: Number(position?.width ?? internship.convention.signatureRH?.position?.width ?? 150),
+            height: Number(position?.height ?? internship.convention.signatureRH?.position?.height ?? 60),
+            page: Number(position?.page ?? internship.convention.signatureRH?.position?.page ?? 0)
+        }
     };
 
     await internship.save();
@@ -305,6 +401,43 @@ exports.signerConvention = asyncHandler(async (req, res) => {
 // ============================================
 // ✅ AJOUTER LA SIGNATURE SUR LE PDF EXISTANT
 // ============================================
+const addConventionStampToPdfBytes = async (pdfBytes, position = {}) => {
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const pngImage = await pdfDoc.embedPng(getOfficialStampBytes());
+    const pages = pdfDoc.getPages();
+    const targetPageIndex = Number(position.page || 0);
+    const page = pages[targetPageIndex] || pages[0];
+    const pageSize = page.getSize();
+    const safePosition = getSignedStampCoordinates(position, pageSize);
+
+    page.drawImage(pngImage, {
+        x: safePosition.x,
+        y: safePosition.y,
+        width: safePosition.width,
+        height: safePosition.height,
+    });
+
+    return pdfDoc.save();
+};
+
+const regenerateSignedPdfFile = async (internship) => {
+    const originalPdfBytes = await getConventionPdfBytes(internship.convention);
+    const signedPdfBytes = await addConventionStampToPdfBytes(
+        originalPdfBytes,
+        internship.convention.signatureRH?.position || {}
+    );
+
+    const fileName = `convention_signee_${internship._id}_${Date.now()}.pdf`;
+    const outputPath = path.join(__dirname, '../../uploads/conventions/', fileName);
+    fs.writeFileSync(outputPath, signedPdfBytes);
+
+    internship.convention.cheminSignee = outputPath;
+    internship.convention.urlSignee = `/uploads/conventions/${fileName}`;
+    internship.convention.dateSignature = internship.convention.dateSignature || new Date();
+
+    return { outputPath, signedPdfBytes, fileName };
+};
+
 exports.ajouterSignatureSurPDF = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -319,68 +452,35 @@ exports.ajouterSignatureSurPDF = asyncHandler(async (req, res) => {
         throw ApiError.notFound('Convention non trouvée');
     }
 
-    if (internship.convention.statut !== 'SigneeRH') {
-        throw ApiError.badRequest('La convention doit être signée avant d\'ajouter la signature');
+    if (!canGenerateSignedPdf(internship.convention.statut)) {
+        throw ApiError.badRequest(`La convention doit être signée ou déjà envoyée pour générer le PDF final. Statut actuel: ${internship.convention.statut}`);
     }
 
-    const signatureData = internship.convention.signatureRH?.signatureData;
-    if (!signatureData) {
-        throw ApiError.badRequest('Aucune signature trouvée');
+    if (!internship.convention.signatureRH?.position) {
+        internship.convention.signatureRH = {
+            ...internship.convention.signatureRH,
+            position: {
+                x: 50,
+                y: 280,
+                width: 150,
+                height: 60,
+                page: 0
+            }
+        };
     }
 
-    const originalPdfPath = internship.convention.chemin;
-    if (!fs.existsSync(originalPdfPath)) {
-        throw ApiError.notFound('Le fichier PDF original n\'existe plus');
-    }
-
-    console.log('🔍 [ajouterSignatureSurPDF] PDF original:', originalPdfPath);
+    console.log('🔍 [ajouterSignatureSurPDF] Préparation du PDF signé');
 
     try {
-        const originalPdfBytes = fs.readFileSync(originalPdfPath);
-        const pdfDoc = await PDFDocument.load(originalPdfBytes);
+        const { signedPdfBytes, fileName } = await regenerateSignedPdfFile(internship);
+        const signedPdfBuffer = Buffer.from(signedPdfBytes);
 
-        const base64Data = signatureData.replace(/^data:image\/png;base64,/, '');
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        const pngImage = await pdfDoc.embedPng(imageBuffer);
-
-        const pages = pdfDoc.getPages();
-        const firstPage = pages[0];
-        const { width, height } = firstPage.getSize();
-
-        // Position de la signature (ajuste selon ton PDF)
-        const signatureWidth = 150;
-        const signatureHeight = 60;
-        const signatureX = 50;
-        const signatureY = height - 280;
-
-        firstPage.drawImage(pngImage, {
-            x: signatureX,
-            y: signatureY,
-            width: signatureWidth,
-            height: signatureHeight,
+        console.log('✅ [ajouterSignatureSurPDF] PDF signé sauvegardé:', internship.convention.cheminSignee);
+        console.log('✅ [ajouterSignatureSurPDF] PDF prêt à envoyer:', {
+            bytes: signedPdfBuffer.length,
+            header: signedPdfBuffer.subarray(0, 5).toString('ascii')
         });
 
-        // Cadre autour de la signature
-        firstPage.drawRectangle({
-            x: signatureX - 2,
-            y: signatureY - 2,
-            width: signatureWidth + 4,
-            height: signatureHeight + 4,
-            borderColor: { r: 0.6, g: 0.6, b: 0.6 },
-            borderWidth: 1,
-        });
-
-        const pdfBytes = await pdfDoc.save();
-
-        const fileName = `convention_signee_${internship._id}_${Date.now()}.pdf`;
-        const outputPath = path.join(__dirname, '../../uploads/conventions/', fileName);
-        fs.writeFileSync(outputPath, pdfBytes);
-
-        console.log('✅ [ajouterSignatureSurPDF] PDF signé sauvegardé:', outputPath);
-
-        internship.convention.cheminSignee = outputPath;
-        internship.convention.urlSignee = `/uploads/conventions/${fileName}`;
-        internship.convention.statut = 'EnvoyeeEtudiant';
         await internship.save();
 
         logger.audit('CONVENTION_SIGNEE_PDF_GENERATED', {
@@ -389,7 +489,10 @@ exports.ajouterSignatureSurPDF = asyncHandler(async (req, res) => {
             rhId: req.user.id
         });
 
-        res.download(outputPath, `Convention_Signee_${internship.etudiantId?.nom || 'stage'}.pdf`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="Convention_Signee_${internship.etudiantId?.nom || 'stage'}.pdf"`);
+        res.setHeader('Content-Length', signedPdfBuffer.length);
+        return res.send(signedPdfBuffer);
 
     } catch (error) {
         console.error('❌ [ajouterSignatureSurPDF] Erreur:', error);
@@ -413,64 +516,24 @@ exports.envoyerConventionEtudiant = asyncHandler(async (req, res) => {
         throw ApiError.notFound('Convention non trouvée');
     }
 
-    if (internship.convention.statut !== 'SigneeRH') {
-        throw ApiError.badRequest('La convention doit être signée avant d\'être envoyée');
+    if (!canResendConventionToStudent(internship.convention.statut)) {
+        throw ApiError.badRequest(`La convention doit déjà être signée ou envoyée pour être renvoyée à l'étudiant. Statut actuel: ${internship.convention.statut}`);
     }
 
-    // Si la convention n'a pas encore été signée sur le PDF, le faire maintenant
-    if (!internship.convention.cheminSignee) {
-        // Appeler la fonction d'ajout de signature
-        const signatureData = internship.convention.signatureRH?.signatureData;
-        if (!signatureData) {
-            throw ApiError.badRequest('Aucune signature trouvée');
-        }
-
-        const originalPdfPath = internship.convention.chemin;
-        if (!fs.existsSync(originalPdfPath)) {
-            throw ApiError.notFound('Le fichier PDF original n\'existe plus');
-        }
-
-        const originalPdfBytes = fs.readFileSync(originalPdfPath);
-        const pdfDoc = await PDFDocument.load(originalPdfBytes);
-
-        const base64Data = signatureData.replace(/^data:image\/png;base64,/, '');
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        const pngImage = await pdfDoc.embedPng(imageBuffer);
-
-        const pages = pdfDoc.getPages();
-        const firstPage = pages[0];
-        const { width, height } = firstPage.getSize();
-
-        const signatureWidth = 150;
-        const signatureHeight = 60;
-        const signatureX = 50;
-        const signatureY = height - 280;
-
-        firstPage.drawImage(pngImage, {
-            x: signatureX,
-            y: signatureY,
-            width: signatureWidth,
-            height: signatureHeight,
-        });
-
-        firstPage.drawRectangle({
-            x: signatureX - 2,
-            y: signatureY - 2,
-            width: signatureWidth + 4,
-            height: signatureHeight + 4,
-            borderColor: { r: 0.6, g: 0.6, b: 0.6 },
-            borderWidth: 1,
-        });
-
-        const pdfBytes = await pdfDoc.save();
-
-        const fileName = `convention_signee_${internship._id}_${Date.now()}.pdf`;
-        const outputPath = path.join(__dirname, '../../uploads/conventions/', fileName);
-        fs.writeFileSync(outputPath, pdfBytes);
-
-        internship.convention.cheminSignee = outputPath;
-        internship.convention.urlSignee = `/uploads/conventions/${fileName}`;
+    if (!internship.convention.signatureRH?.position) {
+        internship.convention.signatureRH = {
+            ...internship.convention.signatureRH,
+            position: {
+                x: 50,
+                y: 280,
+                width: 150,
+                height: 60,
+                page: 0
+            }
+        };
     }
+
+    await regenerateSignedPdfFile(internship);
 
     internship.convention.statut = 'EnvoyeeEtudiant';
     internship.convention.dateEnvoi = new Date();
@@ -506,6 +569,16 @@ exports.downloadConventionRH = asyncHandler(async (req, res) => {
         throw ApiError.notFound('Convention non trouvée');
     }
 
+    if (internship.convention.gridFsId) {
+        const fileId = internship.convention.gridFsId.toString();
+        const downloadStream = gridfsService.downloadFile(fileId);
+        const fileName = internship.convention.nomOriginal || 'convention.pdf';
+        const mimeType = internship.convention.mimeType || 'application/pdf';
+        res.setHeader('Content-Type', mimeType.includes('pdf') ? 'application/pdf' : mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+        return downloadStream.pipe(res);
+    }
+
     const filePath = internship.convention.cheminSignee || internship.convention.chemin;
     if (!fs.existsSync(filePath)) {
         throw ApiError.notFound('Le fichier n\'existe plus');
@@ -513,7 +586,9 @@ exports.downloadConventionRH = asyncHandler(async (req, res) => {
 
     console.log('✅ [downloadConventionRH] Fichier trouvé:', filePath);
 
-    res.download(filePath, `Convention_${internship.convention.nomOriginal}`);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${internship.convention.nomOriginal || 'convention.pdf'}"`);
+    return res.sendFile(filePath);
 });
 
 // ============================================
@@ -541,7 +616,7 @@ exports.uploadConvention = asyncHandler(async (req, res) => {
         throw ApiError.badRequest('Seuls les fichiers PDF sont acceptés');
     }
 
-    const internship = await Internship.findById(id);
+    const internship = await resolveInternshipForConvention(id, req.user.id);
     if (!internship) {
         throw ApiError.notFound('Stage non trouvé');
     }
@@ -561,13 +636,32 @@ exports.uploadConvention = asyncHandler(async (req, res) => {
         throw ApiError.badRequest('Une convention existe déjà pour ce stage');
     }
 
+    let fileBuffer;
+    if (file.buffer && Buffer.isBuffer(file.buffer)) {
+        fileBuffer = file.buffer;
+    } else if (file.path) {
+        fileBuffer = fs.readFileSync(file.path);
+    } else if (file.data) {
+        fileBuffer = Buffer.from(file.data);
+    }
+
+    let gridFsFile = null;
+    if (fileBuffer) {
+        gridFsFile = await require('../services/gridfsService').uploadFile(
+            fileBuffer,
+            file.originalname,
+            file.mimetype
+        );
+    }
+
     const conventionData = {
         nomOriginal: file.originalname,
-        nomStocke: file.filename,
-        chemin: file.path,
-        url: `/uploads/conventions/${file.filename}`,
+        nomStocke: file.filename || file.originalname,
+        chemin: file.path || '',
+        url: gridFsFile ? `/api/v1/documents/file/${gridFsFile._id}` : `/uploads/conventions/${file.filename}`,
         mimeType: file.mimetype,
         taille: file.size,
+        gridFsId: gridFsFile ? gridFsFile._id : null,
         dateDepot: new Date(),
         statut: 'DeposeeEtudiant',
         signedByRH: false
@@ -615,10 +709,10 @@ exports.uploadConvention = asyncHandler(async (req, res) => {
 // ============================================
 exports.signConvention = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { signature } = req.body;
+    const { position } = req.body;
 
     console.log('🔍 [signConvention] ID:', id);
-    console.log('🔍 [signConvention] signature reçue:', !!signature);
+    console.log('🔍 [signConvention] position reçue:', !!position);
 
     const internship = await Internship.findById(id);
     if (!internship || !internship.convention) {
@@ -636,7 +730,14 @@ exports.signConvention = asyncHandler(async (req, res) => {
         date: new Date(),
         rhId: req.user.id,
         rhNom: `${req.user.prenom || ''} ${req.user.nom || ''}`.trim(),
-        signatureData: signature || null
+        signatureData: null,
+        position: {
+            x: Number(position?.x || 50),
+            y: Number(position?.y || 280),
+            width: Number(position?.width || 150),
+            height: Number(position?.height || 60),
+            page: Number(position?.page || 0)
+        }
     };
 
     await internship.save();
