@@ -149,7 +149,6 @@ const DepartmentSidebar = ({ open, onClose }) => {
         { text: 'Offres de stage', icon: <Work />, path: '/department/my-offers', key: 'offers' },
         { text: 'Encadrants', icon: <People />, path: '/department/encadrants', key: 'encadrants' },
         { text: 'Entretiens', icon: <Event />, path: '/department/interviews', key: 'interviews' },
-        { text: 'Statistiques', icon: <BarChart />, path: '/department/stats', key: 'stats' },
         { divider: true },
         { text: 'FAQ', icon: <Help />, path: '/faq', key: 'faq' },
         { text: 'Contact', icon: <ContactMail />, path: '/contact', key: 'contact' },

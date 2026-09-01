@@ -1,5 +1,5 @@
 // src/components/department/InternsList.jsx
-// ✅ VERSION SANS BOUTON RÉINITIALISER
+// ✅ VERSION SANS COLONNE PROGRESSION
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -28,7 +28,6 @@ import {
     Pagination,
     Card,
     CardContent,
-    LinearProgress,
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import {
@@ -308,12 +307,6 @@ const InternsList = () => {
         return labels[status] || status;
     };
 
-    const getProgressColor = (progress) => {
-        if (progress >= 80) return '#22c55e';
-        if (progress >= 50) return '#f59e0b';
-        return '#ef4444';
-    };
-
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
         return format(new Date(dateStr), 'dd MMM yyyy', { locale: fr });
@@ -494,7 +487,6 @@ const InternsList = () => {
                             <StyledTableCell>Offre</StyledTableCell>
                             <StyledTableCell>Encadrant</StyledTableCell>
                             <StyledTableCell>Période</StyledTableCell>
-                            <StyledTableCell>Progression</StyledTableCell>
                             <StyledTableCell>Statut</StyledTableCell>
                             <StyledTableCell align="center">Actions</StyledTableCell>
                         </TableRow>
@@ -502,7 +494,7 @@ const InternsList = () => {
                     <TableBody>
                         {paginatedData.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                                <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                                     <Typography variant="body1" color="text.secondary">
                                         {statusFilter !== 'all' 
                                             ? `Aucun stage avec le statut "${getStatusLabel(statusFilter)}"`
@@ -577,28 +569,6 @@ const InternsList = () => {
                                             au {formatDate(internship.dateFin)}
                                         </Typography>
                                     </TableCell>
-                                    <TableCell sx={{ minWidth: 120 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Box sx={{ flex: 1 }}>
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={internship.progression || 0}
-                                                    sx={{
-                                                        height: 6,
-                                                        borderRadius: 3,
-                                                        backgroundColor: '#e5e7eb',
-                                                        '& .MuiLinearProgress-bar': {
-                                                            backgroundColor: getProgressColor(internship.progression || 0),
-                                                            borderRadius: 3,
-                                                        },
-                                                    }}
-                                                />
-                                            </Box>
-                                            <Typography variant="caption" fontWeight={500}>
-                                                {internship.progression || 0}%
-                                            </Typography>
-                                        </Box>
-                                    </TableCell>
                                     <TableCell>
                                         <StatusChip
                                             label={getStatusLabel(internship.statut)}
@@ -626,7 +596,7 @@ const InternsList = () => {
 
             {/* ===== PAGINATION ===== */}
             {totalPages > 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}> 
                     <Pagination
                         count={totalPages}
                         page={page}

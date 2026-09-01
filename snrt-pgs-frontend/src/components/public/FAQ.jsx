@@ -1,4 +1,6 @@
 // src/components/public/FAQ.jsx
+// ✅ VERSION AVEC TITRE STYLE CONTACT
+
 import React, { useState } from 'react';
 import {
     Typography,
@@ -9,33 +11,57 @@ import {
 import { styled } from '@mui/material/styles';
 
 // ============================================
-// STYLES FAQ
+// STYLES FAQ - ALIGNÉ AVEC CONTACT
 // ============================================
 
 const PageTitle = styled(Typography)({
     textAlign: 'center',
-    fontSize: '24px',
+    fontSize: '42px',
     fontWeight: 700,
     color: '#252930',
-    margin: '0 auto 10px',
-    maxWidth: '600px',
+    margin: '0 0 16px 0',
+    maxWidth: 'none',
     lineHeight: 1.2,
+    fontFamily: '"Inria Sans", sans-serif',
+    '@media (max-width: 768px)': {
+        fontSize: '32px',
+        margin: '0 0 12px 0',
+    },
+    '@media (max-width: 480px)': {
+        fontSize: '24px',
+        margin: '0 0 10px 0',
+    },
 });
 
 const TitleLine = styled(Box)({
-    height: '2px',
+    height: '1px',
     background: '#0b7890',
-    width: '100%',
-    maxWidth: '500px',
-    margin: '0 auto 10px',
+    width: 'calc(100% - 10px)',
+    margin: '0 5px 0',
+    '@media (max-width: 768px)': {
+        width: 'calc(100% - 24px)',
+        margin: '0 12px 0',
+    },
+    '@media (max-width: 480px)': {
+        width: 'calc(100% - 20px)',
+        margin: '0 10px 0',
+    },
 });
 
 const FaqBox = styled(Box)({
-    maxWidth: '600px',
-    margin: '28px auto 0',
+    width: 'calc(100% - 10px)',
+    margin: '28px 5px 0 5px',
     border: '1px solid #d4dbe2',
     borderRadius: '5px',
     overflow: 'hidden',
+    '@media (max-width: 768px)': {
+        width: 'calc(100% - 24px)',
+        margin: '28px 12px 0 12px',
+    },
+    '@media (max-width: 480px)': {
+        width: 'calc(100% - 20px)',
+        margin: '20px 10px 0 10px',
+    },
 });
 
 const FaqItem = styled(Box)(({ open }) => ({
