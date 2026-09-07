@@ -21,17 +21,65 @@
     --panel: #f7f7f7;
     --panel-soft: #fbf9f9;
     --footer: #20252a;
+    --app-background: #ffffff;
+    --app-surface: #ffffff;
+    --app-text: #20242b;
+    --app-border: #d9dee3;
+}
+
+:root[data-theme='dark'] {
+    --app-background: #101820;
+    --app-surface: #17232d;
+    --app-text: #edf3f7;
+    --app-border: #344552;
+    --text: #edf3f7;
+    --muted: #b3c0ca;
+    --line: #344552;
+    --panel: #1d2c37;
+    --panel-soft: #17232d;
 }
 
 body {
     margin: 0;
     min-width: 320px;
-    color: var(--text);
-    background: #fff;
+    color: var(--app-text);
+    background: var(--app-background);
     font-family: 'Inria Sans', 'Open Sans', Arial, Helvetica, sans-serif;
     font-size: 16px;
     zoom: 100%;
     line-height: 1.5;
+    transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+body,
+#root,
+main {
+    background-color: var(--app-background);
+}
+
+:root[data-theme='dark'] body input,
+:root[data-theme='dark'] body textarea,
+:root[data-theme='dark'] body select {
+    background-color: var(--app-surface);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+:root[data-theme='dark'] .MuiPaper-root,
+:root[data-theme='dark'] .MuiCard-root,
+:root[data-theme='dark'] .MuiTableContainer-root,
+:root[data-theme='dark'] .MuiDialog-paper,
+:root[data-theme='dark'] .MuiMenu-paper {
+    background-color: var(--app-surface);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+:root[data-theme='dark'] .MuiTableCell-root,
+:root[data-theme='dark'] .MuiListItemText-primary,
+:root[data-theme='dark'] .MuiListItemText-secondary {
+    color: var(--app-text);
+    border-color: var(--app-border);
 }
 
 /* Dashboard-specific refinements for a cleaner, pro look */

@@ -25,7 +25,7 @@ const Layout = ({ children, hideSidebars = false }) => {
     // ✅ Dashboard admin → PAS de header (car AdminDashboard a déjà le sien)
     if (isAdminDashboard) {
         return (
-            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+            <Box className="theme-page-surface" sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'var(--bg-primary)' }}>
                 <Box component="main" sx={{ flex: 1, padding: 0, margin: 0 }}>
                     {children}
                 </Box>
@@ -36,7 +36,7 @@ const Layout = ({ children, hideSidebars = false }) => {
     // ✅ Sous-pages admin → Header adapté (sans menu, avec bouton retour)
     if (isAdminSubPage) {
         return (
-            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+            <Box className="theme-page-surface" sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'var(--bg-primary)' }}>
                 <Header toggleDrawer={toggleDrawer} />
                 <Box component="main" sx={{ flex: 1, padding: 0, margin: 0 }}>
                     {children}

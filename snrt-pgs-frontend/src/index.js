@@ -9,6 +9,8 @@ import { ToastContainer } from 'react-toastify';
 import App from './App';
 import store from './store';
 import './styles/global.css';
+import './styles/theme.css';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -28,19 +30,21 @@ root.render(
         <Provider store={store}>
             <QueryClientProvider client={queryClient}>
                 <BrowserRouter>
-                    <App />
-                    <ToastContainer
-                        position="top-right"
-                        autoClose={5000}
-                        hideProgressBar={false}
-                        newestOnTop
-                        closeOnClick
-                        rtl={false}
-                        pauseOnFocusLoss
-                        draggable
-                        pauseOnHover
-                        theme="light"
-                    />
+                    <ThemeProvider>
+                        <App />
+                        <ToastContainer
+                            position="top-right"
+                            autoClose={5000}
+                            hideProgressBar={false}
+                            newestOnTop
+                            closeOnClick
+                            rtl={false}
+                            pauseOnFocusLoss
+                            draggable
+                            pauseOnHover
+                            theme="colored"
+                        />
+                    </ThemeProvider>
                 </BrowserRouter>
             </QueryClientProvider>
         </Provider>

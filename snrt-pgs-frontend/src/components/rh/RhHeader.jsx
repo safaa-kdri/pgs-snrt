@@ -4,6 +4,7 @@ import { Box, IconButton, Typography, Avatar } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../common/ThemeToggle';
 
 const AppBar = styled(Box)({
     backgroundColor: '#06455b',
@@ -71,6 +72,7 @@ const RhHeader = ({ toggleDrawer, user }) => {
                     </MenuButton>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <ThemeToggle />
                     <Avatar
                         sx={{
                             width: 32,

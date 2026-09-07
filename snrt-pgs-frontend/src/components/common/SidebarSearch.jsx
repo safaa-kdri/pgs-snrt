@@ -17,7 +17,7 @@ import { styled } from '@mui/material/styles';
 // ============================================
 
 const SearchCard = styled(Card)({
-    backgroundColor: '#f7f7f7',
+    backgroundColor: 'var(--bg-card)',
     borderRadius: '19px',
     padding: '24px 16px 16px',
     minHeight: '350px',
@@ -30,7 +30,7 @@ const SearchCard = styled(Card)({
     alignItems: 'center',
     '& h2': {
         marginBottom: '14px',
-        color: '#4a4a4a', // ✅ Gris foncé (était #07111b noir)
+        color: 'var(--text-primary)',
         fontSize: '18px',
         fontWeight: 700,
         textAlign: 'center',
@@ -45,17 +45,17 @@ const SearchField = styled(TextField)({
     '& .MuiOutlinedInput-root': {
         height: '45px',
         borderRadius: '27px',
-        background: '#fff',
-        '& fieldset': { borderColor: '#e1e6eb' },
-        '&:hover fieldset': { borderColor: '#e1e6eb' },
+        background: 'var(--bg-input)',
+        '& fieldset': { borderColor: 'var(--border-input)' },
+        '&:hover fieldset': { borderColor: 'var(--border-input)' },
         '&.Mui-focused fieldset': { borderColor: '#148aa0' },
     },
     '& .MuiInputBase-input': {
         padding: '0 28px',
         fontSize: '15px',
-        color: '#6d7884',
+        color: 'var(--text-primary)',
         '&::placeholder': {
-            color: '#888888',
+            color: 'var(--text-muted)',
             opacity: 1,
         },
     },
@@ -68,17 +68,17 @@ const DateField = styled(TextField)({
     '& .MuiOutlinedInput-root': {
         height: '48px',
         borderRadius: '27px',
-        background: '#fff',
-        '& fieldset': { borderColor: '#e1e6eb' },
-        '&:hover fieldset': { borderColor: '#e1e6eb' },
+        background: 'var(--bg-input)',
+        '& fieldset': { borderColor: 'var(--border-input)' },
+        '&:hover fieldset': { borderColor: 'var(--border-input)' },
         '&.Mui-focused fieldset': { borderColor: '#148aa0' },
     },
     '& .MuiInputBase-input': {
         padding: '0 23px 0 28px',
         fontSize: '15px',
-        color: '#6d7884',
+        color: 'var(--text-primary)',
         '&::placeholder': {
-            color: '#1a2332',
+            color: 'var(--text-primary)',
             opacity: 1,
         },
     },

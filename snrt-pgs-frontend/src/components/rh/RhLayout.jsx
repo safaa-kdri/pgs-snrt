@@ -13,7 +13,7 @@ const MainContent = styled(Box, {
 })(({ open, isMobile }) => ({
     marginTop: '74px',
     padding: '24px',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--bg-primary)',
     minHeight: 'calc(100vh - 74px)',
     transition: 'margin-left 0.3s ease',
     flex: 1,
@@ -46,7 +46,7 @@ const RhLayout = ({ children }) => {
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <RhHeader toggleDrawer={toggleDrawer} drawerOpen={drawerOpen} user={user} />
             <RhSidebar open={drawerOpen} onClose={() => isMobile && setDrawerOpen(false)} user={user} />
-            <MainContent open={drawerOpen} isMobile={isMobile}>
+            <MainContent className="theme-page-surface" open={drawerOpen} isMobile={isMobile}>
                 <Container maxWidth="xl" sx={{ py: 2 }}>
                     {children}
                 </Container>

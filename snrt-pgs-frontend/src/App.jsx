@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 import Layout from "./components/common/Layout";
 import ScrollToTop from "./components/common/ScrollToTop";
+import ChatBot from "./components/common/ChatBot";
 
 // Pages publiques
 import Home from "./components/public/Home";
@@ -972,6 +973,7 @@ function App() {
         {/* ===== 404 ===== */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ChatBot />
     </Box>
   );
 }

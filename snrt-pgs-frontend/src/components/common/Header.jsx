@@ -14,6 +14,7 @@ import {
 import { styled } from '@mui/material/styles';
 import { Menu as MenuIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { logout, loadCurrentUser } from '../../store/slices/authSlice';
+import ThemeToggle from './ThemeToggle';
 
 // ============================================
 // STYLES
@@ -119,6 +120,7 @@ const Header = ({ toggleDrawer }) => {
                                 E-stages
                             </Typography>
                         </Box>
+                        <ThemeToggle />
                     </Toolbar>
                 </Container>
             </AppBar>
@@ -204,32 +206,37 @@ const Header = ({ toggleDrawer }) => {
 
                     {/* ===== PARTIE DROITE ===== */}
                     {isAuthenticated ? (
-                        <Box sx={{ width: '120px' }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <ThemeToggle />
+                        </Box>
                     ) : (
-                        <Button
-                            component={Link}
-                            to="/register"
-                            variant="contained"
-                            sx={{
-                                backgroundColor: 'white',
-                                color: '#43455a',
-                                borderRadius: '50px',
-                                px: 3,
-                                py: 0.8,
-                                fontFamily: '"Inria Sans", sans-serif',
-                                fontSize: '15px',
-                                fontWeight: 400,
-                                textTransform: 'none',
-                                letterSpacing: '0.5px',
-                                minWidth: '120px',
-                                flexShrink: 0,
-                                '&:hover': { backgroundColor: '#f8f6f5' },
-                                '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
-                            }}
-                        >
-                            <i className="fa-solid fa-user-plus"></i>
-                            S'inscrire
-                        </Button>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <ThemeToggle />
+                            <Button
+                                component={Link}
+                                to="/register"
+                                variant="contained"
+                                sx={{
+                                    backgroundColor: 'white',
+                                    color: '#43455a',
+                                    borderRadius: '50px',
+                                    px: 3,
+                                    py: 0.8,
+                                    fontFamily: '"Inria Sans", sans-serif',
+                                    fontSize: '15px',
+                                    fontWeight: 400,
+                                    textTransform: 'none',
+                                    letterSpacing: '0.5px',
+                                    minWidth: '120px',
+                                    flexShrink: 0,
+                                    '&:hover': { backgroundColor: '#f8f6f5' },
+                                    '& i': { color: '#ea7224', marginRight: '10px', fontSize: '16px' }
+                                }}
+                            >
+                                <i className="fa-solid fa-user-plus"></i>
+                                S'inscrire
+                            </Button>
+                        </Box>
                     )}
                 </Toolbar>
             </Container>

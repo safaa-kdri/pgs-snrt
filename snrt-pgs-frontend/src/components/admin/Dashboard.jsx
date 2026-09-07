@@ -109,7 +109,7 @@ const DrawerFooter = styled(Box)({
 const MainContent = styled(Box)({
   marginTop: '74px',
   padding: '24px',
-  backgroundColor: '#ffffff',
+  backgroundColor: 'var(--bg-primary)',
   minHeight: 'calc(100vh - 74px)',
   transition: 'margin-left 0.3s ease',
   flex: 1,
@@ -696,7 +696,7 @@ const AdminDashboard = ({ children }) => {
         </DrawerFooter>
       </DrawerStyled>
 
-      <MainContent style={{ marginLeft: drawerOpen ? drawerWidth : 0 }}>
+      <MainContent className="theme-page-surface" style={{ marginLeft: drawerOpen ? drawerWidth : 0 }}>
         {children || (
           <>
             <Box sx={{ mb: 4 }}>

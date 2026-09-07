@@ -16,7 +16,7 @@ const MainContent = styled(Box, {
 })(({ open, theme }) => ({
     marginTop: '74px',
     padding: '24px',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--bg-primary)',
     minHeight: 'calc(100vh - 74px)',
     transition: 'margin-left 0.3s ease',
     flex: 1,
@@ -53,7 +53,7 @@ const DepartmentLayout = ({ children }) => {
                 open={drawerOpen}
                 onClose={() => isMobile && setDrawerOpen(false)}
             />
-            <MainContent open={drawerOpen}>
+            <MainContent className="theme-page-surface" open={drawerOpen}>
                 <Container maxWidth="xl" sx={{ py: 2 }}>
                     {children}
                 </Container>

@@ -6,16 +6,16 @@ import { styled } from '@mui/material/styles';
 import { useAuth } from '../../hooks/useAuth';
 
 const CardWrapper = styled(Box)({
-    backgroundColor: '#fbf9f9',
+    backgroundColor: 'var(--bg-card)',
     borderRadius: '8px',
     padding: '20px 24px',
     marginBottom: '16px',
-    border: '1px solid #e8edf0',
+    border: '1px solid var(--border-light)',
     transition: 'all 0.2s ease',
     cursor: 'pointer',
     '&:hover': {
         borderColor: '#148aa0',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: 'var(--bg-hover)',
     },
 });
 
@@ -23,10 +23,10 @@ const OfferTitle = styled(Typography)({
     fontFamily: 'Inter, sans-serif',
     fontWeight: 700,
     fontSize: '18px',
-    color: '#1a1a2e',
+    color: 'var(--text-primary)',
     marginBottom: '4px',
     '& a': {
-        color: '#1a1a2e',
+        color: 'var(--text-primary)',
         textDecoration: 'none',
         '&:hover': { color: '#148aa0' }
     }
@@ -36,7 +36,7 @@ const InfoText = styled(Typography)({
     fontFamily: 'Inter, sans-serif',
     fontWeight: 400,
     fontSize: '14px',
-    color: '#555',
+    color: 'var(--text-secondary)',
     lineHeight: 1.6,
 });
 

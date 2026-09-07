@@ -1,0 +1,233 @@
+:root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f9fb;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --bg-hover: #f2f6f9;
+    --bg-table: #ffffff;
+    --bg-table-stripe: #f7f9fb;
+    --text-primary: #20242b;
+    --text-secondary: #52606d;
+    --text-muted: #687480;
+    --text-white: #ffffff;
+    --text-black: #1a1a1a;
+    --border-color: #d9dee3;
+    --border-light: #e8edf1;
+    --border-input: #c8d1d8;
+    --shadow-color: rgba(16, 24, 32, 0.14);
+    --shadow-light: rgba(16, 24, 32, 0.08);
+    --hover-bg: rgba(20, 138, 160, 0.06);
+    --active-bg: rgba(20, 138, 160, 0.12);
+    --disabled-bg: rgba(16, 24, 32, 0.04);
+    --primary-blue: #0055a4;
+    --primary-red: #e31b23;
+    --primary-blue-dark: #003d7a;
+    --primary-red-dark: #b0151a;
+}
+
+:root[data-theme='dark'] {
+    --bg-primary: #12121e;
+    --bg-secondary: #1a1a2e;
+    --bg-card: #1e1e32;
+    --bg-input: #2a2a42;
+    --bg-hover: #2d2d4d;
+    --bg-table: #1a1a2e;
+    --bg-table-stripe: #22223a;
+    --text-primary: #e8e8f0;
+    --text-secondary: #c2c5d2;
+    --text-muted: #a0a0b0;
+    --text-white: #ffffff;
+    --text-black: #1a1a1a;
+    --border-color: #3d3d5d;
+    --border-light: #4a4a69;
+    --border-input: #555575;
+    --shadow-color: rgba(0, 0, 0, 0.4);
+    --shadow-light: rgba(0, 0, 0, 0.2);
+    --hover-bg: rgba(255, 255, 255, 0.05);
+    --active-bg: rgba(255, 255, 255, 0.1);
+    --disabled-bg: rgba(255, 255, 255, 0.03);
+    --primary-blue: #4d9be8;
+    --primary-red: #ff5961;
+    --primary-blue-dark: #2d78c2;
+    --primary-red-dark: #d93a42;
+}
+
+html,
+body,
+#root {
+    min-height: 100%;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+html {
+    color-scheme: light;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html[data-theme='dark'] {
+    color-scheme: dark;
+}
+
+body,
+#root,
+main,
+header,
+footer,
+section,
+article,
+aside {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+:root[data-theme='dark'] body,
+:root[data-theme='dark'] #root,
+:root[data-theme='dark'] main,
+:root[data-theme='dark'] .content,
+:root[data-theme='dark'] .layout {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary);
+}
+
+:root[data-theme='dark'] .side-card,
+:root[data-theme='dark'] .MuiPaper-root,
+:root[data-theme='dark'] .MuiCard-root,
+:root[data-theme='dark'] .MuiTableContainer-root,
+:root[data-theme='dark'] .MuiDialog-paper,
+:root[data-theme='dark'] .MuiPopover-paper,
+:root[data-theme='dark'] .MuiMenu-paper,
+:root[data-theme='dark'] .MuiAccordion-root {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+    box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] textarea,
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] .MuiInputBase-root,
+:root[data-theme='dark'] .MuiOutlinedInput-root,
+:root[data-theme='dark'] .MuiFilledInput-root {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-input) !important;
+}
+
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+:root[data-theme='dark'] .MuiOutlinedInput-notchedOutline,
+:root[data-theme='dark'] fieldset,
+:root[data-theme='dark'] hr,
+:root[data-theme='dark'] .MuiDivider-root {
+    border-color: var(--border-color) !important;
+}
+
+:root[data-theme='dark'] table,
+:root[data-theme='dark'] thead,
+:root[data-theme='dark'] tbody,
+:root[data-theme='dark'] tr,
+:root[data-theme='dark'] th,
+:root[data-theme='dark'] td,
+:root[data-theme='dark'] .MuiTableCell-root {
+    background-color: var(--bg-table) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+:root[data-theme='dark'] tbody tr:nth-child(even),
+:root[data-theme='dark'] tbody tr:nth-child(even) td {
+    background-color: var(--bg-table-stripe) !important;
+}
+
+:root[data-theme='dark'] h1,
+:root[data-theme='dark'] h2,
+:root[data-theme='dark'] h3,
+:root[data-theme='dark'] h4,
+:root[data-theme='dark'] h5,
+:root[data-theme='dark'] h6,
+:root[data-theme='dark'] p,
+:root[data-theme='dark'] label,
+:root[data-theme='dark'] .MuiTypography-root,
+:root[data-theme='dark'] .MuiFormLabel-root,
+:root[data-theme='dark'] .MuiInputLabel-root,
+:root[data-theme='dark'] .MuiTablePagination-root {
+    color: var(--text-primary);
+}
+
+:root[data-theme='dark'] .MuiTypography-colorTextSecondary,
+:root[data-theme='dark'] .MuiFormHelperText-root,
+:root[data-theme='dark'] .MuiListItemText-secondary {
+    color: var(--text-secondary) !important;
+}
+
+:root[data-theme='dark'] .MuiButton-contained:not(.MuiButton-containedPrimary) {
+    box-shadow: 0 3px 10px var(--shadow-light);
+}
+
+:root[data-theme='dark'] .auth-field,
+:root[data-theme='dark'] .search-field,
+:root[data-theme='dark'] .contact-field,
+:root[data-theme='dark'] .select-field,
+:root[data-theme='dark'] .captcha-row input {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-input) !important;
+}
+
+/* Covers Box/styled components that use hard-coded light colors in page files. */
+:root[data-theme='dark'] [data-theme-light-surface='page'] {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+}
+
+:root[data-theme='dark'] [data-theme-light-surface='card'] {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+:root[data-theme='dark'] [data-theme-light-surface='input'] {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-input) !important;
+}
+
+:root[data-theme='dark'] [data-theme-dark-text='true'] {
+    color: var(--text-primary) !important;
+}
+
+:root[data-theme='dark'] .theme-page-surface,
+:root[data-theme='dark'] .theme-page-surface .MuiContainer-root {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+:root[data-theme='dark'] .theme-page-surface .MuiTypography-root,
+:root[data-theme='dark'] .theme-page-surface h1,
+:root[data-theme='dark'] .theme-page-surface h2,
+:root[data-theme='dark'] .theme-page-surface h3,
+:root[data-theme='dark'] .theme-page-surface h4,
+:root[data-theme='dark'] .theme-page-surface h5,
+:root[data-theme='dark'] .theme-page-surface h6,
+:root[data-theme='dark'] .theme-page-surface p {
+    color: var(--text-primary) !important;
+}
+
+:root[data-theme='dark'] .theme-page-surface .MuiTypography-colorTextSecondary,
+:root[data-theme='dark'] .theme-page-surface .MuiFormHelperText-root {
+    color: var(--text-secondary) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+    }
+}
