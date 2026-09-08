@@ -1,0 +1,33 @@
+.navLink {
+    color: white;
+    text-decoration: none;
+    font-family: "Inria Sans", sans-serif;
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    padding: 4px 0;
+    margin: 0;
+}
+
+.homeLink { font-size: 20px; font-weight: 200; }
+
+.tutorialButton {
+    position: relative;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.newBadge {
+    position: absolute;
+    top: -14px;
+    right: -14px;
+    padding: 2px 5px;
+    border-radius: 8px;
+    color: #fff;
+    background-color: #ea7224;
+    font-family: Inter, sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1.2;
+}

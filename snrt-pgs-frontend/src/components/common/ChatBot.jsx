@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import styles from './ChatBot.module.css';
 
 const knowledgeBase = [
@@ -40,21 +41,34 @@ const knowledgeBase = [
     },
 ];
 
-const findResponse = (message) => {
+const internalLoginResponse = 'Vous êtes sur l’espace de connexion interne de la SNRT. Cet espace est réservé aux utilisateurs internes : RH, département, encadrant et administrateur. Pour vous connecter, saisissez votre CIN professionnel et le mot de passe qui vous a été attribué, puis validez le CAPTCHA. Je ne peux pas connaître ni communiquer votre mot de passe. Après validation, votre rôle est reconnu automatiquement et vous êtes redirigé vers votre espace. En cas d’oubli, utilisez la procédure « Mot de passe oublié » ou contactez l’administrateur.';
+
+const findResponse = (message, isInternalLogin) => {
     const normalizedMessage = message.toLocaleLowerCase('fr-FR');
+
+    if (isInternalLogin && ['login', 'connexion', 'connecter', 'mot de passe', 'mdp', 'identifiant', 'cin', 'interne', 'rh', 'administrateur'].some((keyword) => normalizedMessage.includes(keyword))) {
+        return internalLoginResponse;
+    }
+
     const match = knowledgeBase.find((item) => item.keywords.some((keyword) => normalizedMessage.includes(keyword)));
 
     return match?.response || 'Je peux vous aider avec les offres, les candidatures, les documents, les conventions, les entretiens, votre compte et le suivi de stage.';
 };
 
 const ChatBot = () => {
+    const location = useLocation();
+    const isInternalLogin = location.pathname === '/login-interne';
     const [isOpen, setIsOpen] = useState(false);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [messages, setMessages] = useState([
-        { id: 1, type: 'bot', text: 'Bonjour ! Je suis l’assistant virtuel de la SNRT. Posez-moi vos questions sur les stages et les candidatures.' },
+        { id: 1, type: 'bot', text: isInternalLogin ? 'Bonjour ! Vous êtes sur l’espace de connexion interne de la SNRT. Je peux vous expliquer qui peut se connecter et quels identifiants utiliser.' : 'Bonjour ! Je suis l’assistant virtuel de la SNRT. Posez-moi vos questions sur les stages et les candidatures.' },
     ]);
     const messagesEndRef = useRef(null);
+
+    useEffect(() => {
+        setMessages([{ id: Date.now(), type: 'bot', text: isInternalLogin ? 'Bonjour ! Vous êtes sur l’espace de connexion interne de la SNRT. Je peux vous expliquer qui peut se connecter et quels identifiants utiliser.' : 'Bonjour ! Je suis l’assistant virtuel de la SNRT. Posez-moi vos questions sur les stages et les candidatures.' }]);
+    }, [isInternalLogin]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -69,7 +83,7 @@ const ChatBot = () => {
         setIsLoading(true);
 
         window.setTimeout(() => {
-            setMessages((current) => [...current, { id: Date.now() + 1, type: 'bot', text: findResponse(message) }]);
+            setMessages((current) => [...current, { id: Date.now() + 1, type: 'bot', text: findResponse(message, isInternalLogin) }]);
             setIsLoading(false);
         }, 350);
     };

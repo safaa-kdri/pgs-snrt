@@ -108,6 +108,12 @@ const isOwnerOrStaff = (req, etudiantIdField) => {
     return ownerId === req.user.id;
 };
 
+const canViewApplicationHistory = (req, etudiantIdField) => {
+    if (req.user?.role !== ROLES.ETUDIANT) return false;
+    const ownerId = etudiantIdField?._id ? etudiantIdField._id.toString() : etudiantIdField?.toString();
+    return ownerId === req.user.id;
+};
+
 /**
  * Verifier si un etudiant a un stage en cours pendant une periode donnee
  */
@@ -554,12 +560,19 @@ exports.getAllApplications = async (req, res) => {
 
 exports.getApplicationById = async (req, res) => {
     try {
-        const application = await Application.findById(req.params.id)
+        let applicationQuery = Application.findById(req.params.id)
             .populate('etudiantId', 'nom prenom email cin telephone')
             .populate('offreId', 'titre description typeStage statut dateDebut dateFin dateLimiteCandidature departementId')
             .populate('traiteurId', 'nom prenom email')
-            .populate('documents')
-            .populate('historique.auteurId', 'nom prenom email');
+            .populate('documents');
+
+        if (req.user?.role !== ROLES.ETUDIANT) {
+            applicationQuery = applicationQuery.select('-historique');
+        } else {
+            applicationQuery = applicationQuery.populate('historique.auteurId', 'nom prenom email');
+        }
+
+        const application = await applicationQuery;
 
         if (!application) {
             return res.status(404).json({
@@ -938,7 +951,7 @@ exports.getApplicationHistory = async (req, res) => {
             });
         }
 
-        if (!isOwnerOrStaff(req, application.etudiantId)) {
+        if (!canViewApplicationHistory(req, application.etudiantId)) {
             return res.status(403).json({
                 success: false,
                 message: "Vous n'avez pas acces a cette candidature"

@@ -7,10 +7,14 @@ import Footer from './Footer';
 import SidebarAuth from './SidebarAuth';
 import SidebarSearch from './SidebarSearch';
 import LinksCard from './LinksCard';
+import PublicTutorial from '../public/PublicTutorial';
+import useTutorial from '../../hooks/useTutorial';
 
 const Layout = ({ children, hideSidebars = false }) => {
     const location = useLocation();
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const isTutorialPreview = new URLSearchParams(location.search).has('tutorialPreview');
+    const tutorial = useTutorial({ autoOpen: location.pathname === '/' && !isTutorialPreview });
 
     const toggleDrawer = () => {
         setDrawerOpen(!drawerOpen);
@@ -70,7 +74,7 @@ const Layout = ({ children, hideSidebars = false }) => {
                     </Grid>
 
                     <Grid item xs={12} md={6} sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 }, borderLeft: { md: '1px solid #cfd5da' }, borderRight: { md: '1px solid #cfd5da' } }}>
-                        {children}
+                        {tutorial.isOpen && !isTutorialPreview ? <PublicTutorial tutorial={tutorial} /> : children}
                     </Grid>
 
                     <Grid item xs={12} md={3} sx={{ px: { xs: 2, md: 1 }, py: { xs: 2, md: 3 } }}>

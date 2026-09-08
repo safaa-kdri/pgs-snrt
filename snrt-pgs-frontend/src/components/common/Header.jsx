@@ -15,6 +15,8 @@ import { styled } from '@mui/material/styles';
 import { Menu as MenuIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { logout, loadCurrentUser } from '../../store/slices/authSlice';
 import ThemeToggle from './ThemeToggle';
+import { OPEN_TUTORIAL_EVENT } from '../../hooks/useTutorial';
+import styles from './Header.module.css';
 
 // ============================================
 // STYLES
@@ -62,6 +64,10 @@ const Header = ({ toggleDrawer }) => {
     const handleLogout = () => {
         dispatch(logout());
         navigate('/');
+    };
+
+    const handleTutorialOpen = () => {
+        window.dispatchEvent(new Event(OPEN_TUTORIAL_EVENT));
     };
 
     // ✅ HEADER VIDE POUR LOGIN INTERNE
@@ -201,6 +207,9 @@ const Header = ({ toggleDrawer }) => {
                             <Link to="/faq" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>FAQ</Link>
                             <Link to="/contact" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>Contact</Link>
                             <Link to="https://e-recrutement.snrt.ma/contact#contact" target="_blank" rel="noopener" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>E-recrutement</Link>
+                            <button className={`${styles.navLink} ${styles.tutorialButton}`} type="button" onClick={handleTutorialOpen} aria-label="Ouvrir le tutoriel">
+                                Tutoriel
+                            </button>
                         </Box>
                     </Box>
 

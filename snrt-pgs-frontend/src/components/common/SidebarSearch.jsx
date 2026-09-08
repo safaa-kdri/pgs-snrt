@@ -17,7 +17,7 @@ import { styled } from '@mui/material/styles';
 // ============================================
 
 const SearchCard = styled(Card)({
-    backgroundColor: 'var(--bg-card)',
+    backgroundColor: '#f7f7f7',
     borderRadius: '19px',
     padding: '24px 16px 16px',
     minHeight: '350px',
@@ -30,7 +30,7 @@ const SearchCard = styled(Card)({
     alignItems: 'center',
     '& h2': {
         marginBottom: '14px',
-        color: 'var(--text-primary)',
+        color: '#4a4a4a',
         fontSize: '18px',
         fontWeight: 700,
         textAlign: 'center',
