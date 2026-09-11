@@ -1,6 +1,7 @@
 // src/components/public/OffersList.jsx
-// ✅ CORRECTION FINALE : Chargement des offres public - Indépendant de l'authentification
-// ✅ CORRECTION : Rechargement après déconnexion sans F5
+// CORRECTION FINALE : Chargement des offres public - Indépendant de l'authentification
+// CORRECTION : Rechargement après déconnexion sans F5
+// AJOUT : Onglet Recommandations IA
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -8,21 +9,16 @@ import { useNavigate } from 'react-router-dom';
 import {
     Typography,
     Box,
-    Container,
-    Grid,
     Button,
-    Card,
-    TextField,
-    MenuItem,
     CircularProgress,
     Pagination,
-    Alert,
-    InputAdornment,
-    Chip
+    Alert
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { fetchOffers, fetchDepartments, setFilter, setPage, resetFilters } from '../../store/slices/offerSlice';
+import { fetchOffers, setPage } from '../../store/slices/offerSlice';
 import OfferCard from './OfferCard';
+import OfferRecommendations from './OfferRecommendations';
+import { Analytics } from '@mui/icons-material';
 
 // ============================================
 // STYLES
@@ -57,26 +53,6 @@ const NoResultsBox = styled(Box)({
     color: '#6d7884',
 });
 
-const FilterChip = styled(Chip)({
-    borderRadius: '6px',
-    fontSize: '12px',
-    height: '28px',
-    backgroundColor: '#eef3f7',
-    color: '#2d3748',
-    '& .MuiChip-deleteIcon': {
-        fontSize: '16px',
-        color: '#6d7884',
-    },
-});
-
-const FilterContainer = styled(Box)({
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px',
-    marginTop: '16px',
-    marginBottom: '16px',
-});
-
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -84,59 +60,51 @@ const FilterContainer = styled(Box)({
 const OffersList = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
-    const { offers, loading, error, total, page, pages, filters, types, departments } = useSelector(
+    const { offers, loading, error, total, page, pages, filters } = useSelector(
         (state) => state.offers
     );
-    const { isAuthenticated: authIsAuthenticated } = useSelector((state) => state.auth);
+    const { isAuthenticated: authIsAuthenticated, user } = useSelector((state) => state.auth);
 
     const initialLoadDone = useRef(false);
     const previousAuthState = useRef(authIsAuthenticated);
 
-    const normalizedDepartments = Array.isArray(departments) ? departments : [];
-    const normalizedTypes = Array.isArray(types) ? types : [];
-
-    const [localFilters, setLocalFilters] = useState({
-        statut: 'Publiée',
-        typeStage: '',
-        departementId: '',
-        search: ''
-    });
+    // État pour l'onglet actif
+    const [activeTab, setActiveTab] = useState('all'); // 'all' ou 'recommended'
 
     const isAuthenticated = authIsAuthenticated || !!localStorage.getItem('user') || !!localStorage.getItem('token');
 
-    // ✅ FONCTION DE CHARGEMENT DES OFFRES
+    // FONCTION DE CHARGEMENT DES OFFRES
     const loadOffers = () => {
         const params = { ...filters, page, limit: 10 };
-        console.log('📤 [OffersList] Chargement des offres (public)');
+        console.log('[OffersList] Chargement des offres (public)');
         dispatch(fetchOffers(params));
-        dispatch(fetchDepartments());
     };
 
-    // ✅ CHARGEMENT INITIAL - AU MONTAGE (toujours exécuté)
+    // CHARGEMENT INITIAL - AU MONTAGE (toujours exécuté)
     useEffect(() => {
-        console.log('📤 [OffersList] Montage - Chargement initial');
+        console.log('[OffersList] Montage - Chargement initial');
         loadOffers();
         initialLoadDone.current = true;
     }, [dispatch]);
 
-    // ✅ RECHARGEMENT QUAND LES FILTRES OU LA PAGE CHANGENT
+    // RECHARGEMENT QUAND LES FILTRES OU LA PAGE CHANGENT
     useEffect(() => {
         if (initialLoadDone.current) {
-            console.log('📤 [OffersList] Rechargement - Filtres/Page changés');
+            console.log('[OffersList] Rechargement - Filtres/Page changés');
             loadOffers();
         }
     }, [dispatch, filters, page]);
 
-    // ✅ RECHARGEMENT APRÈS CHANGEMENT D'AUTHENTIFICATION (LOGIN/LOGOUT)
+    // RECHARGEMENT APRÈS CHANGEMENT D'AUTHENTIFICATION (LOGIN/LOGOUT)
     useEffect(() => {
         if (previousAuthState.current !== authIsAuthenticated) {
-            console.log('📤 [OffersList] Changement d\'authentification détecté:', {
+            console.log('[OffersList] Changement d\'authentification détecté:', {
                 avant: previousAuthState.current,
                 apres: authIsAuthenticated
             });
             
             if (initialLoadDone.current) {
-                console.log('📤 [OffersList] Rechargement après changement d\'auth');
+                console.log('[OffersList] Rechargement après changement d\'auth');
                 loadOffers();
             }
             
@@ -144,42 +112,9 @@ const OffersList = () => {
         }
     }, [authIsAuthenticated]);
 
-    // ============================================
-    // GESTION DES FILTRES
-    // ============================================
-
-    const handleSearch = (e) => {
-        e.preventDefault();
-        Object.keys(localFilters).forEach(key => {
-            dispatch(setFilter({ key, value: localFilters[key] }));
-        });
-    };
-
     const handlePageChange = (event, value) => {
         dispatch(setPage(value));
     };
-
-    const handleReset = () => {
-        setLocalFilters({ statut: 'Publiée', typeStage: '', departementId: '', search: '' });
-        dispatch(resetFilters());
-    };
-
-    const handleRemoveFilter = (key) => {
-        dispatch(setFilter({ key, value: '' }));
-        setLocalFilters({ ...localFilters, [key]: '' });
-    };
-
-    // ============================================
-    // FILTRES ACTIFS
-    // ============================================
-
-    const activeFilters = [];
-    if (filters.typeStage) activeFilters.push({ key: 'typeStage', label: `Type: ${filters.typeStage}` });
-    if (filters.departementId) {
-        const dept = normalizedDepartments.find(d => d._id === filters.departementId || d.id === filters.departementId);
-        if (dept) activeFilters.push({ key: 'departementId', label: `Département: ${dept.nom}` });
-    }
-    if (filters.search) activeFilters.push({ key: 'search', label: `🔍 ${filters.search}` });
 
     // ============================================
     // RENDER
@@ -190,172 +125,94 @@ const OffersList = () => {
             <PageTitle>Recherche des offres de stage</PageTitle>
             <TitleLine />
 
-            {!isAuthenticated && (
-                <Alert 
-                    severity="info" 
-                    sx={{ mt: 2, mb: 2, borderRadius: '10px' }}
-                    action={
-                        <Button 
-                            color="inherit" 
-                            size="small" 
-                            onClick={() => navigate('/')}
-                            sx={{ fontWeight: 600 }}
-                        >
-                            Se connecter
-                        </Button>
-                    }
-                >
-                    Connectez-vous pour postuler aux offres de stage.
-                </Alert>
-            )}
-
-            {/* ===== FILTRES ===== */}
-            <Box sx={{ 
-                display: 'flex', 
-                flexWrap: 'wrap', 
-                gap: 2, 
-                mt: 2, 
-                mb: 3,
-                p: 2,
-                backgroundColor: '#f7f7f7',
-                borderRadius: '12px'
-            }}>
-                <TextField
-                    size="small"
-                    placeholder="🔍 Profil"
-                    variant="outlined"
-                    value={localFilters.search}
-                    onChange={(e) => setLocalFilters({ ...localFilters, search: e.target.value })}
-                    sx={{ flex: 1, minWidth: '150px' }}
-                />
-
-                <TextField
-                    size="small"
-                    select
-                    value={localFilters.typeStage}
-                    onChange={(e) => setLocalFilters({ ...localFilters, typeStage: e.target.value })}
-                    variant="outlined"
-                    SelectProps={{ displayEmpty: true }}
-                    sx={{ flex: 1, minWidth: '150px' }}
-                >
-                    <MenuItem value="">Type de stage</MenuItem>
-                    {normalizedTypes.map((type) => (
-                        <MenuItem key={type} value={type}>{type}</MenuItem>
-                    ))}
-                </TextField>
-
-                <TextField
-                    size="small"
-                    select
-                    value={localFilters.departementId}
-                    onChange={(e) => setLocalFilters({ ...localFilters, departementId: e.target.value })}
-                    variant="outlined"
-                    SelectProps={{ displayEmpty: true }}
-                    sx={{ flex: 1, minWidth: '150px' }}
-                >
-                    <MenuItem value="">Département</MenuItem>
-                    {normalizedDepartments.map((dept) => (
-                        <MenuItem key={dept._id || dept.id} value={dept._id || dept.id}>
-                            {dept.nom}
-                        </MenuItem>
-                    ))}
-                </TextField>
-
-                <Button
-                    variant="contained"
-                    onClick={handleSearch}
-                    sx={{
-                        backgroundColor: '#148aa0',
-                        borderRadius: '27px',
-                        textTransform: 'none',
-                        px: 3,
-                        '&:hover': { backgroundColor: '#0b7890' }
-                    }}
-                >
-                    Rechercher
-                </Button>
-
-                <Button
-                    variant="outlined"
-                    onClick={handleReset}
-                    sx={{
-                        borderRadius: '27px',
-                        textTransform: 'none',
-                        borderColor: '#d1d5db',
-                        color: '#6b7280',
-                        px: 3,
-                    }}
-                >
-                    Réinitialiser
-                </Button>
-            </Box>
-
-            {/* ===== FILTRES ACTIFS ===== */}
-            {activeFilters.length > 0 && (
-                <FilterContainer>
-                    {activeFilters.map((filter) => (
-                        <FilterChip
-                            key={filter.key}
-                            label={filter.label}
-                            onDelete={() => handleRemoveFilter(filter.key)}
-                        />
-                    ))}
-                    <FilterChip
-                        label="Réinitialiser tout"
-                        onClick={handleReset}
-                        sx={{ 
-                            backgroundColor: '#fee2e2', 
-                            color: '#b91c1c',
-                            cursor: 'pointer',
-                            '&:hover': { backgroundColor: '#fecaca' }
+            {/* ===== ONGLETS ===== */}
+            {isAuthenticated && user && (
+                <Box sx={{ display: 'flex', gap: 2, mb: 3, mt: 2 }}>
+                    <Button
+                        variant={activeTab === 'all' ? 'contained' : 'outlined'}
+                        onClick={() => setActiveTab('all')}
+                        sx={{
+                            borderRadius: '20px',
+                            textTransform: 'none',
+                            backgroundColor: activeTab === 'all' ? '#148aa0' : 'transparent',
+                            borderColor: '#148aa0',
+                            color: activeTab === 'all' ? '#fff' : '#148aa0',
+                            '&:hover': {
+                                backgroundColor: activeTab === 'all' ? '#0b7890' : '#eaf6f8',
+                            },
                         }}
-                    />
-                </FilterContainer>
+                    >
+                        Toutes les offres
+                    </Button>
+                    <Button
+                        variant={activeTab === 'recommended' ? 'contained' : 'outlined'}
+                        onClick={() => setActiveTab('recommended')}
+                        sx={{
+                            borderRadius: '20px',
+                            textTransform: 'none',
+                            backgroundColor: activeTab === 'recommended' ? '#148aa0' : 'transparent',
+                            borderColor: '#148aa0',
+                            color: activeTab === 'recommended' ? '#fff' : '#148aa0',
+                            '&:hover': {
+                                backgroundColor: activeTab === 'recommended' ? '#0b7890' : '#eaf6f8',
+                            },
+                        }}
+                        startIcon={<Analytics />}
+                    >
+                        Recommandations IA
+                    </Button>
+                </Box>
             )}
 
-            {/* ===== LISTE DES OFFRES ===== */}
-            {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                    <CircularProgress sx={{ color: '#148aa0' }} />
-                </Box>
-            ) : error ? (
-                <Alert severity="error" sx={{ mt: 2, borderRadius: '10px' }}>
-                    {error}
-                </Alert>
-            ) : offers.length === 0 ? (
-                <NoResultsBox>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        🕵️ Aucune offre trouvée
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                        Aucune offre de stage n'est disponible pour le moment.
-                        {!isAuthenticated && ' Connectez-vous pour voir toutes les offres disponibles.'}
-                    </Typography>
-                </NoResultsBox>
+            {/* ===== CONTENU ===== */}
+            {activeTab === 'recommended' && isAuthenticated ? (
+                <OfferRecommendations />
             ) : (
                 <>
-                    <ResultsCount>
-                        {total} offre(s) trouvée(s)
-                    </ResultsCount>
-
-                    {offers.map((offer) => (
-                        <OfferCard key={offer._id} offer={offer} />
-                    ))}
-
-                    {pages > 1 && (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                            <Pagination
-                                count={pages}
-                                page={page}
-                                onChange={handlePageChange}
-                                sx={{
-                                    '& .MuiPaginationItem-root.Mui-selected': {
-                                        backgroundColor: '#148aa0',
-                                        color: '#fff',
-                                    }
-                                }}
-                            />
+                    {/* ===== LISTE DES OFFRES ===== */}
+                    {loading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                            <CircularProgress sx={{ color: '#148aa0' }} />
                         </Box>
+                    ) : error ? (
+                        <Alert severity="error" sx={{ mt: 2, borderRadius: '10px' }}>
+                            {error}
+                        </Alert>
+                    ) : offers.length === 0 ? (
+                        <NoResultsBox>
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                Aucune offre trouvée
+                            </Typography>
+                            <Typography variant="body2" sx={{ mt: 1 }}>
+                                Aucune offre de stage n'est disponible pour le moment.
+                            </Typography>
+                        </NoResultsBox>
+                    ) : (
+                        <>
+                            <ResultsCount>
+                                {total} offre(s) trouvée(s)
+                            </ResultsCount>
+
+                            {offers.map((offer) => (
+                                <OfferCard key={offer._id} offer={offer} />
+                            ))}
+
+                            {pages > 1 && (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                                    <Pagination
+                                        count={pages}
+                                        page={page}
+                                        onChange={handlePageChange}
+                                        sx={{
+                                            '& .MuiPaginationItem-root.Mui-selected': {
+                                                backgroundColor: '#148aa0',
+                                                color: '#fff',
+                                            }
+                                        }}
+                                    />
+                                </Box>
+                            )}
+                        </>
                     )}
                 </>
             )}

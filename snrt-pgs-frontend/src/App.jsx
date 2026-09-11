@@ -1,5 +1,6 @@
 // src/App.jsx
 // VERSION FINALE AVEC ROUTE UploadSignature ET Notifications RH
+// AJOUT : Route /offres/recommandations pour les recommandations IA
 
 import React, { useEffect, useState, useRef } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
@@ -14,6 +15,7 @@ import ChatBot from "./components/common/ChatBot";
 import Home from "./components/public/Home";
 import OffersList from "./components/public/OffersList";
 import OfferDetail from "./components/public/OfferDetail";
+import OfferRecommendations from './components/public/OfferRecommendations';
 import FAQ from "./components/public/FAQ";
 import Contact from "./components/public/Contact";
 import Terms from "./components/public/Terms";
@@ -324,6 +326,14 @@ function App() {
           element={
             <Layout>
               <OfferDetail />
+            </Layout>
+          }
+        />
+        <Route
+          path="/offres/recommandations"
+          element={
+            <Layout>
+              <OfferRecommendations />
             </Layout>
           }
         />

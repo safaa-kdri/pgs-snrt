@@ -31,6 +31,9 @@ const periodRoutes = require('./src/routes/periodRoutes');
 // AJOUT : Routes pour les rôles
 const roleRoutes = require('./src/routes/roleRoutes');
 
+// AJOUT : Routes pour les recommandations IA
+const aiRecommendationRoutes = require('./src/routes/aiRecommendationRoutes');
+
 assertRequiredEnv();
 
 const app = express();
@@ -54,16 +57,16 @@ app.use(cookieParser());
 app.use(mongoSanitize());
 
 // ============================================
-// ✅ EXPOSITION DES DOSSIERS STATIQUES
+// EXPOSITION DES DOSSIERS STATIQUES
 // ============================================
 app.use('/uploads/documents', express.static(path.join(__dirname, 'uploads/documents')));
 app.use('/uploads/rapports', express.static(path.join(__dirname, 'uploads/rapports')));
 app.use('/uploads/engagements', express.static(path.join(__dirname, 'uploads/engagements')));
 app.use('/uploads/livrables', express.static(path.join(__dirname, 'uploads/livrables')));
 app.use('/uploads/conventions', express.static(path.join(__dirname, 'uploads/conventions')));
-// ✅ Dossier uploads racine - permet l'accès à tous les sous-dossiers
+// Dossier uploads racine - permet l'accès à tous les sous-dossiers
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-// ✅ Dossier resultats - spécifique pour les PDF de résultats
+// Dossier resultats - spécifique pour les PDF de résultats
 app.use('/uploads/resultats', express.static(path.join(__dirname, 'uploads/resultats')));
 
 if (CONFIG.nodeEnv !== 'production') {
@@ -88,6 +91,8 @@ app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/internships', internshipRoutes);
 // AJOUT : Route pour les rôles
 app.use('/api/v1/roles', roleRoutes);
+// AJOUT : Route pour les recommandations IA
+app.use('/api/v1/ai', aiRecommendationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route introuvable : ${req.method} ${req.originalUrl}` });

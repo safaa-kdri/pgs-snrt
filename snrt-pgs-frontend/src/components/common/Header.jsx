@@ -204,6 +204,7 @@ const Header = ({ toggleDrawer }) => {
                             flexShrink: 0
                         }}>
                             <Link to="/" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '20px', fontWeight: 200, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>Accueil</Link>
+                            <Link to="/offres" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>Offres</Link>
                             <Link to="/faq" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>FAQ</Link>
                             <Link to="/contact" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>Contact</Link>
                             <Link to="https://e-recrutement.snrt.ma/contact#contact" target="_blank" rel="noopener" style={{ color: 'white', textDecoration: 'none', fontFamily: '"Inria Sans", sans-serif', fontSize: '18px', fontWeight: 400, letterSpacing: '0.5px', padding: '4px 0', margin: 0 }}>E-recrutement</Link>
