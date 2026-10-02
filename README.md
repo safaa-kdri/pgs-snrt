@@ -1,28 +1,99 @@
-# 🎯 SNRT - Plateforme de Gestion des Stages (PGS)
+# SNRT - Plateforme de Gestion des Stages (PGS)
 
-Plateforme web de gestion des stages pour la **SNRT** (Société Nationale de Radiodiffusion et de Télévision).
+Plateforme web dédiée à la **gestion et au suivi des stages au sein de la SNRT (Société Nationale de Radiodiffusion et de Télévision)**.
+
+La plateforme permet de centraliser le processus de gestion des stages, depuis la création et la publication des offres jusqu'au suivi des candidatures, des conventions, des documents et de la clôture du stage.
 
 ---
 
-## 🏗️ Structure du projet (Monorepo)
+## Présentation
+
+La plateforme PGS a été conçue pour digitaliser et simplifier le processus de gestion des stages entre les différents intervenants :
+
+- Étudiants / Candidats
+- Département
+- Ressources Humaines
+- Encadrants
+- Administrateurs
+
+Elle permet notamment de centraliser les offres de stage, les candidatures, les documents administratifs et le suivi des stagiaires au sein d'une seule plateforme.
+
+---
+
+## Fonctionnalités principales
+
+### Gestion des offres
+
+- Création et gestion des offres de stage
+- Validation et publication des offres
+- Gestion des postes disponibles
+- Gestion des compétences et sujets de stage
+
+### Gestion des candidatures
+
+- Inscription et authentification des candidats
+- Dépôt et suivi des candidatures
+- Analyse et traitement des candidatures
+- Gestion des entretiens
+- Acceptation ou refus des candidatures
+- Génération des résultats
+
+### Gestion des stages
+
+- Gestion des conventions
+- Gestion des documents administratifs
+- Suivi du stage
+- Dépôt et validation du rapport de stage
+- Génération des documents liés au stage
+- Génération de l'attestation de stage
+
+### Sécurité
+
+- Authentification JWT
+- Authentification à deux facteurs (2FA)
+- Hachage des mots de passe avec Argon2id
+- Cookies HttpOnly
+- Gestion des rôles et des permissions
+
+---
+
+## Architecture du projet
+
+Le projet est organisé sous forme de monorepo :
+
+```text
 snrt-pgs/
-├── snrt-pgs-backend/ # API REST (Node.js + Express + MongoDB)
-└── snrt-pgs-frontend/ # Application React (SPA)
+├── snrt-pgs-backend/
+│   └── API REST
+│
+└── snrt-pgs-frontend/
+    └── Application web React
+```
+
+### Backend
+
+API REST développée avec Node.js et Express.js, permettant de gérer les utilisateurs, les offres, les candidatures, les stages et les documents.
+
+### Frontend
+
+Application web monopage (SPA) développée avec React.js, Redux Toolkit et Material-UI.
 
 ---
 
-## 🛠️ Technologies
+## Technologies
 
-| Couche | Technologie |
+| Couche | Technologies |
 |:---|:---|
 | **Frontend** | React.js, Redux Toolkit, Material-UI |
 | **Backend** | Node.js, Express.js |
 | **Base de données** | MongoDB, Mongoose |
-| **Sécurité** | JWT, Argon2id, 2FA, cookies HttpOnly |
+| **Authentification** | JWT, 2FA |
+| **Sécurité** | Argon2id, cookies HttpOnly |
+| **Architecture** | API REST, SPA |
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Prérequis
 
@@ -30,37 +101,53 @@ snrt-pgs/
 - MongoDB v6+
 - npm ou yarn
 
-### Backend
+### 1. Cloner le projet
 
+```bash
+git clone <URL_DU_REPOSITORY>
+cd snrt-pgs
+```
+
+### 2. Installer le backend
+
+```bash
 cd snrt-pgs-backend
 npm install
-cp .env.example .env
-npm run seed
+```
+
+Créer ensuite un fichier `.env` à partir du fichier `.env.example` et renseigner les variables d'environnement nécessaires.
+
+Lancer le backend :
+
+```bash
 npm run dev
+```
 
-## Frontend
+### 3. Installer le frontend
 
+Dans un autre terminal :
+
+```bash
 cd snrt-pgs-frontend
 npm install
-cp .env.example .env
+```
+
+Créer ensuite le fichier `.env` à partir du fichier `.env.example`.
+
+Lancer le frontend :
+
+```bash
 npm start
-
-👥 Équipe
-Membre	Rôle
-Safaa EL KADOURI	Chef de projet / Fullstack
-Aya NAHAL	Lead Frontend
-Badr HOUARTI	Lead Backend
-Mohammed AROUI	Fullstack / DevOps
-📝 Licence
-© 2026 SNRT - Tous droits réservés
-
-text
+```
 
 ---
 
-## 📄 CRÉER LES FICHIERS BACKEND
+## Statut du projet
 
-### 3. `snrt-pgs-backend/package.json`
+Projet réalisé dans le cadre d'un projet académique et professionnel portant sur la digitalisation du processus de gestion des stages.
 
-cd snrt-pgs-backend
-npm init -y
+---
+
+## Remarque
+
+Certaines informations, configurations et données utilisées dans le projet peuvent être adaptées ou retirées de la version publique du dépôt pour des raisons de confidentialité.
